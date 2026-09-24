@@ -162,7 +162,12 @@ async function main() {
     }
     const mainWorld = Boolean(frameSession);
     const inFrame = (expr) => (mainWorld ? evaluate(expr, frameSession) : evaluate(expr, page, contextId));
-    await waitFor(() => inFrame("!!document.getElementById('magic')"), "composant dans l'iframe");
+    // Document chargé (scripts de fin de <body> exécutés) et animation d'apparition (0,5 s) terminée.
+    await waitFor(
+      () => inFrame("document.readyState === 'complete' && !!document.getElementById('magic')"),
+      "composant dans l'iframe",
+    );
+    await sleep(700);
 
     // 4. Vrais clics souris, routés par le navigateur jusque dans l'iframe
     const frameBox = await evaluate("(r => ({ x: r.x, y: r.y }))(document.getElementById('frame').getBoundingClientRect())");
