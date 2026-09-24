@@ -43,9 +43,9 @@ def clean_llm_output(raw: str) -> str:
     if start:
         text = text[start.start():]
 
-    end = text.lower().rfind("</html>")
-    if end != -1:
-        text = text[: end + len("</html>")]
+    closings = [m.end() for m in re.finditer(r"</html>", text, re.I)]
+    if closings:
+        text = text[: closings[-1]]
     else:
         last_tag = text.rfind(">")
         if last_tag != -1:
@@ -95,7 +95,7 @@ def validate_document(html: str) -> list[str]:
         issues.append("markdown_fence")
     if not re.match(r"\s*<!doctype\s+html", html, re.I):
         issues.append("missing_doctype")
-    if "</html>" not in html.lower():
+    if not re.search(r"</html>", html, re.I):
         issues.append("missing_closing_html")
 
     counter = _TagCounter()

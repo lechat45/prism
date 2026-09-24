@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tableau de bord</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0d12;--glass:rgba(255,255,255,.06);--glass-2:rgba(255,255,255,.1);
+--line:rgba(255,255,255,.14);--text:#f4f6fb;--muted:#9aa3b5;--accent:#7cc4ff}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;color:var(--text);
+background:radial-gradient(circle at 20% 10%,#1d2a4a 0,transparent 45%),radial-gradient(circle at 85% 90%,#3a1d4a 0,transparent 45%),var(--bg);
+display:grid;place-items:center;padding:24px;min-height:100vh}
+.card{width:min(560px,100%);background:var(--glass);border:1px solid var(--line);border-radius:22px;padding:28px;
+backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);
+box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 20px 50px rgba(0,0,0,.45)}
+h1{font-size:20px;margin:0 0 4px;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:0 0 22px;font-size:13px}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+.card{width:min(760px,100%)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px}
+.kpi{background:var(--glass-2);border:1px solid var(--line);border-radius:16px;padding:12px 14px}
+.kpi span{display:block;color:var(--muted);font-size:12px}
+.kpi strong{font-size:22px;font-variant-numeric:tabular-nums}
+.chart{background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:16px;padding:12px}
+svg{width:100%;height:auto;display:block}
+.bar{transition:opacity .15s}
+.bar:hover{opacity:.8}
+.tip{fill:var(--text);font-size:11px;text-anchor:middle}
+.axis{fill:var(--muted);font-size:11px;text-anchor:middle}
+.toolbar{display:flex;gap:8px;margin:0 0 14px}
+.toolbar button{background:var(--glass-2);border:1px solid var(--line);border-radius:10px;padding:6px 12px;font-size:13px}
+.toolbar button[aria-pressed="true"]{background:rgba(124,196,255,.22);border-color:rgba(124,196,255,.5)}
+</style>
+</head>
+<body>
+
+<main class="card">
+  <h1>Tableau de bord</h1>
+  <p class="sub">Généré à partir de __PRISM_SOURCE__ · survolez les barres.</p>
+  <section class="kpis" id="kpis" aria-label="Indicateurs clés"></section>
+  <div class="toolbar" role="group" aria-label="Tri">
+    <button type="button" data-sort="none" aria-pressed="true">Ordre d'origine</button>
+    <button type="button" data-sort="desc" aria-pressed="false">Tri décroissant</button>
+  </div>
+  <div class="chart"><svg id="chart" viewBox="0 0 700 280" role="img" aria-label="Histogramme"></svg></div>
+</main>
+<script>
+
+const DATA = /*PRISM_DATA*/[];
+const NS = "http://www.w3.org/2000/svg";
+const nf = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 });
+const values = DATA.map((d) => d.value);
+const total = values.reduce((a, b) => a + b, 0);
+const kpis = [
+  ["Total", total],
+  ["Moyenne", total / values.length],
+  ["Maximum", Math.max(...values)],
+  ["Minimum", Math.min(...values)],
+];
+document.getElementById("kpis").innerHTML = kpis
+  .map(([k, v]) => '<div class="kpi"><span>' + k + "</span><strong>" + nf.format(v) + "</strong></div>")
+  .join("");
+
+function el(name, attrs, text) {
+  const node = document.createElementNS(NS, name);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function draw(rows) {
+  const svg = document.getElementById("chart");
+  svg.replaceChildren();
+  const W = 700, H = 280, pad = 34, max = Math.max(...rows.map((r) => r.value), 1);
+  const slot = (W - pad * 2) / rows.length, bw = Math.min(56, slot * 0.62);
+  const grad = el("linearGradient", { id: "g", x1: 0, y1: 0, x2: 0, y2: 1 });
+  grad.append(el("stop", { offset: "0%", "stop-color": "#7cc4ff" }), el("stop", { offset: "100%", "stop-color": "#a66bff" }));
+  const defs = el("defs", {});
+  defs.append(grad);
+  svg.append(defs);
+  rows.forEach((r, i) => {
+    const h = Math.max(0, (r.value / max) * (H - pad * 2));
+    const x = pad + i * slot + (slot - bw) / 2, y = H - pad - h;
+    const bar = el("rect", { class: "bar", x, y, width: bw, height: h, rx: 8, fill: "url(#g)" });
+    bar.append(el("title", {}, r.label + " : " + nf.format(r.value)));
+    svg.append(bar, el("text", { class: "tip", x: x + bw / 2, y: y - 6 }, nf.format(r.value)),
+      el("text", { class: "axis", x: x + bw / 2, y: H - pad + 16 }, r.label));
+  });
+}
+
+document.querySelectorAll("[data-sort]").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("[data-sort]").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
+  draw(b.dataset.sort === "desc" ? [...DATA].sort((a, c) => c.value - a.value) : DATA);
+}));
+draw(DATA);
+
+</script>
+</body>
+</html>

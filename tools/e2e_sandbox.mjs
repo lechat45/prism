@@ -151,7 +151,8 @@ async function main() {
     );
 
     // 3. Accès au DOM de l'iframe (OOPIF, sinon monde isolé dans le même processus)
-    await sleep(1500);
+    // Le processus de l'iframe isolée peut démarrer après le statut « succès » : on l'attend.
+    await waitFor(() => frameSession, "attachement de l'iframe", 8000).catch(() => null);
     let contextId;
     if (!frameSession) {
       const { frameTree } = await cdp.send("Page.getFrameTree", {}, page);
@@ -204,6 +205,8 @@ async function main() {
       writeFileSync(args.screenshot, Buffer.from(data, "base64"));
       check("capture enregistrée", true, args.screenshot);
     }
+  } catch (err) {
+    check("scénario complet", false, err.message);
   } finally {
     browser.kill();
     await sleep(500);

@@ -1,0 +1,191 @@
+{
+  "_doc": "Cas partagés : rejoués par backend/tests/test_parity.py (Python + comparaison avec le JS via Node) et frontend/tests/engine.test.cjs.",
+  "clean": [
+    {
+      "name": "document propre intact",
+      "raw": "<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>let a = 1;</script></body></html>",
+      "expected": "<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>let a = 1;</script></body></html>"
+    },
+    {
+      "name": "bloc ```html et prose retirés",
+      "raw": "Voici votre composant :\n\n```html\n<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>let a = 1;</script></body></html>\n```\n\nBonne utilisation !",
+      "expected": "<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>let a = 1;</script></body></html>"
+    },
+    {
+      "name": "bloc non refermé (réponse tronquée)",
+      "raw": "```html\n<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>let a = 1;</script></body></html>",
+      "expected": "<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>let a = 1;</script></body></html>"
+    },
+    {
+      "name": "balise <think> retirée",
+      "raw": "<think>je réfléchis</think>\n<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>let a = 1;</script></body></html>",
+      "expected": "<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>let a = 1;</script></body></html>"
+    },
+    {
+      "name": "plus gros bloc HTML retenu",
+      "raw": "```css\nb{}\n```\n```html\n<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>let a = 1;</script></body></html>\n```",
+      "expected": "<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>let a = 1;</script></body></html>"
+    },
+    {
+      "name": "fermeture </HTML> en majuscules",
+      "raw": "Voilà\n<!DOCTYPE html><HTML><BODY>x</BODY></HTML>\nFin",
+      "expected": "<!DOCTYPE html><HTML><BODY>x</BODY></HTML>"
+    },
+    {
+      "name": "fragment entouré de prose",
+      "raw": "Bien sûr !\n<div>salut</div>\nVoilà.",
+      "expected": "<div>salut</div>"
+    },
+    {
+      "name": "BOM et espaces",
+      "raw": "﻿  <!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>let a = 1;</script></body></html>  ",
+      "expected": "<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>let a = 1;</script></body></html>"
+    }
+  ],
+  "markup": [
+    {
+      "text": "Désolé, je ne peux pas faire cela.",
+      "expected": false
+    },
+    {
+      "text": "<div>ok</div>",
+      "expected": true
+    }
+  ],
+  "validate": [
+    {
+      "name": "document propre",
+      "doc": "<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>let a = 1;</script></body></html>",
+      "blocking": false,
+      "exact": []
+    },
+    {
+      "name": "chaîne HTML dans un script",
+      "doc": "<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>const s = \"<div></div></body>\";</script></body></html>",
+      "blocking": false,
+      "exact": []
+    },
+    {
+      "name": "document tronqué",
+      "doc": "<!DOCTYPE html>\n<html><head></head><body><script>let a",
+      "blocking": true,
+      "includes": [
+        "missing_closing_html",
+        "unbalanced_<script>"
+      ]
+    },
+    {
+      "name": "fence restante",
+      "doc": "<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>```</b><script>let a = 1;</script></body></html>",
+      "blocking": true,
+      "includes": [
+        "markdown_fence"
+      ]
+    },
+    {
+      "name": "API absentes de la sandbox",
+      "doc": "<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>localStorage.x = 1; fetch('https://x.y');</script></body></html>",
+      "blocking": false,
+      "includes": [
+        "sandbox_api:localStorage",
+        "sandbox_api:fetch()"
+      ]
+    },
+    {
+      "name": "ressource externe",
+      "doc": "<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><img src=\"https://cdn.x/y.png\"><b>ok</b><script>let a = 1;</script></body></html>",
+      "blocking": false,
+      "includes": [
+        "external_resource"
+      ]
+    }
+  ],
+  "js_syntax": [
+    {
+      "name": "script valide",
+      "doc": "<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>let a = 1;</script></body></html>",
+      "errors": 0
+    },
+    {
+      "name": "script invalide",
+      "doc": "<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>const x = ;</script></body></html>",
+      "errors": 1
+    },
+    {
+      "name": "script JSON ignoré",
+      "doc": "<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script type=\"application/json\">{pas du js}</script><script>let a = 1;</script></body></html>",
+      "errors": 0
+    }
+  ],
+  "routing": [
+    {
+      "prompt": "Crée un bouton interactif qui change de couleur au clic et compte le nombre de clics",
+      "template": "counter"
+    },
+    {
+      "prompt": "Une calculatrice élégante",
+      "template": "calculator"
+    },
+    {
+      "prompt": "Tableau de bord des ventes : Janvier 12400, Février 15100, Mars 13850",
+      "template": "dashboard"
+    },
+    {
+      "prompt": "Janvier 120, Février 150, Mars 90",
+      "template": "dashboard"
+    },
+    {
+      "prompt": "ÉTAT DES STATS",
+      "template": "dashboard"
+    },
+    {
+      "prompt": "Un minuteur Pomodoro",
+      "template": "generic"
+    }
+  ],
+  "series": [
+    {
+      "prompt": "Janvier 12400, Février: 15100 ; Mars=13,5",
+      "labels": [
+        "Janvier",
+        "Février",
+        "Mars"
+      ],
+      "values": [
+        12400,
+        15100,
+        13.5
+      ]
+    }
+  ],
+  "render": [
+    {
+      "name": "invite HTML échappée",
+      "prompt": "<img src=x onerror=alert(1)>",
+      "contains": [
+        "&lt;img src=x onerror=alert(1)&gt;"
+      ],
+      "absent": [
+        "<img src=x"
+      ]
+    },
+    {
+      "name": "données du dashboard",
+      "prompt": "dashboard </script><script>alert(1)</script> a: 1, b: 2.5",
+      "contains": [
+        "const DATA = [{\"label\":\"a\",\"value\":1},{\"label\":\"b\",\"value\":2.5}];",
+        "Généré à partir de vos données"
+      ],
+      "script_tags": 1
+    },
+    {
+      "name": "données d'exemple",
+      "prompt": "un tableau de bord",
+      "contains": [
+        "Généré à partir de données d&#x27;exemple",
+        "\"label\":\"Jan\""
+      ],
+      "script_tags": 1
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+User request (may contain raw data):
+<<<
+{{prompt}}
+>>>
+Return only the complete HTML document, starting with <!DOCTYPE html> and ending with </html>.

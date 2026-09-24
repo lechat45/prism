@@ -1,0 +1,36 @@
+{
+  "_doc": "Mode démo, partagé par backend/mocks.py et frontend/engine/local.js. Routage par mots-clés (demande sans accents, en minuscules), dans l'ordre.",
+  "routes": [
+    {
+      "template": "dashboard",
+      "keywords": ["dashboard", "tableau de bord", "donnees", "data", "graph", "chart", "vente", "stat", "csv", "kpi"]
+    },
+    {
+      "template": "calculator",
+      "keywords": ["calcul", "calculator", "calculette", "addition"]
+    },
+    {
+      "template": "counter",
+      "keywords": ["bouton", "button", "clic", "click", "compteur", "counter"]
+    }
+  ],
+  "fallback": "generic",
+  "series_pattern": "([A-Za-zÀ-ÖØ-öø-ÿ][\\wÀ-ÖØ-öø-ÿ '’-]{0,28}?)\\s*[:=;,\\t]?\\s*(-?\\d+(?:[.,]\\d+)?)",
+  "series_min": 2,
+  "series_max": 12,
+  "label_max": 24,
+  "sample_series": [
+    { "label": "Jan", "value": 12400 },
+    { "label": "Fév", "value": 15100 },
+    { "label": "Mar", "value": 13850 },
+    { "label": "Avr", "value": 18200 },
+    { "label": "Mai", "value": 21400 },
+    { "label": "Juin", "value": 19750 }
+  ],
+  "sources": { "user": "vos données", "sample": "données d'exemple" },
+  "placeholders": {
+    "data": "/*PRISM_DATA*/[]",
+    "source": "__PRISM_SOURCE__",
+    "prompt": "__PRISM_PROMPT__"
+  }
+}

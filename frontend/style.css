@@ -144,7 +144,12 @@ button:disabled { cursor: not-allowed; }
   border-radius: 999px;
   background: var(--glass-fill);
   white-space: nowrap;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
 }
+.engine:hover { color: var(--text); border-color: var(--line-strong); background: var(--glass-hover); }
 
 /* Pastille d'état commune (moteur + statut). */
 .dot {
@@ -376,6 +381,54 @@ kbd {
 .meta .warn { color: var(--warn); }
 
 .footer { text-align: center; color: var(--faint); font-size: 12px; }
+
+/* --- Réglages du moteur (dialog natif) ------------------------------------ */
+.dialog {
+  position: fixed; /* .glass impose relative : on rétablit le centrage natif du <dialog> modal */
+  inset: 0;
+  width: min(500px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  margin: auto;
+  padding: 26px;
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(34, 38, 54, 0.86), rgba(14, 16, 24, 0.92));
+}
+.dialog::before { inset: 0; } /* liseré dans la boîte : pas de débordement ni de barres de défilement */
+.dialog::backdrop { background: rgba(3, 4, 8, 0.6); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.dialog h2 { margin: 0 0 8px; font-size: 19px; letter-spacing: -0.02em; }
+.dialog .hint { margin-bottom: 4px; }
+.dialog a { color: var(--info); }
+.dialog code {
+  font: 12px var(--mono);
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--glass-fill);
+  border: 1px solid var(--line);
+}
+.field-label { display: block; margin: 16px 0 6px; font-size: 13px; color: var(--muted); }
+.dialog input[type="password"],
+.dialog input[type="text"] {
+  width: 100%;
+  padding: 11px 14px;
+  font: 14px var(--mono);
+  color: var(--text);
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.dialog input[type="password"]:focus,
+.dialog input[type="text"]:focus { outline: none; border-color: rgba(124, 196, 255, 0.55); box-shadow: 0 0 0 4px rgba(124, 196, 255, 0.14); }
+.check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13.5px; cursor: pointer; }
+.check input { width: 16px; height: 16px; accent-color: var(--info); }
+.fine { margin: 8px 0 0; font-size: 12px; color: var(--faint); }
+.advanced { margin-top: 14px; font-size: 13px; color: var(--muted); }
+.advanced summary { cursor: pointer; }
+.dialog-actions { display: flex; align-items: center; gap: 8px; margin-top: 24px; flex-wrap: wrap; }
+.spacer { flex: 1; }
+.cta-small { padding: 9px 18px; }
 
 [hidden] { display: none !important; }
 

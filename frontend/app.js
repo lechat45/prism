@@ -4,9 +4,16 @@
    Prism — logique du frontend (Vanilla JS, aucune dépendance)
    ========================================================================== */
 
+// Deux moteurs, même contrat de réponse :
+//  - "server"  : backend Python (POST /api/generate), servi sur la même origine ;
+//  - "browser" : sans backend (GitHub Pages…) — démo, ou Groq en direct avec la clé de l'utilisateur.
 // Servi par le backend : même origine. Ouvert en file:// : backend local par défaut.
 const API_BASE = location.protocol === "file:" ? "http://127.0.0.1:8000" : "";
+// Hébergement purement statique connu : inutile de chercher un backend (évite un 404 en console).
+const STATIC_HOST = /\.github\.io$/i.test(location.hostname);
 const MAX_CHARS = 12000;
+const KEY_STORAGE = "prism:groq-key";
+const MODELS_STORAGE = "prism:groq-models";
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -31,7 +38,19 @@ const els = {
   btnCopy: $("btn-copy"),
   btnReload: $("btn-reload"),
   btnFull: $("btn-full"),
+  settings: $("settings"),
+  settingsForm: $("settings-form"),
+  settingsServer: $("settings-server"),
+  settingsBrowser: $("settings-browser"),
+  keyInput: $("groq-key"),
+  modelsInput: $("groq-models"),
+  rememberKey: $("remember-key"),
+  btnForget: $("btn-forget"),
+  btnCancelSettings: $("btn-cancel-settings"),
 };
+
+const local = PrismLocal.createLocalEngine({ baseUrl: "engine/" });
+const engine = { kind: "pending", info: null }; // info : réponse de /api/health en mode serveur
 
 const state = {
   controller: null, // AbortController de la requête en cours
@@ -199,6 +218,24 @@ function errorMessage(payload, status) {
   return `Erreur serveur (HTTP ${status})`;
 }
 
+async function generateViaServer(prompt, signal) {
+  let res;
+  try {
+    res = await fetch(`${API_BASE}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+      signal,
+    });
+  } catch (err) {
+    if (err.name === "AbortError") throw err;
+    throw new Error("serveur injoignable (lancez « python backend/app.py »)");
+  }
+  const payload = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(errorMessage(payload, res.status));
+  return payload;
+}
+
 async function generate() {
   const prompt = els.prompt.value.trim();
   if (!prompt) {
@@ -218,19 +255,14 @@ async function generate() {
   showPanel("loading");
   els.meta.textContent = "";
 
-  let reachedServer = false;
   try {
-    const res = await fetch(`${API_BASE}/api/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt }),
-      signal: controller.signal,
-    });
-    reachedServer = true;
-    const payload = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(errorMessage(payload, res.status));
+    await engineReady;
+    const payload =
+      engine.kind === "server"
+        ? await generateViaServer(prompt, controller.signal)
+        : await local.generate(prompt, { key: readKey(), models: readModels(), signal: controller.signal });
     if (!payload || typeof payload.html !== "string" || !payload.html.trim()) {
-      throw new Error("Réponse vide du serveur.");
+      throw new Error("réponse vide.");
     }
 
     state.result = payload;
@@ -242,8 +274,8 @@ async function generate() {
   } catch (err) {
     if (err.name === "AbortError") {
       setStatus("idle", "Génération annulée");
-    } else if (!reachedServer) {
-      setStatus("error", "Serveur injoignable : lancez « python backend/app.py »");
+    } else if (engine.kind === "browser" && location.protocol === "file:") {
+      setStatus("error", "Hors serveur, ouvrez Prism via http(s) (GitHub Pages) ou lancez « python backend/app.py »");
     } else {
       setStatus("error", `Échec : ${err.message}`);
     }
@@ -351,26 +383,140 @@ function restoreDraft() {
   updateCounter();
 }
 
-async function checkEngine() {
+/* --------------------------------------------------------------------------
+   Clé Groq de l'utilisateur (moteur navigateur uniquement)
+   Par défaut en sessionStorage (oubliée à la fermeture de l'onglet) ;
+   en localStorage seulement si « Mémoriser sur cet appareil » est coché.
+   -------------------------------------------------------------------------- */
+function storageAreas() {
+  const areas = [];
+  try { areas.push(window.sessionStorage); } catch { /* indisponible */ }
+  try { areas.push(window.localStorage); } catch { /* indisponible */ }
+  return areas;
+}
+
+function readKey() {
+  for (const area of storageAreas()) {
+    try {
+      const key = area.getItem(KEY_STORAGE);
+      if (key) return key;
+    } catch { /* indisponible */ }
+  }
+  return "";
+}
+
+function isKeyRemembered() {
+  try { return Boolean(localStorage.getItem(KEY_STORAGE)); } catch { return false; }
+}
+
+function writeKey(key, remember) {
+  for (const area of storageAreas()) {
+    try { area.removeItem(KEY_STORAGE); } catch { /* indisponible */ }
+  }
+  if (!key) return;
+  try { (remember ? localStorage : sessionStorage).setItem(KEY_STORAGE, key); } catch { /* indisponible */ }
+}
+
+function readModels() {
   try {
-    const res = await fetch(`${API_BASE}/api/health`);
-    if (!res.ok) throw new Error(String(res.status));
-    const info = await res.json();
-    if (info.mode === "groq") {
-      els.engine.dataset.state = "groq";
-      els.engineText.textContent = `Groq · ${info.models[0]}`;
-      els.engine.title = `Chaîne de modèles : ${info.models.join(" → ")} · v${info.version}`;
-    } else {
-      els.engine.dataset.state = "mock";
-      els.engineText.textContent = "Mode démo";
-      els.engine.title = "GROQ_API_KEY absente : composants pré-écrits. Ajoutez la clé dans backend/.env.";
-    }
+    return (localStorage.getItem(MODELS_STORAGE) || "").split(",").map((m) => m.trim()).filter(Boolean);
   } catch {
-    els.engine.dataset.state = "offline";
-    els.engineText.textContent = "Serveur hors ligne";
-    els.engine.title = "Lancez : python backend/app.py";
+    return [];
   }
 }
 
+function writeModels(value) {
+  const models = value.split(",").map((m) => m.trim()).filter(Boolean);
+  try {
+    if (models.length) localStorage.setItem(MODELS_STORAGE, models.join(","));
+    else localStorage.removeItem(MODELS_STORAGE);
+  } catch { /* indisponible */ }
+}
+
+/* --------------------------------------------------------------------------
+   Détection du moteur
+   -------------------------------------------------------------------------- */
+async function detectEngine() {
+  if (!STATIC_HOST) {
+    try {
+      const res = await fetch(`${API_BASE}/api/health`, { cache: "no-store" });
+      const info = res.ok ? await res.json() : null;
+      if (info && info.status === "ok") {
+        engine.kind = "server";
+        engine.info = info;
+        renderEngine();
+        return;
+      }
+    } catch { /* pas de backend : moteur navigateur */ }
+  }
+  engine.kind = "browser";
+  engine.defaults = await local.defaults().catch(() => null);
+  renderEngine();
+}
+
+function renderEngine() {
+  const shortName = (model) => model.replace(/^openai\//, "");
+  if (engine.kind === "server") {
+    const info = engine.info;
+    if (info.mode === "groq") {
+      els.engine.dataset.state = "groq";
+      els.engineText.textContent = `Groq · ${shortName(info.models[0])}`;
+      els.engine.title = `Serveur Prism v${info.version} · modèles : ${info.models.join(" → ")}`;
+    } else {
+      els.engine.dataset.state = "mock";
+      els.engineText.textContent = "Mode démo";
+      els.engine.title = "Serveur sans GROQ_API_KEY : composants pré-écrits. Ajoutez la clé dans backend/.env.";
+    }
+    return;
+  }
+  const models = readModels().length ? readModels() : (engine.defaults && engine.defaults.models) || [];
+  if (readKey()) {
+    els.engine.dataset.state = "groq";
+    els.engineText.textContent = `Groq · ${shortName(models[0] || "navigateur")}`;
+    els.engine.title = `Génération depuis ce navigateur avec votre clé · modèles : ${models.join(" → ")}`;
+  } else {
+    els.engine.dataset.state = "mock";
+    els.engineText.textContent = "Démo · ajouter une clé";
+    els.engine.title = "Aucun serveur ici : mode démo. Cliquez pour utiliser votre clé Groq gratuite.";
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Réglages du moteur
+   -------------------------------------------------------------------------- */
+function openSettings() {
+  const browserMode = engine.kind !== "server";
+  els.settingsServer.hidden = browserMode;
+  els.settingsBrowser.hidden = !browserMode;
+  els.btnForget.hidden = !browserMode || !readKey();
+  $("btn-save-settings").hidden = !browserMode;
+  els.keyInput.value = readKey();
+  els.rememberKey.checked = isKeyRemembered();
+  els.modelsInput.value = readModels().join(", ");
+  els.modelsInput.placeholder = ((engine.defaults && engine.defaults.models) || []).join(", ");
+  els.settings.showModal();
+  (browserMode ? els.keyInput : els.btnCancelSettings).focus();
+}
+
+els.engine.addEventListener("click", openSettings);
+els.btnCancelSettings.addEventListener("click", () => els.settings.close());
+
+els.settingsForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const key = els.keyInput.value.trim();
+  writeKey(key, els.rememberKey.checked);
+  writeModels(els.modelsInput.value);
+  els.settings.close();
+  renderEngine();
+  setStatus("idle", key ? "Clé Groq enregistrée : génération réelle activée" : "Aucune clé : mode démo");
+});
+
+els.btnForget.addEventListener("click", () => {
+  writeKey("", false);
+  els.settings.close();
+  renderEngine();
+  setStatus("idle", "Clé oubliée : retour au mode démo");
+});
+
 restoreDraft();
-checkEngine();
+const engineReady = detectEngine();

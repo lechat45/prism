@@ -22,9 +22,9 @@
       <span class="brand-name">Prism</span>
     </a>
     <span class="tagline">Interfaces éphémères, générées à la demande</span>
-    <span class="engine" id="engine" data-state="pending" title="Moteur de génération">
+    <button type="button" class="engine" id="engine" data-state="pending" title="Moteur de génération" aria-haspopup="dialog">
       <span class="dot"></span><span id="engine-text">Connexion…</span>
-    </span>
+    </button>
   </header>
 
   <main class="layout">
@@ -95,8 +95,45 @@
     </section>
   </main>
 
-  <footer class="footer">Prism MVP · le code généré est éphémère&nbsp;: rien n'est stocké côté serveur.</footer>
+  <footer class="footer">Prism · le code généré est éphémère&nbsp;: rien n'est stocké côté serveur.</footer>
 
+  <dialog class="dialog glass" id="settings" aria-labelledby="settings-title">
+    <form id="settings-form" method="dialog">
+      <h2 id="settings-title">Moteur de génération</h2>
+
+      <p class="hint" id="settings-server" hidden>
+        Le serveur Prism génère avec sa propre configuration (<code>backend/.env</code>).
+        Les réglages ci-dessous ne servent que sans serveur, par exemple sur GitHub Pages.
+      </p>
+
+      <div id="settings-browser">
+        <p class="hint">
+          Aucun serveur Prism ici&nbsp;: sans clé, Prism affiche des composants de démo.
+          Avec votre clé Groq gratuite (<a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">console.groq.com</a>),
+          il génère pour de vrai, directement depuis ce navigateur.
+        </p>
+        <label class="field-label" for="groq-key">Clé API Groq</label>
+        <input id="groq-key" type="password" autocomplete="off" spellcheck="false" placeholder="gsk_…">
+        <label class="check"><input type="checkbox" id="remember-key"> Mémoriser sur cet appareil</label>
+        <p class="fine">La clé reste dans ce navigateur et n'est envoyée qu'à api.groq.com. Sans «&nbsp;Mémoriser&nbsp;», elle est oubliée à la fermeture de l'onglet.</p>
+        <details class="advanced">
+          <summary>Modèles (avancé)</summary>
+          <label class="field-label" for="groq-models">Chaîne de modèles, séparés par des virgules</label>
+          <input id="groq-models" type="text" autocomplete="off" spellcheck="false">
+        </details>
+      </div>
+
+      <div class="dialog-actions">
+        <button type="button" class="tool" id="btn-forget">Oublier la clé</button>
+        <span class="spacer"></span>
+        <button type="button" class="tool" id="btn-cancel-settings">Fermer</button>
+        <button type="submit" class="cta cta-small" id="btn-save-settings">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="engine/sanitize.js" defer></script>
+  <script src="engine/local.js" defer></script>
   <script src="app.js" defer></script>
 </body>
 </html>

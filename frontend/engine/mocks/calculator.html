@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calculatrice</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0d12;--glass:rgba(255,255,255,.06);--glass-2:rgba(255,255,255,.1);
+--line:rgba(255,255,255,.14);--text:#f4f6fb;--muted:#9aa3b5;--accent:#7cc4ff}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;color:var(--text);
+background:radial-gradient(circle at 20% 10%,#1d2a4a 0,transparent 45%),radial-gradient(circle at 85% 90%,#3a1d4a 0,transparent 45%),var(--bg);
+display:grid;place-items:center;padding:24px;min-height:100vh}
+.card{width:min(560px,100%);background:var(--glass);border:1px solid var(--line);border-radius:22px;padding:28px;
+backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);
+box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 20px 50px rgba(0,0,0,.45)}
+h1{font-size:20px;margin:0 0 4px;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:0 0 22px;font-size:13px}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+.display{background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:16px;padding:14px 18px;text-align:right;margin-bottom:14px}
+.expr{color:var(--muted);font-size:13px;min-height:20px}
+.value{font-size:38px;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.keys{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.keys button{height:58px;border-radius:16px;border:1px solid var(--line);background:var(--glass-2);font-size:18px;transition:background .15s,transform .1s}
+.keys button:hover{background:rgba(255,255,255,.16)}
+.keys button:active{transform:scale(.96)}
+.keys .op{background:rgba(124,196,255,.18);color:#bfe3ff}
+.keys .eq{background:linear-gradient(135deg,#5b8cff,#a66bff);border-color:rgba(255,255,255,.3)}
+.keys .wide{grid-column:span 2}
+</style>
+</head>
+<body>
+
+<main class="card">
+  <h1>Calculatrice</h1>
+  <p class="sub">Clavier physique pris en charge (chiffres, + − × ÷, Entrée, Échap).</p>
+  <div class="display" aria-live="polite"><div class="expr" id="expr"></div><div class="value" id="value">0</div></div>
+  <div class="keys" id="keys">
+    <button data-k="C">C</button><button data-k="±">±</button><button data-k="%">%</button><button class="op" data-k="/">÷</button>
+    <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button><button class="op" data-k="*">×</button>
+    <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button><button class="op" data-k="-">−</button>
+    <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button><button class="op" data-k="+">+</button>
+    <button class="wide" data-k="0">0</button><button data-k=".">,</button><button class="eq" data-k="=">=</button>
+  </div>
+</main>
+<script>
+
+const valueEl = document.getElementById("value");
+const exprEl = document.getElementById("expr");
+const symbols = { "+": "+", "-": "−", "*": "×", "/": "÷" };
+let current = "0", stored = null, op = null, fresh = false;
+
+const fmt = (n) => Number.isFinite(n) ? String(Number(n.toPrecision(12))).replace(".", ",") : "Erreur";
+function render() {
+  valueEl.textContent = current.replace(".", ",");
+  exprEl.textContent = stored !== null && op ? fmt(stored) + " " + symbols[op] : "";
+}
+function compute(a, b, o) {
+  if (o === "+") return a + b;
+  if (o === "-") return a - b;
+  if (o === "*") return a * b;
+  if (o === "/") return b === 0 ? NaN : a / b;
+  return b;
+}
+function press(k) {
+  if (/^[0-9]$/.test(k)) {
+    current = fresh || current === "0" ? k : current + k;
+    fresh = false;
+  } else if (k === ".") {
+    if (fresh) { current = "0"; fresh = false; }
+    if (!current.includes(".")) current += ".";
+  } else if (k in symbols) {
+    if (op && !fresh) current = String(compute(stored, parseFloat(current), op));
+    stored = parseFloat(current); op = k; fresh = true;
+  } else if (k === "=") {
+    if (op === null) return;
+    const result = compute(stored, parseFloat(current), op);
+    current = Number.isFinite(result) ? String(Number(result.toPrecision(12))) : "Erreur";
+    stored = null; op = null; fresh = true;
+  } else if (k === "C") {
+    current = "0"; stored = null; op = null; fresh = false;
+  } else if (k === "±") {
+    current = current.startsWith("-") ? current.slice(1) : (current === "0" ? "0" : "-" + current);
+  } else if (k === "%") {
+    current = String(parseFloat(current) / 100);
+  }
+  if (current === "NaN") current = "Erreur";
+  render();
+}
+document.getElementById("keys").addEventListener("click", (e) => {
+  const key = e.target.closest("button");
+  if (key) press(key.dataset.k);
+});
+document.addEventListener("keydown", (e) => {
+  const map = { Enter: "=", Escape: "C", ",": "." };
+  const k = map[e.key] || e.key;
+  if (/^[0-9.+\-*\/=%C]$/.test(k)) { e.preventDefault(); press(k); }
+});
+render();
+
+</script>
+</body>
+</html>

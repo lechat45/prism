@@ -13,6 +13,7 @@ Lancement :  python backend/app.py   (puis http://127.0.0.1:8000)
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -35,7 +36,7 @@ from sanitize import (
     validate_document,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
@@ -56,16 +57,17 @@ def _load_dotenv(*paths: Path) -> None:
 
 _load_dotenv(BACKEND_DIR / ".env", BACKEND_DIR.parent / ".env")
 
+ENGINE_DIR = FRONTEND_DIR / "engine"  # fichiers partagés avec le moteur navigateur (GitHub Pages)
+GROQ_DEFAULTS = json.loads((ENGINE_DIR / "groq.json").read_text(encoding="utf-8"))
+
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_URL = GROQ_DEFAULTS["url"]
 # Chaîne de modèles essayés dans l'ordre (le suivant prend le relais en cas d'échec).
 GROQ_MODELS = [
-    m.strip()
-    for m in os.getenv("GROQ_MODELS", "openai/gpt-oss-120b,llama-3.3-70b-versatile").split(",")
-    if m.strip()
+    m.strip() for m in os.getenv("GROQ_MODELS", ",".join(GROQ_DEFAULTS["models"])).split(",") if m.strip()
 ]
-GROQ_REASONING_EFFORT = os.getenv("GROQ_REASONING_EFFORT", "medium")
-MAX_TOKENS = int(os.getenv("PRISM_MAX_TOKENS", "6000"))
+GROQ_REASONING_EFFORT = os.getenv("GROQ_REASONING_EFFORT", GROQ_DEFAULTS["reasoning_effort"])
+MAX_TOKENS = int(os.getenv("PRISM_MAX_TOKENS", str(GROQ_DEFAULTS["max_completion_tokens"])))
 TIMEOUT_S = float(os.getenv("PRISM_TIMEOUT", "90"))
 HOST = os.getenv("PRISM_HOST", "127.0.0.1")
 PORT = int(os.getenv("PRISM_PORT", "8000"))
@@ -75,47 +77,15 @@ log = logging.getLogger("prism")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 # --------------------------------------------------------------------------- #
-# Prompt système : impose une sortie 100 % HTML, sans Markdown ni explication.
+# Prompts : impose une sortie 100 % HTML, sans Markdown ni explication.
+# Source unique dans frontend/engine/ (aussi utilisée par le moteur navigateur).
 # --------------------------------------------------------------------------- #
-SYSTEM_PROMPT = """You are Prism, an engine that turns a request (or raw pasted data) into ONE ephemeral, single-purpose interactive web component.
-
-OUTPUT CONTRACT (absolute, no exceptions):
-1. Reply with the raw source of ONE complete, self-contained HTML5 document and NOTHING else.
-   Your very first characters are <!DOCTYPE html> and your very last characters are </html>.
-2. NEVER use Markdown: no code fences (no ```html, no ```), no backticks wrapping the document, no headings,
-   no bullet lists, no explanation, no greeting, no notes before or after the document.
-3. Put all CSS in one <style> element inside <head>. Put all JavaScript in inline <script> elements at the end
-   of <body>: vanilla ES2020, no modules, no imports, no frameworks, no build step.
-4. Zero external resources: no CDN, no remote stylesheet, no web font, no remote image, no fetch/XMLHttpRequest/WebSocket.
-   Draw visuals with inline SVG, CSS, <canvas> or emoji.
-5. The document runs inside <iframe sandbox="allow-scripts">: do NOT use localStorage, sessionStorage, cookies,
-   IndexedDB, alert/confirm/prompt, window.open, form submission or navigation. Keep state in JavaScript variables.
-6. The JavaScript must be syntactically valid and must not throw on load. Every element you query must exist.
-
-DESIGN ("liquid glass", dark):
-- Deep background (around #0b0d12) with subtle radial color glows; translucent panels (rgba(255,255,255,.06)),
-  backdrop-filter: blur(20px) saturate(160%); 1px luminous borders (rgba(255,255,255,.14)); inner top highlight;
-  soft deep shadows; 14-22px corner radii.
-- Font stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif. Text #f4f6fb, muted #9aa3b5.
-- Responsive from 320px wide, no horizontal scrollbar, generous padding, content centered.
-- Accessible: real <button>, <input>, <label>; visible :focus-visible styles; good contrast; aria-live for changing values.
-- Smooth micro-interactions (150-300ms transitions); honor prefers-reduced-motion.
-
-BEHAVIOUR:
-- Build exactly what is asked, fully functional: no placeholder, no TODO, no lorem ipsum, no fake buttons.
-- If the user pastes data (CSV, JSON, lists, numbers), parse it yourself and embed it as a JS constant;
-  compute real figures from it (totals, averages, trends) and chart it with SVG or <canvas>.
-- Write all visible text in the language of the user's request.
-- Stay compact: under ~300 lines in total."""
+SYSTEM_PROMPT = (ENGINE_DIR / "system-prompt.txt").read_text(encoding="utf-8").strip()
+USER_TEMPLATE = (ENGINE_DIR / "user-template.txt").read_text(encoding="utf-8").strip()
 
 
 def build_user_message(prompt: str) -> str:
-    return (
-        "User request (may contain raw data):\n<<<\n"
-        f"{prompt}\n"
-        ">>>\n"
-        "Return only the complete HTML document, starting with <!DOCTYPE html> and ending with </html>."
-    )
+    return USER_TEMPLATE.replace("{{prompt}}", prompt)
 
 
 # --------------------------------------------------------------------------- #
@@ -185,10 +155,10 @@ async def _call_groq(client: httpx.AsyncClient, model: str, prompt: str) -> tupl
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": build_user_message(prompt)},
         ],
-        "temperature": 0.5,
+        "temperature": GROQ_DEFAULTS["temperature"],
         "max_completion_tokens": MAX_TOKENS,
     }
-    if model.startswith("openai/gpt-oss"):
+    if model.startswith(GROQ_DEFAULTS["reasoning_models_prefix"]):
         payload["reasoning_effort"] = GROQ_REASONING_EFFORT
 
     try:

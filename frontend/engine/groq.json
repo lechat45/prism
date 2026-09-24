@@ -1,0 +1,9 @@
+{
+  "_doc": "Réglages Groq par défaut, partagés par le backend (surchargés par les variables d'environnement) et le moteur navigateur.",
+  "url": "https://api.groq.com/openai/v1/chat/completions",
+  "models": ["openai/gpt-oss-120b", "llama-3.3-70b-versatile"],
+  "temperature": 0.5,
+  "max_completion_tokens": 6000,
+  "reasoning_effort": "medium",
+  "reasoning_models_prefix": "openai/gpt-oss"
+}
