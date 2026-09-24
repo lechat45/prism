@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Prism génère des interfaces web éphémères et interactives à partir d'une simple demande.">
+  <title>Prism — interfaces éphémères</title>
+  <link rel="icon" href="assets/prism-logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="backdrop" aria-hidden="true">
+    <span class="orb orb-a"></span>
+    <span class="orb orb-b"></span>
+    <span class="orb orb-c"></span>
+  </div>
+
+  <header class="topbar glass">
+    <a class="brand" href="./" aria-label="Prism, accueil">
+      <img class="logo" src="assets/prism-logo.svg" width="40" height="40" alt="">
+      <span class="brand-name">Prism</span>
+    </a>
+    <span class="tagline">Interfaces éphémères, générées à la demande</span>
+    <span class="engine" id="engine" data-state="pending" title="Moteur de génération">
+      <span class="dot"></span><span id="engine-text">Connexion…</span>
+    </span>
+  </header>
+
+  <main class="layout">
+    <section class="composer glass" aria-labelledby="composer-title">
+      <h1 id="composer-title">Que voulez-vous construire&nbsp;?</h1>
+      <p class="hint">Décrivez un outil ou collez des données brutes&nbsp;: Prism en fait un composant interactif, exécuté dans un bac à sable isolé.</p>
+
+      <form id="form" novalidate>
+        <label class="sr-only" for="prompt">Votre demande</label>
+        <div class="field">
+          <textarea id="prompt" name="prompt" rows="6" maxlength="12000" spellcheck="true"
+            placeholder="Ex. : Crée un bouton interactif qui change de couleur au clic et compte le nombre de clics"></textarea>
+          <span class="counter" id="char-count" aria-hidden="true">0 / 12 000</span>
+        </div>
+
+        <div class="examples" role="group" aria-label="Exemples de demandes">
+          <button type="button" class="chip" data-prompt="Crée un bouton interactif qui change de couleur au clic et compte le nombre de clics">Compteur de clics</button>
+          <button type="button" class="chip" data-prompt="Tableau de bord des ventes du semestre : Janvier 12400, Février 15100, Mars 13850, Avril 18200, Mai 21400, Juin 19750">Dashboard ventes</button>
+          <button type="button" class="chip" data-prompt="Une calculatrice élégante avec l'historique des dernières opérations">Calculatrice</button>
+          <button type="button" class="chip" data-prompt="Un minuteur Pomodoro 25/5 avec un anneau de progression animé et un compteur de cycles">Pomodoro</button>
+        </div>
+
+        <div class="actions">
+          <span class="kbd-hint"><kbd>Ctrl</kbd> + <kbd>Entrée</kbd></span>
+          <button type="submit" class="cta" id="generate">
+            <span class="cta-icon" aria-hidden="true"></span>
+            <span class="cta-label" id="generate-label">Générer</span>
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <section class="stage glass" aria-labelledby="stage-title">
+      <div class="stage-bar">
+        <h2 id="stage-title">Rendu</h2>
+        <div class="status" id="status" role="status" aria-live="polite" data-state="idle">
+          <span class="dot"></span><span id="status-text">En attente d'une demande</span>
+        </div>
+        <div class="tools" role="toolbar" aria-label="Actions sur le composant">
+          <button type="button" class="tool" id="btn-code" aria-pressed="false" disabled>Code</button>
+          <button type="button" class="tool" id="btn-copy" disabled>Copier</button>
+          <button type="button" class="tool" id="btn-reload" disabled>Relancer</button>
+          <button type="button" class="tool" id="btn-full" disabled>Plein écran</button>
+        </div>
+      </div>
+
+      <div class="viewport" id="viewport">
+        <div class="empty" id="empty">
+          <img src="assets/prism-logo.svg" width="96" height="96" alt="">
+          <p class="empty-title">Votre composant apparaîtra ici</p>
+          <p class="empty-sub">Exécuté dans une iframe <code>sandbox="allow-scripts"</code>, sans accès au réseau ni à cette page.</p>
+        </div>
+
+        <div class="skeleton" id="skeleton" hidden>
+          <div class="beam" aria-hidden="true"></div>
+          <div class="sk-line w60"></div>
+          <div class="sk-line w40"></div>
+          <div class="sk-block"></div>
+          <p class="sk-text" id="sk-text">Prism réfracte votre demande…</p>
+        </div>
+
+        <iframe id="frame" title="Composant généré" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>
+
+        <pre class="code" id="code" hidden><code id="code-content"></code></pre>
+      </div>
+
+      <p class="meta" id="meta" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <footer class="footer">Prism MVP · le code généré est éphémère&nbsp;: rien n'est stocké côté serveur.</footer>
+
+  <script src="app.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+.venv/
+.claude/
+__pycache__/
+*.pyc
+.env
+backend/.env
+resp.json
+e2e.png
