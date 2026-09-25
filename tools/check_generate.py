@@ -18,6 +18,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
 from sanitize import inline_scripts, is_blocking, js_syntax_errors, validate_document  # noqa: E402
 
+LIBS = json.loads((Path(__file__).resolve().parent.parent / "frontend" / "engine" / "libs.json").read_text(encoding="utf-8"))
+ALLOWED_URLS = tuple(lib["url"] for key, lib in LIBS.items() if not key.startswith("_"))
+
 
 def check(path: Path) -> bool:
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -26,7 +29,7 @@ def check(path: Path) -> bool:
         return False
 
     html = payload["html"]
-    issues = validate_document(html)
+    issues = validate_document(html, ALLOWED_URLS)
     js_errors = js_syntax_errors(html)
     checks = [
         ("JSON valide avec champ html", True),

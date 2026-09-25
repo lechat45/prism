@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Données CSV</title>
+<style>
+:root{color-scheme:dark;--accent:#7cc4ff;--bg:#0b0d12;--glass:rgba(255,255,255,.06);--glass-2:rgba(255,255,255,.1);--line:rgba(255,255,255,.14);--text:#f4f6fb;--muted:#9aa3b5}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;width:100%;height:100%}
+body{font:13.5px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;color:var(--text);display:flex;padding:clamp(8px,2.5vw,16px);
+background:radial-gradient(circle at 15% 0%,color-mix(in srgb,var(--accent) 22%,transparent) 0,transparent 55%),radial-gradient(circle at 90% 100%,#3a1d4a 0,transparent 50%),var(--bg)}
+.card{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;gap:10px;background:var(--glass);border:1px solid var(--line);border-radius:18px;padding:clamp(12px,2.5vw,18px);
+backdrop-filter:blur(20px) saturate(160%);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 20px 50px rgba(0,0,0,.45)}
+.head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+h1{font-size:16px;margin:0;letter-spacing:-.01em;overflow-wrap:anywhere}
+.sub{color:var(--muted);margin:0;font-size:12px}
+button,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.seg{display:inline-flex;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:10px;padding:2px}
+.seg button{border:0;background:transparent;border-radius:8px;padding:4px 10px;font-size:12.5px;color:var(--muted)}
+.seg button[aria-pressed="true"],.seg button[aria-selected="true"]{background:color-mix(in srgb,var(--accent) 26%,transparent);color:var(--text)}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+select{background:rgba(0,0,0,.3);border:1px solid var(--line);border-radius:8px;padding:4px 8px;max-width:160px}
+.pane{flex:1;min-height:0;display:flex;flex-direction:column}
+.chart-box{position:relative;flex:1;min-height:120px}
+.table-wrap{flex:1;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:12px}
+table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
+th,td{padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.06);text-align:left;white-space:nowrap}
+th{position:sticky;top:0;background:#141824;cursor:pointer;user-select:none}
+th[aria-sort]{color:var(--accent)}
+td.num{text-align:right}
+.empty{color:var(--muted);margin:auto;text-align:center}
+</style>
+</head>
+<body>
+<main class="card" id="app">
+  <header class="head">
+    <div>
+      <h1 id="title">Données CSV</h1>
+      <p class="sub" id="meta"></p>
+    </div>
+    <div class="seg" role="tablist" aria-label="Vue">
+      <button type="button" role="tab" data-tab="chart">Graphique</button>
+      <button type="button" role="tab" data-tab="table">Tableau</button>
+    </div>
+  </header>
+  <div class="controls" id="controls">
+    <label>Axe <select id="x"></select></label>
+    <label>Valeur <select id="y"></select></label>
+    <div class="seg" role="group" aria-label="Type de graphique">
+      <button type="button" data-type="bar">Barres</button>
+      <button type="button" data-type="line">Courbe</button>
+    </div>
+  </div>
+  <section class="pane" id="pane-chart">
+    <div class="chart-box"><canvas id="chart" role="img" aria-label="Graphique des données"></canvas></div>
+    <p class="empty" id="no-num" hidden>Aucune colonne numérique : consultez le tableau.</p>
+  </section>
+  <section class="pane" id="pane-table" hidden>
+    <div class="table-wrap"><table id="table"></table></div>
+    <p class="sub" id="table-note"></p>
+  </section>
+</main>
+<script>
+const FILE = window.PRISM_FILE;
+const $ = (id) => document.getElementById(id);
+const nf = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 });
+const state = Object.assign(
+  { tab: "chart", x: null, y: null, type: "bar", sortCol: null, sortDir: 1 },
+  JSON.parse(localStorage.getItem("state") || "null"),
+);
+let chart = null;
+
+function save() {
+  localStorage.setItem("state", JSON.stringify(state));
+}
+
+function accent(alpha) {
+  const c = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#7cc4ff";
+  const m = /^#([0-9a-f]{6})$/i.exec(c);
+  if (!m || alpha === undefined) return c;
+  const n = parseInt(m[1], 16);
+  return "rgba(" + (n >> 16) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + alpha + ")";
+}
+
+function column(name) {
+  return FILE.columns.find((c) => c.name === name);
+}
+
+function series() {
+  const sums = new Map();
+  for (const row of FILE.rows) {
+    const key = row[state.x] === null || row[state.x] === undefined ? "—" : String(row[state.x]);
+    const v = Number(row[state.y]);
+    if (!Number.isFinite(v)) continue;
+    sums.set(key, (sums.get(key) || 0) + v);
+  }
+  let entries = [...sums.entries()];
+  const xType = column(state.x).type;
+  if (xType === "number") entries.sort((a, b) => Number(a[0]) - Number(b[0]));
+  if (xType === "date") entries.sort((a, b) => Date.parse(a[0]) - Date.parse(b[0]));
+  entries = entries.slice(0, 200);
+  return { labels: entries.map((e) => e[0]), values: entries.map((e) => e[1]) };
+}
+
+function drawChart() {
+  if (chart) { chart.destroy(); chart = null; }
+  const hasNum = Boolean(state.y);
+  $("no-num").hidden = hasNum;
+  $("chart").parentElement.hidden = !hasNum;
+  if (!hasNum || state.tab !== "chart") return;
+  const { labels, values } = series();
+  Chart.defaults.color = "#9aa3b5";
+  Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif';
+  chart = new Chart($("chart"), {
+    type: state.type,
+    data: {
+      labels,
+      datasets: [{
+        label: state.y,
+        data: values,
+        backgroundColor: accent(state.type === "bar" ? 0.55 : 0.18),
+        borderColor: accent(),
+        borderWidth: 2,
+        borderRadius: 6,
+        fill: state.type === "line",
+        tension: 0.3,
+        pointRadius: values.length > 60 ? 0 : 3,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 350 },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => state.y + " : " + nf.format(ctx.parsed.y) } },
+      },
+      scales: {
+        x: { grid: { color: "rgba(255,255,255,.05)" }, ticks: { maxRotation: 0, autoSkip: true } },
+        y: { grid: { color: "rgba(255,255,255,.07)" }, ticks: { callback: (v) => nf.format(v) } },
+      },
+    },
+  });
+}
+
+function drawTable() {
+  const cols = FILE.columns;
+  let rows = FILE.rows;
+  if (state.sortCol) {
+    const numeric = column(state.sortCol) && column(state.sortCol).type === "number";
+    rows = [...rows].sort((a, b) => {
+      const va = a[state.sortCol], vb = b[state.sortCol];
+      const cmp = numeric ? (Number(va) || 0) - (Number(vb) || 0) : String(va ?? "").localeCompare(String(vb ?? ""), "fr");
+      return cmp * state.sortDir;
+    });
+  }
+  const shown = rows.slice(0, 200);
+  const table = $("table");
+  table.replaceChildren();
+  const head = table.createTHead().insertRow();
+  cols.forEach((c) => {
+    const th = document.createElement("th");
+    th.scope = "col";
+    th.textContent = c.name + (state.sortCol === c.name ? (state.sortDir > 0 ? " ▲" : " ▼") : "");
+    if (state.sortCol === c.name) th.setAttribute("aria-sort", state.sortDir > 0 ? "ascending" : "descending");
+    th.addEventListener("click", () => {
+      state.sortDir = state.sortCol === c.name ? -state.sortDir : 1;
+      state.sortCol = c.name;
+      save();
+      drawTable();
+    });
+    head.append(th);
+  });
+  const body = table.createTBody();
+  shown.forEach((row) => {
+    const tr = body.insertRow();
+    cols.forEach((c) => {
+      const td = tr.insertCell();
+      const v = row[c.name];
+      td.textContent = v === null || v === undefined ? "" : c.type === "number" && typeof v === "number" ? nf.format(v) : String(v);
+      if (c.type === "number") td.className = "num";
+    });
+  });
+  $("table-note").textContent = rows.length > shown.length ? shown.length + " premières lignes sur " + nf.format(rows.length) : "";
+}
+
+function render() {
+  document.querySelectorAll("[data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === state.tab)));
+  document.querySelectorAll("[data-type]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.type === state.type)));
+  $("pane-chart").hidden = state.tab !== "chart";
+  $("controls").hidden = state.tab !== "chart";
+  $("pane-table").hidden = state.tab !== "table";
+  if (state.tab === "chart") drawChart();
+  else drawTable();
+}
+
+function init() {
+  const cols = FILE.columns;
+  const numeric = cols.filter((c) => c.type === "number").map((c) => c.name);
+  document.title = FILE.name;
+  $("title").textContent = FILE.name;
+  $("meta").textContent = nf.format(FILE.rowCount) + " lignes · " + cols.length + " colonnes";
+  if (!cols.some((c) => c.name === state.x)) state.x = (cols.find((c) => c.type !== "number") || cols[0]).name;
+  if (!numeric.includes(state.y)) state.y = numeric.find((n) => n !== state.x) || numeric[0] || null;
+
+  for (const [id, names, current] of [["x", cols.map((c) => c.name), state.x], ["y", numeric, state.y]]) {
+    const select = $(id);
+    names.forEach((name) => select.add(new Option(name, name, false, name === current)));
+    select.disabled = names.length === 0;
+    select.addEventListener("change", () => {
+      state[id] = select.value;
+      save();
+      render();
+    });
+  }
+  document.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => {
+    state.tab = b.dataset.tab;
+    save();
+    render();
+  }));
+  document.querySelectorAll("[data-type]").forEach((b) => b.addEventListener("click", () => {
+    state.type = b.dataset.type;
+    save();
+    render();
+  }));
+  window.addEventListener("prism:accent", () => { if (chart) drawChart(); });
+  render();
+}
+
+if (FILE && FILE.kind === "csv" && FILE.columns.length) {
+  init();
+} else {
+  $("app").innerHTML = '<p class="empty">Aucun fichier CSV joint : glissez un fichier dans Prism.</p>';
+}
+</script>
+</body>
+</html>

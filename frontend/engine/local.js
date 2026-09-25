@@ -20,6 +20,7 @@
   const jsValue = (value) => JSON.stringify(value).replace(/</g, "\\u003c");
   const normalize = (text) => text.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
   const replaceAll = (text, token, value) => text.split(token).join(value);
+  const allowedUrls = (libs) => Object.keys(libs).filter((k) => !k.startsWith("_")).map((k) => libs[k].url);
   const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
   function extractSeries(prompt, spec) {
@@ -33,12 +34,22 @@
     return series;
   }
 
-  function route(prompt, spec) {
+  function route(prompt, spec, fileKind) {
+    if (fileKind && spec.file_routes[fileKind]) return spec.file_routes[fileKind];
     const text = normalize(prompt);
     for (const r of spec.routes) {
       if (r.keywords.some((k) => text.includes(k))) return r.template;
     }
     return extractSeries(prompt, spec).length >= spec.series_min ? "dashboard" : spec.fallback;
+  }
+
+  /** Même construction que build_user_message() côté Python. */
+  function buildUserMessage(prompt, file, baseHtml, t) {
+    const fileBlock = file ? replaceAll(replaceAll(t.file, "{{kind}}", file.kind), "{{summary}}", file.summary) + "\n" : "";
+    const template = baseHtml ? t.refactor : t.user;
+    // {{html}} en dernier : le code existant ne doit pas être réinterprété comme gabarit.
+    const message = replaceAll(replaceAll(template, "{{file}}", fileBlock), "{{prompt}}", prompt);
+    return replaceAll(message, "{{html}}", baseHtml || "");
   }
 
   function createLocalEngine(options = {}) {
@@ -63,9 +74,9 @@
       return cache.get(key);
     }
 
-    async function mock(prompt) {
-      const spec = await load("mocks/manifest.json", "json");
-      const name = route(prompt, spec);
+    async function mock(prompt, fileKind) {
+      const [spec, libs] = await Promise.all([load("mocks/manifest.json", "json"), load("libs.json", "json")]);
+      const name = route(prompt, spec, fileKind);
       const marks = spec.placeholders;
       let html = (await load(`mocks/${name}.html`)).replace(/\n+$/, "");
       if (name === "dashboard") {
@@ -74,7 +85,8 @@
         html = replaceAll(html, marks.data, jsValue(ownData ? series : spec.sample_series));
         html = replaceAll(html, marks.source, escapeHtml(spec.sources[ownData ? "user" : "sample"]));
       }
-      return { html: replaceAll(html, marks.prompt, escapeHtml(prompt)), template: name };
+      html = replaceAll(html, marks.prompt, escapeHtml(prompt));
+      return { html: S.normalizeLibraries(html, libs), template: name };
     }
 
     function fatal(message) {
@@ -83,13 +95,13 @@
       return err;
     }
 
-    async function callGroq(model, prompt, key, ctx, signal) {
-      const { cfg, system, userTemplate } = ctx;
+    async function callGroq(model, userMessage, key, ctx, signal) {
+      const { cfg, system, libs } = ctx;
       const body = {
         model,
         messages: [
           { role: "system", content: system },
-          { role: "user", content: replaceAll(userTemplate, "{{prompt}}", prompt) },
+          { role: "user", content: userMessage },
         ],
         temperature: cfg.temperature,
         max_completion_tokens: cfg.max_completion_tokens,
@@ -131,34 +143,44 @@
 
       const cleaned = S.cleanLlmOutput((choice.message && choice.message.content) || "");
       if (!S.hasMarkup(cleaned)) throw new Error(`${model}: aucune balise HTML dans la réponse`);
-      const html = S.ensureDocument(cleaned);
-      const issues = S.validateDocument(html);
+      const html = S.normalizeLibraries(S.ensureDocument(cleaned), libs);
+      const issues = S.validateDocument(html, allowedUrls(libs));
       const jsErrors = S.jsSyntaxErrors(html);
       if (jsErrors.length) issues.push("js_syntax");
       if (S.isBlocking(issues)) throw new Error(`${model}: document invalide (${issues.concat(jsErrors).join(", ")})`);
       return { html, warnings: issues };
     }
 
-    /** Même contrat de réponse que POST /api/generate. */
-    async function generate(prompt, { key = "", models = [], signal } = {}) {
+    /** Même contrat que POST /api/generate : { prompt, file?: {name, kind, summary}, baseHtml? }. */
+    async function generate(prompt, { key = "", models = [], signal, file = null, baseHtml = null } = {}) {
       const started = now();
       const elapsed = () => Math.round(now() - started);
 
       if (!key) {
-        const { html, template } = await mock(prompt);
-        return { html, mode: "mock", model: `mock:${template}`, elapsed_ms: elapsed(), warnings: S.validateDocument(html) };
+        if (baseHtml) {
+          const err = new Error("La refactorisation a besoin d'un modèle : ajoutez votre clé Groq (mode démo actif).");
+          err.code = "needs_key";
+          throw err;
+        }
+        const [{ html, template }, libs] = await Promise.all([mock(prompt, file && file.kind), load("libs.json", "json")]);
+        return { html, mode: "mock", model: `mock:${template}`, elapsed_ms: elapsed(), warnings: S.validateDocument(html, allowedUrls(libs)) };
       }
 
-      const [cfg, system, userTemplate] = await Promise.all([
+      const [cfg, libs, system, user, fileTpl, refactor] = await Promise.all([
         load("groq.json", "json"),
+        load("libs.json", "json"),
         load("system-prompt.txt"),
         load("user-template.txt"),
+        load("file-template.txt"),
+        load("refactor-template.txt"),
       ]);
-      const ctx = { cfg, system: system.trim(), userTemplate: userTemplate.trim() };
+      const ctx = { cfg, libs, system: replaceAll(system.trim(), "{{chartjs_url}}", libs.chartjs.url) };
+      const templates = { user: user.trim(), file: fileTpl.trim(), refactor: refactor.trim() };
+      const userMessage = buildUserMessage(prompt, file, baseHtml, templates);
       const errors = [];
       for (const model of models.length ? models : cfg.models) {
         try {
-          const { html, warnings } = await callGroq(model, prompt, key, ctx, signal);
+          const { html, warnings } = await callGroq(model, userMessage, key, ctx, signal);
           return { html, mode: "groq", model, elapsed_ms: elapsed(), warnings };
         } catch (err) {
           if (err.fatal || (err.name === "AbortError" && signal && signal.aborted)) throw err;
@@ -168,8 +190,8 @@
       throw new Error(`Tous les modèles ont échoué : ${errors.join(" | ")}`);
     }
 
-    return { generate, mock, defaults: () => load("groq.json", "json") };
+    return { generate, mock, defaults: () => load("groq.json", "json"), libs: () => load("libs.json", "json") };
   }
 
-  return { createLocalEngine, extractSeries, route, escapeHtml };
+  return { createLocalEngine, extractSeries, route, escapeHtml, buildUserMessage, allowedUrls };
 });

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Explorateur JSON</title>
+<style>
+:root{color-scheme:dark;--accent:#7cc4ff;--bg:#0b0d12;--glass:rgba(255,255,255,.06);--glass-2:rgba(255,255,255,.1);--line:rgba(255,255,255,.14);--text:#f4f6fb;--muted:#9aa3b5;--mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,monospace}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;width:100%;height:100%}
+body{font:13.5px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;color:var(--text);display:flex;padding:clamp(8px,2.5vw,16px);
+background:radial-gradient(circle at 15% 0%,color-mix(in srgb,var(--accent) 22%,transparent) 0,transparent 55%),radial-gradient(circle at 90% 100%,#3a1d4a 0,transparent 50%),var(--bg)}
+.card{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;gap:10px;background:var(--glass);border:1px solid var(--line);border-radius:18px;padding:clamp(12px,2.5vw,18px);
+backdrop-filter:blur(20px) saturate(160%);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 20px 50px rgba(0,0,0,.45)}
+h1{font-size:16px;margin:0;letter-spacing:-.01em;overflow-wrap:anywhere}
+.sub{color:var(--muted);margin:0;font-size:12px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.search{display:flex;align-items:center;gap:8px}
+input{flex:1;min-width:0;font:inherit;color:inherit;background:rgba(0,0,0,.3);border:1px solid var(--line);border-radius:10px;padding:7px 11px}
+input:focus{outline:none;border-color:var(--accent)}
+.tree,.results{flex:1;min-height:0;overflow:auto;font:12.5px/1.6 var(--mono);margin:0}
+details>summary{cursor:pointer;list-style:none;padding:1px 4px;border-radius:6px;white-space:nowrap}
+details>summary::-webkit-details-marker{display:none}
+details>summary::before{content:"▸";display:inline-block;width:14px;color:var(--muted);transition:transform .15s}
+details[open]>summary::before{transform:rotate(90deg)}
+summary:hover,.leaf:hover{background:rgba(255,255,255,.05)}
+.children{padding-left:16px;border-left:1px solid rgba(255,255,255,.07);margin-left:6px}
+.leaf{padding:1px 4px 1px 18px;border-radius:6px;white-space:nowrap}
+.k{color:var(--text)}
+.v{color:var(--muted)}
+.v.string{color:#a8e6a1}.v.number{color:var(--accent)}.v.boolean{color:#ffb547}.v.null{color:#ff7a8a}
+.badge{font:10.5px -apple-system,"Segoe UI",sans-serif;padding:0 6px;margin:0 6px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.badge.array,.badge.object{border-color:color-mix(in srgb,var(--accent) 50%,transparent);color:var(--accent)}
+.results{padding-left:0;list-style:none}
+.results li{padding:3px 6px;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.results li:nth-child(odd){background:rgba(255,255,255,.03)}
+.more{color:var(--muted);padding-left:18px;font-style:italic}
+.empty{color:var(--muted);margin:auto;text-align:center}
+</style>
+</head>
+<body>
+<main class="card" id="app">
+  <header>
+    <h1 id="title">Explorateur JSON</h1>
+    <p class="sub" id="meta"></p>
+  </header>
+  <div class="search">
+    <input id="q" type="search" placeholder="Rechercher une clé ou une valeur…" aria-label="Rechercher dans le JSON">
+    <span class="sub" id="count" aria-live="polite"></span>
+  </div>
+  <div class="tree" id="tree" role="tree"></div>
+  <ol class="results" id="results" hidden></ol>
+</main>
+<script>
+const FILE = window.PRISM_FILE;
+const $ = (id) => document.getElementById(id);
+const state = Object.assign({ open: ["$"], q: "" }, JSON.parse(localStorage.getItem("state") || "null"));
+const openSet = new Set(state.open);
+const LIMIT = 300;
+
+function save() {
+  state.open = [...openSet].slice(0, 500);
+  localStorage.setItem("state", JSON.stringify(state));
+}
+
+function typeOf(v) {
+  return v === null ? "null" : Array.isArray(v) ? "array" : typeof v;
+}
+
+function preview(v) {
+  const t = typeOf(v);
+  if (t === "array") return "[" + v.length + "]";
+  if (t === "object") return "{" + Object.keys(v).length + "}";
+  if (t === "string") return JSON.stringify(v.length > 90 ? v.slice(0, 90) + "…" : v);
+  return String(v);
+}
+
+function span(cls, text) {
+  const s = document.createElement("span");
+  s.className = cls;
+  s.textContent = text;
+  return s;
+}
+
+function node(key, value, path) {
+  const t = typeOf(value);
+  if (t !== "object" && t !== "array") {
+    const leaf = document.createElement("div");
+    leaf.className = "leaf";
+    leaf.setAttribute("role", "treeitem");
+    leaf.append(span("k", key + ": "), span("v " + t, preview(value)));
+    return leaf;
+  }
+  const details = document.createElement("details");
+  details.setAttribute("role", "treeitem");
+  details.open = openSet.has(path);
+  const summary = document.createElement("summary");
+  summary.append(span("k", key), span("badge " + t, t === "array" ? "liste" : "objet"), span("v", preview(value)));
+  details.append(summary);
+  let filled = false;
+  const fill = () => {
+    if (filled) return;
+    filled = true;
+    const entries = t === "array" ? value.map((v, i) => [i, v]) : Object.entries(value);
+    const box = document.createElement("div");
+    box.className = "children";
+    box.setAttribute("role", "group");
+    entries.slice(0, LIMIT).forEach(([k, v]) => {
+      box.append(node(t === "array" ? "[" + k + "]" : k, v, t === "array" ? path + "[" + k + "]" : path + "." + k));
+    });
+    if (entries.length > LIMIT) box.append(span("more", "… " + (entries.length - LIMIT) + " éléments de plus"));
+    details.append(box);
+  };
+  if (details.open) fill();
+  details.addEventListener("toggle", () => {
+    if (details.open) { fill(); openSet.add(path); } else { openSet.delete(path); }
+    save();
+  });
+  return details;
+}
+
+function search(q) {
+  const needle = q.toLowerCase();
+  const hits = [];
+  const stack = [["$", FILE.data]];
+  let visited = 0;
+  while (stack.length && hits.length < 150 && visited < 50000) {
+    const [path, value] = stack.pop();
+    visited += 1;
+    const t = typeOf(value);
+    if (t === "object" || t === "array") {
+      const entries = t === "array" ? value.map((v, i) => [path + "[" + i + "]", v, String(i)]) : Object.entries(value).map(([k, v]) => [path + "." + k, v, k]);
+      for (let i = entries.length - 1; i >= 0; i--) {
+        const [p, v, k] = entries[i];
+        if (k.toLowerCase().includes(needle)) hits.push([p, v]);
+        stack.push([p, v]);
+      }
+    } else if (String(value).toLowerCase().includes(needle)) {
+      hits.push([path, value]);
+    }
+  }
+  return hits;
+}
+
+function render() {
+  const q = state.q.trim();
+  $("tree").hidden = Boolean(q);
+  $("results").hidden = !q;
+  $("count").textContent = "";
+  if (!q) return;
+  const hits = search(q);
+  const list = $("results");
+  list.replaceChildren();
+  hits.forEach(([path, value]) => {
+    const li = document.createElement("li");
+    li.append(span("k", path + " "), span("v " + typeOf(value), preview(value)));
+    list.append(li);
+  });
+  $("count").textContent = hits.length >= 150 ? "150+ résultats" : hits.length + " résultat" + (hits.length > 1 ? "s" : "");
+}
+
+if (FILE && FILE.kind === "json") {
+  document.title = FILE.name;
+  $("title").textContent = FILE.name;
+  const root = FILE.data;
+  const t = typeOf(root);
+  $("meta").textContent = t === "array" ? "Liste de " + root.length + " éléments" : t === "object" ? Object.keys(root).length + " clés à la racine" : "Valeur " + t;
+  $("tree").append(node("racine", root, "$"));
+  $("q").value = state.q;
+  $("q").addEventListener("input", () => {
+    state.q = $("q").value;
+    save();
+    render();
+  });
+  render();
+} else {
+  $("app").innerHTML = '<p class="empty">Aucun fichier JSON joint : glissez un fichier dans Prism.</p>';
+}
+</script>
+</body>
+</html>

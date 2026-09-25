@@ -16,8 +16,10 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import time
 from pathlib import Path
+from typing import Literal
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -33,10 +35,11 @@ from sanitize import (
     has_markup,
     is_blocking,
     js_syntax_errors,
+    normalize_libraries,
     validate_document,
 )
 
-__version__ = "0.2.0"
+__version__ = "2.0.0"
 
 BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
@@ -59,9 +62,12 @@ _load_dotenv(BACKEND_DIR / ".env", BACKEND_DIR.parent / ".env")
 
 ENGINE_DIR = FRONTEND_DIR / "engine"  # fichiers partagés avec le moteur navigateur (GitHub Pages)
 GROQ_DEFAULTS = json.loads((ENGINE_DIR / "groq.json").read_text(encoding="utf-8"))
+LIBS = json.loads((ENGINE_DIR / "libs.json").read_text(encoding="utf-8"))
+ALLOWED_URLS = tuple(lib["url"] for key, lib in LIBS.items() if not key.startswith("_"))
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
-GROQ_URL = GROQ_DEFAULTS["url"]
+# Surcharge réservée aux tests locaux (faux serveur Groq, cf. tools/e2e_server.py).
+GROQ_URL = os.getenv("GROQ_URL", GROQ_DEFAULTS["url"])
 # Chaîne de modèles essayés dans l'ordre (le suivant prend le relais en cas d'échec).
 GROQ_MODELS = [
     m.strip() for m in os.getenv("GROQ_MODELS", ",".join(GROQ_DEFAULTS["models"])).split(",") if m.strip()
@@ -80,19 +86,43 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 # Prompts : impose une sortie 100 % HTML, sans Markdown ni explication.
 # Source unique dans frontend/engine/ (aussi utilisée par le moteur navigateur).
 # --------------------------------------------------------------------------- #
-SYSTEM_PROMPT = (ENGINE_DIR / "system-prompt.txt").read_text(encoding="utf-8").strip()
-USER_TEMPLATE = (ENGINE_DIR / "user-template.txt").read_text(encoding="utf-8").strip()
+def _engine_text(name: str) -> str:
+    return (ENGINE_DIR / name).read_text(encoding="utf-8").strip()
 
 
-def build_user_message(prompt: str) -> str:
-    return USER_TEMPLATE.replace("{{prompt}}", prompt)
+SYSTEM_PROMPT = _engine_text("system-prompt.txt").replace("{{chartjs_url}}", LIBS["chartjs"]["url"])
+USER_TEMPLATE = _engine_text("user-template.txt")
+FILE_TEMPLATE = _engine_text("file-template.txt")
+REFACTOR_TEMPLATE = _engine_text("refactor-template.txt")
 
 
 # --------------------------------------------------------------------------- #
 # API
 # --------------------------------------------------------------------------- #
+class AttachedFile(BaseModel):
+    """Structure d'un fichier joint : les données complètes restent dans le navigateur
+    (injectées dans le widget sous window.PRISM_FILE), seul ce résumé part au LLM."""
+
+    name: str = Field(..., min_length=1, max_length=200)
+    kind: Literal["csv", "json", "txt"]
+    summary: str = Field(..., max_length=8_000)
+
+
 class GenerateRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=12_000)
+    file: AttachedFile | None = None
+    # Présent = refactorisation d'un widget existant (seule cette carte est modifiée).
+    base_html: str | None = Field(None, max_length=120_000)
+
+
+def build_user_message(prompt: str, file: AttachedFile | None = None, base_html: str | None = None) -> str:
+    file_block = ""
+    if file:
+        file_block = FILE_TEMPLATE.replace("{{kind}}", file.kind).replace("{{summary}}", file.summary) + "\n"
+    template = REFACTOR_TEMPLATE if base_html else USER_TEMPLATE
+    # {{html}} en dernier : le code existant ne doit pas être réinterprété comme gabarit.
+    message = template.replace("{{file}}", file_block).replace("{{prompt}}", prompt)
+    return message.replace("{{html}}", base_html or "")
 
 
 class GenerateResponse(BaseModel):
@@ -148,12 +178,12 @@ def _http_client() -> httpx.AsyncClient:
     return httpx.AsyncClient()
 
 
-async def _call_groq(client: httpx.AsyncClient, model: str, prompt: str) -> tuple[str, list[str]]:
+async def _call_groq(client: httpx.AsyncClient, model: str, req: GenerateRequest) -> tuple[str, list[str]]:
     payload: dict = {
         "model": model,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": build_user_message(prompt)},
+            {"role": "user", "content": build_user_message(req.prompt.strip(), req.file, req.base_html)},
         ],
         "temperature": GROQ_DEFAULTS["temperature"],
         "max_completion_tokens": MAX_TOKENS,
@@ -161,6 +191,7 @@ async def _call_groq(client: httpx.AsyncClient, model: str, prompt: str) -> tupl
     if model.startswith(GROQ_DEFAULTS["reasoning_models_prefix"]):
         payload["reasoning_effort"] = GROQ_REASONING_EFFORT
 
+    t0 = time.perf_counter()
     try:
         resp = await client.post(
             GROQ_URL,
@@ -187,12 +218,18 @@ async def _call_groq(client: httpx.AsyncClient, model: str, prompt: str) -> tupl
     if choice.get("finish_reason") == "length":
         raise GenerationError(f"{model}: réponse tronquée (max_completion_tokens={MAX_TOKENS})")
 
+    t1 = time.perf_counter()
     cleaned = clean_llm_output(raw)
     if not has_markup(cleaned):
         raise GenerationError(f"{model}: aucune balise HTML dans la réponse ({cleaned[:80]!r})")
-    document = ensure_document(cleaned)
-    issues = validate_document(document)
+    document = normalize_libraries(ensure_document(cleaned), LIBS)
+    issues = validate_document(document, ALLOWED_URLS)
+    t2 = time.perf_counter()
     js_errors = await asyncio.to_thread(js_syntax_errors, document)
+    log.info(
+        "%s : modèle %d ms, nettoyage %d ms, vérification JS %d ms",
+        model, (t1 - t0) * 1000, (t2 - t1) * 1000, (time.perf_counter() - t2) * 1000,
+    )
     if js_errors:
         issues.append("js_syntax")
     if is_blocking(issues):
@@ -227,20 +264,25 @@ async def generate(req: GenerateRequest = Depends(read_generate_request)) -> Gen
     started = time.perf_counter()
 
     if not GROQ_API_KEY:
-        document, template = mock_component(prompt)
+        if req.base_html:
+            raise HTTPException(
+                status_code=409,
+                detail="La refactorisation a besoin d'un modèle : ajoutez GROQ_API_KEY (mode démo actif).",
+            )
+        document, template = mock_component(prompt, req.file.kind if req.file else None)
         return GenerateResponse(
             html=document,
             mode="mock",
             model=f"mock:{template}",
             elapsed_ms=round((time.perf_counter() - started) * 1000),
-            warnings=validate_document(document),
+            warnings=validate_document(document, ALLOWED_URLS),
         )
 
     errors: list[str] = []
     async with _http_client() as client:
         for model in GROQ_MODELS:
             try:
-                document, issues = await _call_groq(client, model, prompt)
+                document, issues = await _call_groq(client, model, req)
             except FatalGenerationError as exc:
                 raise HTTPException(status_code=502, detail=str(exc)) from exc
             except GenerationError as exc:
@@ -262,8 +304,15 @@ if FRONTEND_DIR.is_dir():
     app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 
+# Sous Windows, uvicorn prend par défaut la boucle Proactor : avec Python 3.14, des réponses
+# complètes côté serveur n'arrivaient parfois jamais au navigateur (vu en E2E). La boucle
+# « selector » n'a pas ce défaut ; Prism n'utilise pas les sous-processus asyncio (vérification
+# JS lancée dans un thread), seule chose qu'elle ne sait pas faire sous Windows.
+UVICORN_LOOP = "asyncio:SelectorEventLoop" if sys.platform == "win32" else "auto"
+
+
 if __name__ == "__main__":
     import uvicorn
 
     log.info("Prism %s — mode %s — http://%s:%d", __version__, "groq" if GROQ_API_KEY else "mock", HOST, PORT)
-    uvicorn.run(app, host=HOST, port=PORT)
+    uvicorn.run(app, host=HOST, port=PORT, loop=UVICORN_LOOP)

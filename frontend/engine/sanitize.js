@@ -17,8 +17,8 @@
   const DOC_START_RE = /<!doctype\s+html|<html[\s>]/i;
   const TAG_START_RE = /<[a-zA-Z!]/;
   const EXTERNAL_RE = /\b(?:src|href)\s*=\s*["']?\s*(?:https?:)?\/\//i;
+  // localStorage n'y figure plus : la sandbox fournit un stockage persistant par widget.
   const SANDBOX_APIS = {
-    localStorage: /\blocalStorage\b/,
     sessionStorage: /\bsessionStorage\b/,
     "document.cookie": /\bdocument\.cookie\b/,
     "fetch()": /\bfetch\s*\(/,
@@ -88,6 +88,36 @@
     return html;
   }
 
+  const EMPTY_SCRIPT_RE = /<script\b([^>]*)>\s*<\/script\s*>/gi;
+  const SRC_ATTR_RE = /\bsrc\s*=\s*(["']?)([^"'\s>]+)\1/i;
+  // chart.js, chart.js@4…, Chart.js/4.4.0/…, …/chart.umd.min.js — mais pas les plugins (chartjs-plugin-…).
+  const CHARTJS_SRC_RE = /chart\.js(?:@|\/|$)|\/chart(?:\.umd)?(?:\.min)?\.js(?:$|\?)/i;
+  const USES_CHART_RE = /\bnew\s+Chart\s*\(|\bChart\s*\.\s*(?:register|defaults|getChart|helpers)\b/;
+
+  function insertInHead(html, tag) {
+    const head = /<head(?:\s[^>]*)?>/i.exec(html);
+    if (head) return html.slice(0, head.index + head[0].length) + tag + html.slice(head.index + head[0].length);
+    const root = /<html(?:\s[^>]*)?>/i.exec(html);
+    if (root) {
+      const at = root.index + root[0].length;
+      return html.slice(0, at) + "<head>" + tag + "</head>" + html.slice(at);
+    }
+    return tag + html;
+  }
+
+  /** Remplace toute balise Chart.js par la version épinglée avec SRI (libs.json). Idempotent. */
+  function normalizeLibraries(html, libs) {
+    const chart = libs.chartjs;
+    html = html.replace(EMPTY_SCRIPT_RE, (whole, attrs) => {
+      const src = SRC_ATTR_RE.exec(attrs);
+      return src && CHARTJS_SRC_RE.test(src[2]) ? "" : whole;
+    });
+    if (USES_CHART_RE.test(html)) {
+      html = insertInHead(html, `<script src="${chart.url}" integrity="${chart.integrity}" crossorigin="anonymous"></script>`);
+    }
+    return html;
+  }
+
   /** Compte ouvertures/fermetures d'un élément à contenu brut (script, style), comme HTMLParser. */
   function rawTextBalance(html, tag) {
     const open = new RegExp(`<${tag}\\b[^>]*>`, "gi");
@@ -119,8 +149,8 @@
     return opened === closed;
   }
 
-  /** Liste des problèmes détectés (vide = document propre). */
-  function validateDocument(html) {
+  /** Liste des problèmes détectés (vide = document propre). allowedUrls : bibliothèques épinglées. */
+  function validateDocument(html, allowedUrls = []) {
     const issues = [];
     if (!String(html).trim()) return ["empty_document"];
     if (html.includes("```")) issues.push("markdown_fence");
@@ -135,7 +165,8 @@
       if (!rawTextBalance(html, tag)) issues.push(`unbalanced_<${tag}>`);
     }
 
-    if (EXTERNAL_RE.test(html)) issues.push("external_resource");
+    const checked = allowedUrls.reduce((text, url) => text.split(url).join(""), html);
+    if (EXTERNAL_RE.test(checked)) issues.push("external_resource");
     for (const [name, pattern] of Object.entries(SANDBOX_APIS)) {
       if (pattern.test(html)) issues.push(`sandbox_api:${name}`);
     }
@@ -176,6 +207,7 @@
     cleanLlmOutput,
     hasMarkup,
     ensureDocument,
+    normalizeLibraries,
     validateDocument,
     inlineScripts,
     jsSyntaxErrors,

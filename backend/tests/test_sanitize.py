@@ -65,10 +65,14 @@ class ValidateTests(unittest.TestCase):
         self.assertTrue(is_blocking(validate_document(DOC.replace("ok", "```"))))
 
     def test_sandbox_warnings_are_not_blocking(self):
-        issues = validate_document(DOC.replace("let a = 1;", "localStorage.x = 1; fetch('https://x.y');"))
-        self.assertIn("sandbox_api:localStorage", issues)
+        issues = validate_document(DOC.replace("let a = 1;", "sessionStorage.x = 1; fetch('https://x.y');"))
+        self.assertIn("sandbox_api:sessionStorage", issues)
         self.assertIn("sandbox_api:fetch()", issues)
         self.assertFalse(is_blocking(issues))
+
+    def test_local_storage_is_expected(self):
+        # v2 : la sandbox fournit un localStorage persistant par widget, que le prompt impose.
+        self.assertEqual(validate_document(DOC.replace("let a = 1;", 'localStorage.setItem("state", "{}");')), [])
 
     def test_external_resource_detected(self):
         self.assertIn("external_resource", validate_document(DOC.replace("<b>", '<img src="https://cdn.x/y.png"><b>')))

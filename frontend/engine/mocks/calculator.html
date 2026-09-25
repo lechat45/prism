@@ -5,40 +5,36 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Calculatrice</title>
 <style>
-:root{color-scheme:dark;--bg:#0b0d12;--glass:rgba(255,255,255,.06);--glass-2:rgba(255,255,255,.1);
---line:rgba(255,255,255,.14);--text:#f4f6fb;--muted:#9aa3b5;--accent:#7cc4ff}
+:root{color-scheme:dark;--accent:#7cc4ff;--bg:#0b0d12;--glass:rgba(255,255,255,.06);--glass-2:rgba(255,255,255,.1);--line:rgba(255,255,255,.14);--text:#f4f6fb;--muted:#9aa3b5}
 *{box-sizing:border-box}
-html,body{margin:0;min-height:100%}
-body{font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;color:var(--text);
-background:radial-gradient(circle at 20% 10%,#1d2a4a 0,transparent 45%),radial-gradient(circle at 85% 90%,#3a1d4a 0,transparent 45%),var(--bg);
-display:grid;place-items:center;padding:24px;min-height:100vh}
-.card{width:min(560px,100%);background:var(--glass);border:1px solid var(--line);border-radius:22px;padding:28px;
-backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);
-box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 20px 50px rgba(0,0,0,.45)}
-h1{font-size:20px;margin:0 0 4px;letter-spacing:-.01em}
-.sub{color:var(--muted);margin:0 0 22px;font-size:13px}
+html,body{margin:0;width:100%;height:100%}
+body{font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;color:var(--text);display:flex;padding:clamp(10px,3vw,18px);
+background:radial-gradient(circle at 15% 0%,color-mix(in srgb,var(--accent) 22%,transparent) 0,transparent 55%),radial-gradient(circle at 90% 100%,#3a1d4a 0,transparent 50%),var(--bg)}
+.card{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;background:var(--glass);border:1px solid var(--line);border-radius:18px;padding:clamp(12px,3vw,20px);
+backdrop-filter:blur(20px) saturate(160%);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 20px 50px rgba(0,0,0,.45)}
 button{font:inherit;color:inherit;cursor:pointer}
-button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
-
-.display{background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:16px;padding:14px 18px;text-align:right;margin-bottom:14px}
-.expr{color:var(--muted);font-size:13px;min-height:20px}
-.value{font-size:38px;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-.keys{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-.keys button{height:58px;border-radius:16px;border:1px solid var(--line);background:var(--glass-2);font-size:18px;transition:background .15s,transform .1s}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.display{background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:14px;padding:10px 14px;text-align:right}
+.history{color:var(--muted);font-size:12px;min-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.expr{color:var(--muted);font-size:12px;min-height:18px}
+.value{font-size:clamp(22px,7vmin,36px);font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;line-height:1.2}
+.keys{flex:1;display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:1fr;gap:8px;min-height:0}
+.keys button{min-height:34px;border-radius:12px;border:1px solid var(--line);background:var(--glass-2);font-size:clamp(14px,3vmin,18px);transition:background .15s,transform .1s}
 .keys button:hover{background:rgba(255,255,255,.16)}
 .keys button:active{transform:scale(.96)}
-.keys .op{background:rgba(124,196,255,.18);color:#bfe3ff}
-.keys .eq{background:linear-gradient(135deg,#5b8cff,#a66bff);border-color:rgba(255,255,255,.3)}
+.keys .op{background:color-mix(in srgb,var(--accent) 20%,transparent);color:color-mix(in srgb,var(--accent) 45%,white)}
+.keys .eq{background:var(--accent);color:#0b0d12;font-weight:700;border-color:rgba(255,255,255,.3)}
 .keys .wide{grid-column:span 2}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
-
 <main class="card">
-  <h1>Calculatrice</h1>
-  <p class="sub">Clavier physique pris en charge (chiffres, + − × ÷, Entrée, Échap).</p>
-  <div class="display" aria-live="polite"><div class="expr" id="expr"></div><div class="value" id="value">0</div></div>
+  <div class="display" aria-live="polite">
+    <div class="history" id="history" title="Dernières opérations"></div>
+    <div class="expr" id="expr"></div>
+    <div class="value" id="value">0</div>
+  </div>
   <div class="keys" id="keys">
     <button data-k="C">C</button><button data-k="±">±</button><button data-k="%">%</button><button class="op" data-k="/">÷</button>
     <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button><button class="op" data-k="*">×</button>
@@ -48,16 +44,23 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   </div>
 </main>
 <script>
-
 const valueEl = document.getElementById("value");
 const exprEl = document.getElementById("expr");
+const historyEl = document.getElementById("history");
 const symbols = { "+": "+", "-": "−", "*": "×", "/": "÷" };
-let current = "0", stored = null, op = null, fresh = false;
+const state = Object.assign(
+  { current: "0", stored: null, op: null, fresh: false, history: [] },
+  JSON.parse(localStorage.getItem("state") || "null"),
+);
 
-const fmt = (n) => Number.isFinite(n) ? String(Number(n.toPrecision(12))).replace(".", ",") : "Erreur";
+const fmt = (n) => (Number.isFinite(n) ? String(Number(n.toPrecision(12))).replace(".", ",") : "Erreur");
+function save() {
+  localStorage.setItem("state", JSON.stringify(state));
+}
 function render() {
-  valueEl.textContent = current.replace(".", ",");
-  exprEl.textContent = stored !== null && op ? fmt(stored) + " " + symbols[op] : "";
+  valueEl.textContent = state.current.replace(".", ",");
+  exprEl.textContent = state.stored !== null && state.op ? fmt(state.stored) + " " + symbols[state.op] : "";
+  historyEl.textContent = state.history.join("   ·   ");
 }
 function compute(a, b, o) {
   if (o === "+") return a + b;
@@ -68,27 +71,34 @@ function compute(a, b, o) {
 }
 function press(k) {
   if (/^[0-9]$/.test(k)) {
-    current = fresh || current === "0" ? k : current + k;
-    fresh = false;
+    state.current = state.fresh || state.current === "0" ? k : state.current + k;
+    state.fresh = false;
   } else if (k === ".") {
-    if (fresh) { current = "0"; fresh = false; }
-    if (!current.includes(".")) current += ".";
+    if (state.fresh) { state.current = "0"; state.fresh = false; }
+    if (!state.current.includes(".")) state.current += ".";
   } else if (k in symbols) {
-    if (op && !fresh) current = String(compute(stored, parseFloat(current), op));
-    stored = parseFloat(current); op = k; fresh = true;
+    if (state.op && !state.fresh) state.current = String(compute(state.stored, parseFloat(state.current), state.op));
+    state.stored = parseFloat(state.current);
+    state.op = k;
+    state.fresh = true;
   } else if (k === "=") {
-    if (op === null) return;
-    const result = compute(stored, parseFloat(current), op);
-    current = Number.isFinite(result) ? String(Number(result.toPrecision(12))) : "Erreur";
-    stored = null; op = null; fresh = true;
+    if (state.op === null) return;
+    const result = compute(state.stored, parseFloat(state.current), state.op);
+    const line = fmt(state.stored) + " " + symbols[state.op] + " " + fmt(parseFloat(state.current)) + " = " + fmt(result);
+    state.history = [line].concat(state.history).slice(0, 4);
+    state.current = Number.isFinite(result) ? String(Number(result.toPrecision(12))) : "Erreur";
+    state.stored = null;
+    state.op = null;
+    state.fresh = true;
   } else if (k === "C") {
-    current = "0"; stored = null; op = null; fresh = false;
+    Object.assign(state, { current: "0", stored: null, op: null, fresh: false });
   } else if (k === "±") {
-    current = current.startsWith("-") ? current.slice(1) : (current === "0" ? "0" : "-" + current);
+    state.current = state.current.startsWith("-") ? state.current.slice(1) : state.current === "0" ? "0" : "-" + state.current;
   } else if (k === "%") {
-    current = String(parseFloat(current) / 100);
+    state.current = String(parseFloat(state.current) / 100);
   }
-  if (current === "NaN") current = "Erreur";
+  if (state.current === "NaN") state.current = "Erreur";
+  save();
   render();
 }
 document.getElementById("keys").addEventListener("click", (e) => {
@@ -101,7 +111,6 @@ document.addEventListener("keydown", (e) => {
   if (/^[0-9.+\-*\/=%C]$/.test(k)) { e.preventDefault(); press(k); }
 });
 render();
-
 </script>
 </body>
 </html>

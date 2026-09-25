@@ -1,5 +1,32 @@
 # Changelog
 
+## 2.0.0 — 2026-09-24
+
+Prism devient un canvas spatial multi-widgets.
+
+- **Canvas infini** : chaque demande crée une carte ; pan, zoom (Ctrl + molette, pincement, boutons),
+  « Tout voir », « Ranger » ; cartes déplaçables, redimensionnables, fermables avec « Rétablir »,
+  pilotables au clavier ; générations en parallèle, annulables.
+- **Import de fichiers** CSV/JSON/TXT par glisser-déposer, trombone ou collage (5 Mo max) : analyse dans
+  le navigateur (séparateur, types, formats français), résumé de structure envoyé au modèle, données
+  complètes injectées dans le widget (`window.PRISM_FILE`). Nouveaux gabarits de démo : graphique CSV,
+  explorateur JSON, analyse de texte.
+- **Persistance** : cartes en IndexedDB ; `localStorage` persistant par widget, fourni par la sandbox
+  (sans `allow-same-origin`). Le prompt système impose de l'utiliser pour tout état modifiable.
+- **Inspecteur** : refactorisation d'une carte seule (données conservées, annulation), couleur d'accent
+  à chaud (`--accent` imposé par le prompt), copie du code complet, téléchargement d'un `.html` autonome.
+- **Chart.js** 4.5.1 via jsDelivr, épinglé (SRI) : toute balise Chart.js écrite par le modèle est remplacée
+  par la version épinglée ; la CSP n'autorise que ce fichier.
+- **Liquid Glass v2** : dégradés fluides animés, grain de verre dépoli, grille du canvas, animations
+  d'apparition, micro-interactions, barres de défilement des cartes masquées.
+- API : `POST /api/generate` accepte `file` (résumé) et `base_html` (refactorisation) ; 409 en mode démo
+  pour une refactorisation. `GROQ_URL` surchargeable pour les tests.
+- Frontend réécrit en modules ES (`frontend/js/`).
+- Serveur sous Windows : boucle d'évènements « selector » au lieu de Proactor (avec Python 3.14, des
+  réponses complètes côté serveur n'arrivaient parfois jamais au navigateur).
+- Tests : 45 tests Python (parité Python ↔ JS étendue), 29 tests Node, E2E Chrome headless en trois modes
+  (serveur, statique, faux Groq avec refactorisation).
+
 ## 0.2.0 — 2026-09-24
 
 Compatibilité GitHub Pages.

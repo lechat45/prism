@@ -1,0 +1,5 @@
+ATTACHED FILE: the complete parsed content is available at runtime as window.PRISM_FILE (kind: {{kind}}).
+Use it for every value; the excerpt below only describes its structure.
+<<<
+{{summary}}
+>>>

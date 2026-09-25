@@ -4,7 +4,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const L = require("../engine/local.js");
-const { runFixtures, fixtures, fileFetch } = require("./run_fixtures.cjs");
+const { runFixtures, fixtures, fileFetch, libs } = require("./run_fixtures.cjs");
 
 const GOOD =
   '<!DOCTYPE html>\n<html><head><style>b{}</style></head><body><button id="b">0</button>' +
@@ -30,6 +30,16 @@ test("fixtures partagées : mêmes attentes que le backend", async () => {
   fixtures.series.forEach((c, i) => {
     assert.deepEqual(r.series[i].map((s) => s.label), c.labels);
     assert.deepEqual(r.series[i].map((s) => s.value), c.values);
+  });
+  fixtures.libraries.forEach((c, i) => {
+    const got = r.libraries[i];
+    assert.equal(got.split(libs.chartjs.url).length - 1, c.pinned, c.name);
+    (c.absent || []).forEach((s) => assert.ok(!got.includes(s), `${c.name} : sans ${s}`));
+    (c.contains || []).forEach((s) => assert.ok(got.includes(s), `${c.name} : contient ${s}`));
+  });
+  fixtures.messages.forEach((c, i) => {
+    (c.contains || []).forEach((s) => assert.ok(r.messages[i].includes(s), `${c.name} : contient ${s}`));
+    (c.absent || []).forEach((s) => assert.ok(!r.messages[i].includes(s), `${c.name} : sans ${s}`));
   });
   fixtures.render.forEach((c, i) => {
     (c.contains || []).forEach((s) => assert.ok(r.renders[i].includes(s), `${c.name} : contient ${s}`));
@@ -103,6 +113,36 @@ test("clé refusée : arrêt immédiat, sans essayer d'autre modèle", async () 
 test("tous les modèles en échec : message détaillé", async () => {
   const { engine } = fakeGroq({ [PRIMARY]: httpError(500), [SECONDARY]: completion("Non.") });
   await assert.rejects(engine.generate("x", { key: "k" }), /Tous les modèles ont échoué.*HTTP 500.*aucune balise HTML/);
+});
+
+test("fichier joint : résumé envoyé au modèle, gabarit CSV en démo", async () => {
+  const file = { name: "ventes.csv", kind: "csv", summary: "Colonnes : mois (text), total (number)" };
+  const { engine, calls } = fakeGroq({ [PRIMARY]: completion(GOOD) });
+  await engine.generate("un graphique", { key: "k", file });
+  assert.match(calls[0].body.messages[1].content, /ATTACHED FILE[\s\S]*kind: csv[\s\S]*Colonnes : mois/);
+  assert.match(calls[0].body.messages[0].content, new RegExp(libs.chartjs.url.replace(/[.]/g, "\\.")));
+
+  const demo = await fakeGroq({}).engine.generate("un graphique", { file });
+  assert.equal(demo.model, "mock:csv-chart");
+  assert.ok(demo.html.includes(`integrity="${libs.chartjs.integrity}"`));
+});
+
+test("refactorisation : code actuel et consigne envoyés, Chart.js ré-épinglé", async () => {
+  const withOldChart = GOOD.replace("<head>", '<head><script src="https://cdn.jsdelivr.net/npm/chart.js@3"></script>')
+    .replace("let n = 0;", "let n = 0; new Chart(document.body, {});");
+  const { engine, calls } = fakeGroq({ [PRIMARY]: completion(withOldChart) });
+  const r = await engine.generate("ajoute un graphique", { key: "k", baseHtml: GOOD });
+  const message = calls[0].body.messages[1].content;
+  assert.ok(message.includes("current source of an existing widget"));
+  assert.ok(message.includes(GOOD));
+  assert.ok(!r.html.includes("chart.js@3"));
+  assert.equal(r.html.split(libs.chartjs.url).length - 1, 1);
+});
+
+test("refactorisation en mode démo : erreur explicite, aucun appel", async () => {
+  const { engine, calls } = fakeGroq({});
+  await assert.rejects(engine.generate("change la couleur", { baseHtml: GOOD }), (err) => err.code === "needs_key");
+  assert.equal(calls.length, 0);
 });
 
 test("chaîne de modèles personnalisée", async () => {

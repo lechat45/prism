@@ -1,5 +1,5 @@
 {
-  "_doc": "Cas partagés : rejoués par backend/tests/test_parity.py (Python + comparaison avec le JS via Node) et frontend/tests/engine.test.cjs.",
+  "_doc": "Cas partagés : rejoués par backend/tests/test_parity.py (Python + comparaison exacte avec le JS via Node) et frontend/tests/engine.test.cjs.",
   "clean": [
     {
       "name": "document propre intact",
@@ -66,6 +66,12 @@
       "exact": []
     },
     {
+      "name": "localStorage autorisé (stockage persistant de la sandbox)",
+      "doc": "<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>localStorage.setItem(\"state\", \"{}\");</script></body></html>",
+      "blocking": false,
+      "exact": []
+    },
+    {
       "name": "document tronqué",
       "doc": "<!DOCTYPE html>\n<html><head></head><body><script>let a",
       "blocking": true,
@@ -84,10 +90,10 @@
     },
     {
       "name": "API absentes de la sandbox",
-      "doc": "<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>localStorage.x = 1; fetch('https://x.y');</script></body></html>",
+      "doc": "<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script>sessionStorage.x = 1; fetch('https://x.y');</script></body></html>",
       "blocking": false,
       "includes": [
-        "sandbox_api:localStorage",
+        "sandbox_api:sessionStorage",
         "sandbox_api:fetch()"
       ]
     },
@@ -98,6 +104,12 @@
       "includes": [
         "external_resource"
       ]
+    },
+    {
+      "name": "Chart.js épinglé non signalé",
+      "doc": "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><script src=\"https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js\"></script></head><body><canvas id=\"c\"></canvas><script>new Chart(document.getElementById(\"c\"), {type: \"bar\"});</script></body></html>",
+      "blocking": false,
+      "exact": []
     }
   ],
   "js_syntax": [
@@ -115,6 +127,53 @@
       "name": "script JSON ignoré",
       "doc": "<!DOCTYPE html>\n<html lang=\"fr\"><head><style>b{}</style></head><body><b>ok</b><script type=\"application/json\">{pas du js}</script><script>let a = 1;</script></body></html>",
       "errors": 0
+    }
+  ],
+  "libraries": [
+    {
+      "name": "jsDelivr sans version remplacé",
+      "doc": "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><script src=\"https://cdn.jsdelivr.net/npm/chart.js\"></script></head><body><canvas id=\"c\"></canvas><script>new Chart(document.getElementById(\"c\"), {type: \"bar\"});</script></body></html>",
+      "pinned": 1,
+      "absent": [
+        "npm/chart.js\""
+      ]
+    },
+    {
+      "name": "cdnjs Chart.js 3 remplacé",
+      "doc": "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><script src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js'></script></head><body><canvas id=\"c\"></canvas><script>new Chart(document.getElementById(\"c\"), {type: \"bar\"});</script></body></html>",
+      "pinned": 1,
+      "absent": [
+        "3.9.1"
+      ]
+    },
+    {
+      "name": "usage sans balise : ajout",
+      "doc": "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"></head><body><canvas id=\"c\"></canvas><script>new Chart(document.getElementById(\"c\"), {type: \"bar\"});</script></body></html>",
+      "pinned": 1,
+      "absent": []
+    },
+    {
+      "name": "balise inutilisée retirée",
+      "doc": "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><script src=\"https://unpkg.com/chart.js@4\"></script></head><body><p>rien</p></body></html>",
+      "pinned": 0,
+      "absent": [
+        "unpkg"
+      ]
+    },
+    {
+      "name": "plugin conservé",
+      "doc": "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><script src=\"https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2\"></script></head><body><canvas id=\"c\"></canvas><script>new Chart(document.getElementById(\"c\"), {type: \"bar\"});</script></body></html>",
+      "pinned": 1,
+      "absent": [],
+      "contains": [
+        "chartjs-plugin-datalabels"
+      ]
+    },
+    {
+      "name": "sans <head>",
+      "doc": "<!DOCTYPE html><html><body><canvas id=\"c\"></canvas><script>new Chart(document.getElementById(\"c\"), {type: \"bar\"});</script></body></html>",
+      "pinned": 1,
+      "absent": []
     }
   ],
   "routing": [
@@ -141,6 +200,21 @@
     {
       "prompt": "Un minuteur Pomodoro",
       "template": "generic"
+    },
+    {
+      "prompt": "un bouton pour ce fichier",
+      "file_kind": "csv",
+      "template": "csv-chart"
+    },
+    {
+      "prompt": "explore",
+      "file_kind": "json",
+      "template": "json-tree"
+    },
+    {
+      "prompt": "analyse",
+      "file_kind": "txt",
+      "template": "text-stats"
     }
   ],
   "series": [
@@ -186,6 +260,59 @@
         "\"label\":\"Jan\""
       ],
       "script_tags": 1
+    },
+    {
+      "name": "CSV : Chart.js épinglé injecté",
+      "prompt": "graphique",
+      "file_kind": "csv",
+      "contains": [
+        "https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js",
+        "window.PRISM_FILE"
+      ],
+      "script_tags": 1
+    }
+  ],
+  "messages": [
+    {
+      "name": "demande simple",
+      "prompt": "un compteur",
+      "contains": [
+        "<<<\nun compteur\n>>>"
+      ],
+      "absent": [
+        "{{",
+        "ATTACHED FILE"
+      ]
+    },
+    {
+      "name": "avec fichier",
+      "prompt": "un graphe",
+      "file": {
+        "name": "v.csv",
+        "kind": "csv",
+        "summary": "Colonnes : mois (text), total (number)"
+      },
+      "contains": [
+        "ATTACHED FILE",
+        "kind: csv",
+        "Colonnes : mois (text), total (number)"
+      ],
+      "absent": [
+        "{{"
+      ]
+    },
+    {
+      "name": "refactorisation (le code n'est pas réinterprété)",
+      "prompt": "ajoute un titre",
+      "base_html": "<!DOCTYPE html><html><body>{{prompt}} {{file}}</body></html>",
+      "contains": [
+        "current source of an existing widget",
+        "<body>{{prompt}} {{file}}</body>",
+        "<<<\najoute un titre\n>>>"
+      ],
+      "absent": [
+        "ATTACHED FILE"
+      ]
     }
   ]
 }

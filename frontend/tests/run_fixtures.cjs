@@ -20,23 +20,32 @@ function fileFetch(url) {
   return Promise.resolve({ ok: true, status: 200, text: async () => body, json: async () => JSON.parse(body) });
 }
 
+const libs = JSON.parse(read("engine/libs.json"));
+const templates = {
+  user: read("engine/user-template.txt").trim(),
+  file: read("engine/file-template.txt").trim(),
+  refactor: read("engine/refactor-template.txt").trim(),
+};
+
 async function runFixtures() {
   const engine = L.createLocalEngine({ baseUrl: "engine/", fetch: fileFetch });
   const manifest = JSON.parse(read("engine/mocks/manifest.json"));
-  const mockHtml = async (prompt) => (await engine.mock(prompt)).html;
+  const mockHtml = async (c) => (await engine.mock(c.prompt, c.file_kind)).html;
   return {
     clean: fixtures.clean.map((c) => S.cleanLlmOutput(c.raw)),
     markup: fixtures.markup.map((c) => S.hasMarkup(c.text)),
-    validate: fixtures.validate.map((c) => S.validateDocument(c.doc)),
+    validate: fixtures.validate.map((c) => S.validateDocument(c.doc, L.allowedUrls(libs))),
     js_syntax: fixtures.js_syntax.map((c) => S.jsSyntaxErrors(c.doc).length),
-    routing: fixtures.routing.map((c) => L.route(c.prompt, manifest)),
+    libraries: fixtures.libraries.map((c) => S.normalizeLibraries(c.doc, libs)),
+    routing: fixtures.routing.map((c) => L.route(c.prompt, manifest, c.file_kind)),
     series: fixtures.series.map((c) => L.extractSeries(c.prompt, manifest)),
-    renders: await Promise.all(fixtures.render.map((c) => mockHtml(c.prompt))),
-    mock_renders: await Promise.all(fixtures.routing.map((c) => mockHtml(c.prompt))),
+    renders: await Promise.all(fixtures.render.map(mockHtml)),
+    mock_renders: await Promise.all(fixtures.routing.map(mockHtml)),
+    messages: fixtures.messages.map((c) => L.buildUserMessage(c.prompt, c.file || null, c.base_html || null, templates)),
   };
 }
 
-module.exports = { runFixtures, fixtures, fileFetch };
+module.exports = { runFixtures, fixtures, fileFetch, libs };
 
 if (require.main === module) {
   runFixtures().then((results) => process.stdout.write(JSON.stringify(results)));

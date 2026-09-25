@@ -1,5 +1,5 @@
 {
-  "_doc": "Mode démo, partagé par backend/mocks.py et frontend/engine/local.js. Routage par mots-clés (demande sans accents, en minuscules), dans l'ordre.",
+  "_doc": "Mode démo, partagé par backend/mocks.py et frontend/engine/local.js. Un fichier joint choisit le gabarit (file_routes) ; sinon routage par mots-clés (demande sans accents, en minuscules), dans l'ordre.",
   "routes": [
     {
       "template": "dashboard",
@@ -15,6 +15,7 @@
     }
   ],
   "fallback": "generic",
+  "file_routes": { "csv": "csv-chart", "json": "json-tree", "txt": "text-stats" },
   "series_pattern": "([A-Za-zÀ-ÖØ-öø-ÿ][\\wÀ-ÖØ-öø-ÿ '’-]{0,28}?)\\s*[:=;,\\t]?\\s*(-?\\d+(?:[.,]\\d+)?)",
   "series_min": 2,
   "series_max": 12,

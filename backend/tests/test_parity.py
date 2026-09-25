@@ -15,12 +15,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import app  # noqa: E402
 import mocks  # noqa: E402
 from sanitize import (  # noqa: E402
     clean_llm_output,
     has_markup,
     is_blocking,
     js_syntax_errors,
+    normalize_libraries,
     validate_document,
 )
 
@@ -29,16 +31,23 @@ FIXTURES = json.loads((FRONTEND / "tests" / "fixtures.json").read_text(encoding=
 NODE = shutil.which("node")
 
 
+def _message(case: dict) -> str:
+    file = app.AttachedFile(**case["file"]) if case.get("file") else None
+    return app.build_user_message(case["prompt"], file, case.get("base_html"))
+
+
 def python_results() -> dict:
     return {
         "clean": [clean_llm_output(c["raw"]) for c in FIXTURES["clean"]],
         "markup": [has_markup(c["text"]) for c in FIXTURES["markup"]],
-        "validate": [validate_document(c["doc"]) for c in FIXTURES["validate"]],
+        "validate": [validate_document(c["doc"], app.ALLOWED_URLS) for c in FIXTURES["validate"]],
         "js_syntax": [len(js_syntax_errors(c["doc"])) for c in FIXTURES["js_syntax"]],
-        "routing": [mocks.mock_component(c["prompt"])[1] for c in FIXTURES["routing"]],
+        "libraries": [normalize_libraries(c["doc"], app.LIBS) for c in FIXTURES["libraries"]],
+        "routing": [mocks.mock_component(c["prompt"], c.get("file_kind"))[1] for c in FIXTURES["routing"]],
         "series": [mocks.extract_series(c["prompt"]) for c in FIXTURES["series"]],
-        "renders": [mocks.mock_component(c["prompt"])[0] for c in FIXTURES["render"]],
-        "mock_renders": [mocks.mock_component(c["prompt"])[0] for c in FIXTURES["routing"]],
+        "renders": [mocks.mock_component(c["prompt"], c.get("file_kind"))[0] for c in FIXTURES["render"]],
+        "mock_renders": [mocks.mock_component(c["prompt"], c.get("file_kind"))[0] for c in FIXTURES["routing"]],
+        "messages": [_message(c) for c in FIXTURES["messages"]],
     }
 
 
@@ -75,6 +84,27 @@ class FixtureTests(unittest.TestCase):
         for case, got in zip(FIXTURES["series"], self.r["series"]):
             self.assertEqual([s["label"] for s in got], case["labels"])
             self.assertEqual([s["value"] for s in got], case["values"])
+
+    def test_libraries(self):
+        pinned = app.LIBS["chartjs"]["url"]
+        for case, got in zip(FIXTURES["libraries"], self.r["libraries"]):
+            with self.subTest(case["name"]):
+                self.assertEqual(got.count(pinned), case["pinned"])
+                if case["pinned"]:
+                    self.assertIn(f'integrity="{app.LIBS["chartjs"]["integrity"]}"', got)
+                for needle in case.get("absent", []):
+                    self.assertNotIn(needle, got)
+                for needle in case.get("contains", []):
+                    self.assertIn(needle, got)
+                self.assertEqual(normalize_libraries(got, app.LIBS), got, "idempotent")
+
+    def test_messages(self):
+        for case, got in zip(FIXTURES["messages"], self.r["messages"]):
+            with self.subTest(case["name"]):
+                for needle in case.get("contains", []):
+                    self.assertIn(needle, got)
+                for needle in case.get("absent", []):
+                    self.assertNotIn(needle, got)
 
     def test_render(self):
         for case, got in zip(FIXTURES["render"], self.r["renders"]):

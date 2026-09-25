@@ -14,12 +14,20 @@ import unicodedata
 from functools import lru_cache
 from pathlib import Path
 
-MOCKS_DIR = Path(__file__).resolve().parent.parent / "frontend" / "engine" / "mocks"
+from sanitize import normalize_libraries
+
+ENGINE_DIR = Path(__file__).resolve().parent.parent / "frontend" / "engine"
+MOCKS_DIR = ENGINE_DIR / "mocks"
 
 
 @lru_cache(maxsize=1)
 def manifest() -> dict:
     return json.loads((MOCKS_DIR / "manifest.json").read_text(encoding="utf-8"))
+
+
+@lru_cache(maxsize=1)
+def libs() -> dict:
+    return json.loads((ENGINE_DIR / "libs.json").read_text(encoding="utf-8"))
 
 
 @lru_cache(maxsize=None)
@@ -51,8 +59,10 @@ def extract_series(prompt: str) -> list[dict[str, float | str]]:
     return series
 
 
-def _route(prompt: str) -> str:
+def _route(prompt: str, file_kind: str | None = None) -> str:
     spec = manifest()
+    if file_kind in spec["file_routes"]:
+        return spec["file_routes"][file_kind]
     text = _normalize(prompt)
     for route in spec["routes"]:
         if any(keyword in text for keyword in route["keywords"]):
@@ -72,10 +82,11 @@ def render(name: str, prompt: str) -> str:
         source = spec["sources"]["user" if own_data else "sample"]
         document = document.replace(marks["data"], _js_value(series if own_data else spec["sample_series"]))
         document = document.replace(marks["source"], html.escape(source))
-    return document.replace(marks["prompt"], html.escape(prompt))
+    document = document.replace(marks["prompt"], html.escape(prompt))
+    return normalize_libraries(document, libs())
 
 
-def mock_component(prompt: str) -> tuple[str, str]:
-    """Retourne (html, nom_du_gabarit) pour une demande donnée."""
-    name = _route(prompt)
+def mock_component(prompt: str, file_kind: str | None = None) -> tuple[str, str]:
+    """Retourne (html, nom_du_gabarit) pour une demande (et un éventuel fichier joint)."""
+    name = _route(prompt, file_kind)
     return render(name, prompt), name

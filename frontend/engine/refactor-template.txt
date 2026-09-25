@@ -1,0 +1,12 @@
+Here is the current source of an existing widget:
+<<<
+{{html}}
+>>>
+Modify this widget according to the instruction below. Keep everything that is not concerned by the instruction:
+features, texts, design, the --accent variable and the structure of the persisted localStorage "state" object
+(add new fields to it rather than renaming existing ones, so the user's saved data keeps working).
+Instruction:
+<<<
+{{prompt}}
+>>>
+{{file}}Return only the complete updated HTML document, starting with <!DOCTYPE html> and ending with </html>.

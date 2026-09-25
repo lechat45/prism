@@ -3,58 +3,60 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Prism · démo</title>
+<title>Aperçu démo</title>
 <style>
-:root{color-scheme:dark;--bg:#0b0d12;--glass:rgba(255,255,255,.06);--glass-2:rgba(255,255,255,.1);
---line:rgba(255,255,255,.14);--text:#f4f6fb;--muted:#9aa3b5;--accent:#7cc4ff}
+:root{color-scheme:dark;--accent:#7cc4ff;--bg:#0b0d12;--glass:rgba(255,255,255,.06);--glass-2:rgba(255,255,255,.1);--line:rgba(255,255,255,.14);--text:#f4f6fb;--muted:#9aa3b5}
 *{box-sizing:border-box}
-html,body{margin:0;min-height:100%}
-body{font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;color:var(--text);
-background:radial-gradient(circle at 20% 10%,#1d2a4a 0,transparent 45%),radial-gradient(circle at 85% 90%,#3a1d4a 0,transparent 45%),var(--bg);
-display:grid;place-items:center;padding:24px;min-height:100vh}
-.card{width:min(560px,100%);background:var(--glass);border:1px solid var(--line);border-radius:22px;padding:28px;
-backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);
-box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 20px 50px rgba(0,0,0,.45)}
-h1{font-size:20px;margin:0 0 4px;letter-spacing:-.01em}
-.sub{color:var(--muted);margin:0 0 22px;font-size:13px}
-button{font:inherit;color:inherit;cursor:pointer}
-button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
-
-blockquote{margin:0 0 18px;padding:14px 16px;border-left:3px solid var(--accent);background:rgba(0,0,0,.25);border-radius:0 14px 14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
-ol{padding-left:20px;color:var(--muted);margin:0 0 18px}
+html,body{margin:0;width:100%;height:100%}
+body{font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;color:var(--text);display:flex;padding:clamp(10px,3vw,18px);
+background:radial-gradient(circle at 15% 0%,color-mix(in srgb,var(--accent) 22%,transparent) 0,transparent 55%),radial-gradient(circle at 90% 100%,#3a1d4a 0,transparent 50%),var(--bg)}
+.card{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px;background:var(--glass);border:1px solid var(--line);border-radius:18px;padding:clamp(14px,3vw,22px);
+backdrop-filter:blur(20px) saturate(160%);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 20px 50px rgba(0,0,0,.45);overflow:auto}
+h1{font-size:17px;margin:0;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:0;font-size:12.5px}
+blockquote{margin:0;padding:12px 14px;border-left:3px solid var(--accent);background:rgba(0,0,0,.25);border-radius:0 12px 12px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+ol{padding-left:20px;color:var(--muted);margin:0}
 code{background:var(--glass-2);border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:12px;color:var(--text)}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
-.chip{background:var(--glass-2);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px}
-.chip[aria-pressed="true"]{background:rgba(124,196,255,.22);border-color:rgba(124,196,255,.5)}
+.chip{background:var(--glass-2);border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:12.5px}
+.chip[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 24%,transparent);border-color:color-mix(in srgb,var(--accent) 60%,transparent)}
 </style>
 </head>
 <body>
-
 <main class="card">
   <h1>Mode démo</h1>
-  <p class="sub">Aucune clé Groq détectée : voici un aperçu statique de votre demande.</p>
+  <p class="sub">Aucune clé Groq : voici un aperçu statique de votre demande.</p>
   <blockquote>__PRISM_PROMPT__</blockquote>
   <ol>
     <li>Créez une clé gratuite sur console.groq.com.</li>
-    <li>Ajoutez <code>GROQ_API_KEY=…</code> dans <code>backend/.env</code>.</li>
-    <li>Relancez le serveur : Prism générera un composant sur mesure.</li>
+    <li>Ajoutez-la via le badge du moteur (en haut à droite) ou dans <code>backend/.env</code>.</li>
+    <li>Prism générera alors un widget sur mesure.</li>
   </ol>
-  <p class="sub">Essayez les démos intégrées :</p>
+  <p class="sub">Démos intégrées à essayer (vos choix sont mémorisés) :</p>
   <div class="chips" id="chips">
-    <button class="chip" type="button" aria-pressed="false">compteur de clics</button>
-    <button class="chip" type="button" aria-pressed="false">calculatrice</button>
-    <button class="chip" type="button" aria-pressed="false">tableau de bord</button>
+    <button class="chip" type="button" data-id="counter" aria-pressed="false">compteur de clics</button>
+    <button class="chip" type="button" data-id="calc" aria-pressed="false">calculatrice</button>
+    <button class="chip" type="button" data-id="dash" aria-pressed="false">tableau de bord</button>
+    <button class="chip" type="button" data-id="file" aria-pressed="false">fichier CSV, JSON ou TXT</button>
   </div>
 </main>
 <script>
-
+const state = Object.assign({ picked: [] }, JSON.parse(localStorage.getItem("state") || "null"));
+const chips = document.querySelectorAll(".chip");
+function render() {
+  chips.forEach((chip) => chip.setAttribute("aria-pressed", String(state.picked.includes(chip.dataset.id))));
+}
 document.getElementById("chips").addEventListener("click", (e) => {
   const chip = e.target.closest(".chip");
   if (!chip) return;
-  chip.setAttribute("aria-pressed", String(chip.getAttribute("aria-pressed") !== "true"));
+  const id = chip.dataset.id;
+  state.picked = state.picked.includes(id) ? state.picked.filter((p) => p !== id) : state.picked.concat(id);
+  localStorage.setItem("state", JSON.stringify(state));
+  render();
 });
-
+render();
 </script>
 </body>
 </html>

@@ -17,8 +17,8 @@ _THINK_RE = re.compile(r"<think>.*?</think>", re.S | re.I)
 _DOC_START_RE = re.compile(r"<!doctype\s+html|<html[\s>]", re.I)
 _TAG_START_RE = re.compile(r"<[a-zA-Z!]")
 _EXTERNAL_RE = re.compile(r"""\b(?:src|href)\s*=\s*["']?\s*(?:https?:)?//""", re.I)
+# localStorage n'y figure plus : la sandbox fournit un stockage persistant par widget.
 _SANDBOX_APIS = {
-    "localStorage": re.compile(r"\blocalStorage\b"),
     "sessionStorage": re.compile(r"\bsessionStorage\b"),
     "document.cookie": re.compile(r"\bdocument\.cookie\b"),
     "fetch()": re.compile(r"\bfetch\s*\("),
@@ -73,6 +73,39 @@ def ensure_document(html: str, lang: str = "fr") -> str:
     return html
 
 
+_EMPTY_SCRIPT_RE = re.compile(r"<script\b([^>]*)>\s*</script\s*>", re.I)
+_SRC_ATTR_RE = re.compile(r"""\bsrc\s*=\s*(["']?)([^"'\s>]+)\1""", re.I)
+# chart.js, chart.js@4…, Chart.js/4.4.0/…, …/chart.umd.min.js — mais pas les plugins (chartjs-plugin-…).
+_CHARTJS_SRC_RE = re.compile(r"chart\.js(?:@|/|$)|/chart(?:\.umd)?(?:\.min)?\.js(?:$|\?)", re.I)
+_USES_CHART_RE = re.compile(r"\bnew\s+Chart\s*\(|\bChart\s*\.\s*(?:register|defaults|getChart|helpers)\b")
+
+
+def _insert_in_head(html: str, tag: str) -> str:
+    head = re.search(r"<head(?:\s[^>]*)?>", html, re.I)
+    if head:
+        return html[: head.end()] + tag + html[head.end():]
+    root = re.search(r"<html(?:\s[^>]*)?>", html, re.I)
+    if root:
+        return html[: root.end()] + "<head>" + tag + "</head>" + html[root.end():]
+    return tag + html
+
+
+def normalize_libraries(html: str, libs: dict) -> str:
+    """Remplace toute balise Chart.js (version ou CDN quelconque) par la version épinglée avec SRI,
+    injectée en tête de <head> si le document utilise Chart. Idempotent."""
+    chart = libs["chartjs"]
+
+    def drop_chartjs(match: re.Match) -> str:
+        src = _SRC_ATTR_RE.search(match.group(1))
+        return "" if src and _CHARTJS_SRC_RE.search(src.group(2)) else match.group(0)
+
+    html = _EMPTY_SCRIPT_RE.sub(drop_chartjs, html)
+    if _USES_CHART_RE.search(html):
+        tag = f'<script src="{chart["url"]}" integrity="{chart["integrity"]}" crossorigin="anonymous"></script>'
+        html = _insert_in_head(html, tag)
+    return html
+
+
 class _TagCounter(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -86,8 +119,9 @@ class _TagCounter(HTMLParser):
         self.closed[tag] = self.closed.get(tag, 0) + 1
 
 
-def validate_document(html: str) -> list[str]:
-    """Retourne la liste des problèmes détectés (vide = document propre)."""
+def validate_document(html: str, allowed_urls: tuple[str, ...] = ()) -> list[str]:
+    """Retourne la liste des problèmes détectés (vide = document propre).
+    `allowed_urls` : ressources externes autorisées (bibliothèques épinglées)."""
     issues: list[str] = []
     if not html.strip():
         return ["empty_document"]
@@ -108,7 +142,10 @@ def validate_document(html: str) -> list[str]:
         if counter.opened.get(tag, 0) != counter.closed.get(tag, 0):
             issues.append(f"unbalanced_<{tag}>")
 
-    if _EXTERNAL_RE.search(html):
+    checked = html
+    for url in allowed_urls:
+        checked = checked.replace(url, "")
+    if _EXTERNAL_RE.search(checked):
         issues.append("external_resource")
     for name, pattern in _SANDBOX_APIS.items():
         if pattern.search(html):

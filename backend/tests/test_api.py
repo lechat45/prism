@@ -135,6 +135,44 @@ class ApiTests(unittest.TestCase):
                 self.assertEqual(res.status_code, 200)
                 self.assertIn("Crée un minuteur à café", res.json()["html"])
 
+    def test_attached_file_summary_reaches_the_model(self):
+        groq = self.fake(primary=completion(GOOD))
+        file = {"name": "ventes.csv", "kind": "csv", "summary": "Colonnes : mois (text), total (number)"}
+        res = self.client.post("/api/generate", json={"prompt": "un graphique", "file": file})
+        self.assertEqual(res.status_code, 200)
+        message = groq.calls[0][0]["messages"][1]["content"]
+        self.assertIn("ATTACHED FILE", message)
+        self.assertIn("Colonnes : mois (text), total (number)", message)
+        self.assertIn(prism.LIBS["chartjs"]["url"], groq.calls[0][0]["messages"][0]["content"])
+
+    def test_refactor_sends_current_code_and_repins_chartjs(self):
+        answer = GOOD.replace("<head>", '<head><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>').replace(
+            "let n = 0;", "let n = 0; new Chart(document.body, {});"
+        )
+        groq = self.fake(primary=completion(answer))
+        res = self.client.post("/api/generate", json={"prompt": "ajoute un graphique", "base_html": GOOD})
+        self.assertEqual(res.status_code, 200)
+        message = groq.calls[0][0]["messages"][1]["content"]
+        self.assertIn("current source of an existing widget", message)
+        self.assertIn(GOOD, message)
+        html = res.json()["html"]
+        self.assertEqual(html.count(prism.LIBS["chartjs"]["url"]), 1)
+        self.assertIn(prism.LIBS["chartjs"]["integrity"], html)
+        self.assertNotIn("external_resource", res.json()["warnings"])
+
+    def test_demo_mode_routes_files_and_refuses_refactor(self):
+        prism.GROQ_API_KEY = ""
+        file = {"name": "arbre.json", "kind": "json", "summary": "objet, 3 clés"}
+        res = self.client.post("/api/generate", json={"prompt": "explore", "file": file})
+        self.assertEqual(res.json()["model"], "mock:json-tree")
+        refused = self.client.post("/api/generate", json={"prompt": "change", "base_html": GOOD})
+        self.assertEqual(refused.status_code, 409)
+        self.assertIn("GROQ_API_KEY", refused.json()["detail"])
+
+    def test_invalid_file_kind_is_rejected(self):
+        res = self.client.post("/api/generate", json={"prompt": "x", "file": {"name": "a.exe", "kind": "exe", "summary": ""}})
+        self.assertEqual(res.status_code, 422)
+
     def test_openapi_documents_request_body(self):
         schema = self.client.get("/openapi.json").json()
         body = schema["paths"]["/api/generate"]["post"]["requestBody"]["content"]["application/json"]["schema"]
@@ -152,8 +190,13 @@ class ApiTests(unittest.TestCase):
     def test_frontend_is_served(self):
         res = self.client.get("/")
         self.assertEqual(res.status_code, 200)
-        self.assertIn('sandbox="allow-scripts"', res.text)
-        self.assertEqual(self.client.get("/assets/prism-logo.svg").status_code, 200)
+        self.assertIn('<script type="module" src="js/main.js">', res.text)
+        # v2 : les iframes sont créées par le canvas, avec la sandbox définie dans js/sandbox.js.
+        sandbox = self.client.get("/js/sandbox.js")
+        self.assertEqual(sandbox.status_code, 200)
+        self.assertIn('FRAME_SANDBOX = "allow-scripts"', sandbox.text)
+        for path in ("/assets/prism-logo.svg", "/engine/libs.json", "/engine/mocks/csv-chart.html"):
+            self.assertEqual(self.client.get(path).status_code, 200, path)
 
 
 if __name__ == "__main__":
