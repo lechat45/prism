@@ -1,12 +1,16 @@
 // Choix du moteur de génération et réglages.
 //  - "server"  : backend Python (POST /api/generate), servi sur la même origine ;
-//  - "browser" : sans backend (GitHub Pages…) — démo, ou Groq en direct avec la clé de l'utilisateur.
+//  - "browser" : sans backend (GitHub Pages…) — démo, ou Gemini en direct avec la clé de l'utilisateur.
+//    L'appel, le nettoyage et la validation du code reçu tournent dans le Web Worker (offload.js).
+
+import { run } from "./offload.js";
 
 const API_BASE = location.protocol === "file:" ? "http://127.0.0.1:8000" : "";
 // Hébergement purement statique connu : inutile de chercher un backend (évite un 404 en console).
 const STATIC_HOST = /\.github\.io$/i.test(location.hostname);
-const KEY_STORAGE = "prism:groq-key";
-const MODELS_STORAGE = "prism:groq-models";
+const KEY_STORAGE = "prism:gemini-key";
+const MODELS_STORAGE = "prism:gemini-models";
+const PROVIDER_LABELS = { gemini: "Gemini", groq: "Groq" };
 
 const local = window.PrismLocal.createLocalEngine({ baseUrl: "engine/" });
 export const engine = { kind: "pending", info: null, defaults: null, libs: null };
@@ -15,7 +19,7 @@ let listeners = [];
 const $ = (id) => document.getElementById(id);
 
 // --------------------------------------------------------------------------
-// Clé Groq : sessionStorage par défaut, localStorage si « Mémoriser ».
+// Clé Gemini : sessionStorage par défaut, localStorage si « Mémoriser ».
 // --------------------------------------------------------------------------
 function storageAreas() {
   const areas = [];
@@ -90,7 +94,7 @@ export function onEngineChange(fn) {
 
 /** Vrai quand un modèle est disponible (la refactorisation n'existe pas en démo). */
 export function hasModel() {
-  if (engine.kind === "server") return engine.info.mode === "groq";
+  if (engine.kind === "server") return engine.info.mode !== "mock";
   return engine.kind === "browser" && Boolean(readKey());
 }
 
@@ -100,20 +104,20 @@ function render() {
   const shortName = (model) => model.replace(/^openai\//, "");
   if (engine.kind === "server") {
     const info = engine.info;
-    const live = info.mode === "groq";
-    badge.dataset.state = live ? "groq" : "mock";
-    text.textContent = live ? `Groq · ${shortName(info.models[0])}` : "Mode démo";
+    const live = info.mode !== "mock";
+    badge.dataset.state = live ? "live" : "mock";
+    text.textContent = live ? `${PROVIDER_LABELS[info.mode] || info.mode} · ${shortName(info.models[0])}` : "Mode démo";
     badge.title = live
       ? `Serveur Prism v${info.version} · modèles : ${info.models.join(" → ")}`
-      : "Serveur sans GROQ_API_KEY : widgets de démonstration. Ajoutez la clé dans backend/.env.";
+      : "Serveur sans GEMINI_API_KEY : widgets de démonstration. Ajoutez la clé dans backend/.env.";
   } else {
     const models = readModels().length ? readModels() : (engine.defaults && engine.defaults.models) || [];
     const live = Boolean(readKey());
-    badge.dataset.state = live ? "groq" : "mock";
-    text.textContent = live ? `Groq · ${shortName(models[0] || "navigateur")}` : "Démo · ajouter une clé";
+    badge.dataset.state = live ? "live" : "mock";
+    text.textContent = live ? `Gemini · ${shortName(models[0] || "navigateur")}` : "Démo · ajouter une clé";
     badge.title = live
       ? `Génération depuis ce navigateur avec votre clé · modèles : ${models.join(" → ")}`
-      : "Aucun serveur ici : mode démo. Cliquez pour utiliser votre clé Groq gratuite.";
+      : "Aucun serveur ici : mode démo. Cliquez pour utiliser votre clé Gemini gratuite (Google AI Studio).";
   }
   listeners.forEach((fn) => fn(engine));
 }
@@ -150,13 +154,8 @@ export async function generate(request, signal) {
     payload = await res.json().catch(() => null);
     if (!res.ok) throw new Error(errorMessage(payload, res.status));
   } else {
-    payload = await local.generate(request.prompt, {
-      key: readKey(),
-      models: readModels(),
-      signal,
-      file: request.file || null,
-      baseHtml: request.baseHtml || null,
-    });
+    const options = { key: readKey(), models: readModels(), file: request.file || null, baseHtml: request.baseHtml || null };
+    payload = await run("generate", { prompt: request.prompt, options }, { signal });
   }
   if (!payload || typeof payload.html !== "string" || !payload.html.trim()) throw new Error("réponse vide");
   return payload;
@@ -171,12 +170,12 @@ export function openSettings() {
   $("settings-browser").hidden = !browserMode;
   $("btn-forget").hidden = !browserMode || !readKey();
   $("btn-save-settings").hidden = !browserMode;
-  $("groq-key").value = readKey();
+  $("gemini-key").value = readKey();
   $("remember-key").checked = isKeyRemembered();
-  $("groq-models").value = readModels().join(", ");
-  $("groq-models").placeholder = ((engine.defaults && engine.defaults.models) || []).join(", ");
+  $("gemini-models").value = readModels().join(", ");
+  $("gemini-models").placeholder = ((engine.defaults && engine.defaults.models) || []).join(", ");
   $("settings").showModal();
-  (browserMode ? $("groq-key") : $("btn-cancel-settings")).focus();
+  (browserMode ? $("gemini-key") : $("btn-cancel-settings")).focus();
 }
 
 export function initSettings(notify) {
@@ -184,12 +183,12 @@ export function initSettings(notify) {
   $("btn-cancel-settings").addEventListener("click", () => $("settings").close());
   $("settings-form").addEventListener("submit", (e) => {
     e.preventDefault();
-    const key = $("groq-key").value.trim();
+    const key = $("gemini-key").value.trim();
     writeKey(key, $("remember-key").checked);
-    writeModels($("groq-models").value);
+    writeModels($("gemini-models").value);
     $("settings").close();
     render();
-    notify(key ? "Clé Groq enregistrée : génération réelle activée" : "Aucune clé : mode démo");
+    notify(key ? "Clé Gemini enregistrée : génération réelle activée" : "Aucune clé : mode démo");
   });
   $("btn-forget").addEventListener("click", () => {
     writeKey("", false);

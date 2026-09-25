@@ -41,7 +41,7 @@
 
   /** Extrait le document HTML brut d'une réponse de modèle. */
   function cleanLlmOutput(raw) {
-    let text = String(raw || "").replace(/^﻿+/, "").trim();
+    let text = String(raw || "").replace(/^\uFEFF+/, "").trim();
     text = text.replace(THINK_RE, "").trim();
 
     const fences = [...text.matchAll(FENCE_RE)].map((m) => m[1]);
@@ -90,9 +90,6 @@
 
   const EMPTY_SCRIPT_RE = /<script\b([^>]*)>\s*<\/script\s*>/gi;
   const SRC_ATTR_RE = /\bsrc\s*=\s*(["']?)([^"'\s>]+)\1/i;
-  // chart.js, chart.js@4…, Chart.js/4.4.0/…, …/chart.umd.min.js — mais pas les plugins (chartjs-plugin-…).
-  const CHARTJS_SRC_RE = /chart\.js(?:@|\/|$)|\/chart(?:\.umd)?(?:\.min)?\.js(?:$|\?)/i;
-  const USES_CHART_RE = /\bnew\s+Chart\s*\(|\bChart\s*\.\s*(?:register|defaults|getChart|helpers)\b/;
 
   function insertInHead(html, tag) {
     const head = /<head(?:\s[^>]*)?>/i.exec(html);
@@ -105,15 +102,25 @@
     return tag + html;
   }
 
-  /** Remplace toute balise Chart.js par la version épinglée avec SRI (libs.json). Idempotent. */
+  /** Remplace toute balise d'une bibliothèque autorisée par sa version épinglée avec SRI (règles : libs.json). Idempotent. */
   function normalizeLibraries(html, libs) {
-    const chart = libs.chartjs;
-    html = html.replace(EMPTY_SCRIPT_RE, (whole, attrs) => {
-      const src = SRC_ATTR_RE.exec(attrs);
-      return src && CHARTJS_SRC_RE.test(src[2]) ? "" : whole;
-    });
-    if (USES_CHART_RE.test(html)) {
-      html = insertInHead(html, `<script src="${chart.url}" integrity="${chart.integrity}" crossorigin="anonymous"></script>`);
+    for (const name of Object.keys(libs)) {
+      if (name.startsWith("_")) continue;
+      const lib = libs[name];
+      const srcRe = new RegExp(lib.match, "i");
+      let found = false;
+      html = html.replace(EMPTY_SCRIPT_RE, (whole, attrs) => {
+        const src = SRC_ATTR_RE.exec(attrs);
+        if (src && srcRe.test(src[2])) {
+          found = true;
+          return "";
+        }
+        return whole;
+      });
+      const used = (html.match(new RegExp(lib.uses, "g")) || []).length >= lib.min_uses;
+      if ((found && lib.keep_if_tag) || used) {
+        html = insertInHead(html, `<script src="${lib.url}" integrity="${lib.integrity}" crossorigin="anonymous"></script>`);
+      }
     }
     return html;
   }

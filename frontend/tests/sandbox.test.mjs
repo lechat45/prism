@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { acceptStorage, buildSrcdoc, exportHtml, FRAME_SANDBOX, isAccent } from "../js/sandbox.js";
+import { acceptStorage, bootSrcdoc, buildSrcdoc, exportHtml, FRAME_SANDBOX, isAccent, needsBoot } from "../js/sandbox.js";
 
 const libs = JSON.parse(readFileSync(new URL("../engine/libs.json", import.meta.url), "utf8"));
 const DOC = '<!DOCTYPE html><html lang="fr"><head><title>T</title></head><body><script>localStorage.setItem("state","1")</script></body></html>';
@@ -18,12 +18,13 @@ test("sandbox sans allow-same-origin", () => {
   assert.equal(FRAME_SANDBOX, "allow-scripts");
 });
 
-test("CSP en tête : aucun réseau sauf Chart.js épinglé", () => {
+test("CSP en tête : aucun réseau sauf les bibliothèques épinglées (Tailwind, Chart.js)", () => {
   const doc = buildSrcdoc({ html: DOC, storage: {} }, libs);
   const head = injected(doc);
   assert.ok(head.startsWith('<meta http-equiv="Content-Security-Policy"'), "la CSP doit précéder tout script");
   assert.match(head, /default-src 'none'/);
-  assert.match(head, new RegExp(`script-src 'unsafe-inline' ${libs.chartjs.url.replace(/[.]/g, "\\.")}`));
+  const scriptSrc = /script-src ([^;]+);/.exec(head)[1].trim().split(/\s+/);
+  assert.deepEqual(scriptSrc.sort(), ["'unsafe-inline'", libs.tailwind.url, libs.chartjs.url].sort());
   assert.doesNotMatch(head, /connect-src/);
 });
 
@@ -64,13 +65,40 @@ test("couleur d'accent : seules les couleurs #rrggbb passent", () => {
   assert.ok(buildSrcdoc({ html: DOC, accent: "#a66bff" }, libs).includes(":root{--accent:#a66bff !important}"));
 });
 
-test("export autonome : données et accent inclus, ni CSP ni prélude", () => {
-  const html = exportHtml({ html: DOC, accent: "#3ddc84", file: { data: { name: "d.json", kind: "json", data: [1] } } });
+test("export autonome : données et accent inclus, ni CSP ni prélude", async () => {
+  const html = await exportHtml({ html: DOC, accent: "#3ddc84", file: { data: { name: "d.json", kind: "json", data: [1] } } });
   assert.ok(html.startsWith("<!DOCTYPE html>"));
   assert.ok(html.includes('window.PRISM_FILE={"name":"d.json","kind":"json","data":[1]}'));
   assert.ok(html.includes("--accent:#3ddc84"));
   assert.ok(!html.includes("Content-Security-Policy"));
   assert.ok(!html.includes("parent.postMessage"));
+});
+
+// Fichier joint en Blob (produit par le Web Worker) : jamais dans srcdoc, livré par le chargeur.
+const blobFile = (value) => ({ name: "v.csv", kind: "csv", blob: new Blob([JSON.stringify(value)], { type: "application/json" }) });
+
+test("fichier en Blob : srcdoc sans les données, chargeur minimal sous la même CSP", () => {
+  const card = { html: DOC, storage: {}, file: blobFile({ rows: [{ secret: "valeur-témoin" }] }) };
+  assert.ok(needsBoot(card));
+  assert.ok(!needsBoot({ html: DOC, file: { data: {} } }), "cartes v2 non migrées : données dans srcdoc");
+  assert.ok(!buildSrcdoc(card, libs).includes("valeur-témoin"));
+  assert.ok(!buildSrcdoc(card, libs).includes("PRISM_FILE"));
+
+  const boot = bootSrcdoc(libs);
+  assert.ok(boot.length < 2000, `chargeur de ${boot.length} caractères`);
+  assert.equal(boot.indexOf('<meta http-equiv="Content-Security-Policy"'), "<!DOCTYPE html><html><head>".length, "CSP avant tout script");
+  assert.equal(/script-src ([^;]+);/.exec(boot)[1], /script-src ([^;]+);/.exec(buildSrcdoc(card, libs))[1]);
+  const script = /<script>([\s\S]*?)<\/script>/.exec(boot)[1];
+  assert.doesNotThrow(() => new Function(script));
+  assert.match(script, /e\.source !== parent/, "seul le parent peut livrer le document");
+  assert.match(script, /booted/, "une seule livraison");
+});
+
+test("export d'une carte à Blob : données lues et échappées pour le <script>", async () => {
+  const html = await exportHtml({ html: DOC, file: blobFile({ rows: [{ v: `</script><b>${LS}` }] }) });
+  assert.ok(html.includes("window.PRISM_FILE={"));
+  assert.ok(html.includes("\\u003c/script>") && !html.includes(LS));
+  assert.equal(html.split("</script>").length - 1, 2); // données + script du widget
 });
 
 test("documents sans <head> ou sans <html>", () => {

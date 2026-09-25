@@ -90,6 +90,7 @@ class FixtureTests(unittest.TestCase):
         for case, got in zip(FIXTURES["libraries"], self.r["libraries"]):
             with self.subTest(case["name"]):
                 self.assertEqual(got.count(pinned), case["pinned"])
+                self.assertEqual(got.count(app.LIBS["tailwind"]["url"]), case.get("tailwind", 0))
                 if case["pinned"]:
                     self.assertIn(f'integrity="{app.LIBS["chartjs"]["integrity"]}"', got)
                 for needle in case.get("absent", []):
@@ -97,6 +98,11 @@ class FixtureTests(unittest.TestCase):
                 for needle in case.get("contains", []):
                     self.assertIn(needle, got)
                 self.assertEqual(normalize_libraries(got, app.LIBS), got, "idempotent")
+
+    def test_demo_templates_keep_their_own_css(self):
+        # Les gabarits de démo ont leur CSS : le reset de Tailwind (preflight) les casserait.
+        for html in self.r["mock_renders"] + self.r["renders"]:
+            self.assertNotIn(app.LIBS["tailwind"]["url"], html)
 
     def test_messages(self):
         for case, got in zip(FIXTURES["messages"], self.r["messages"]):

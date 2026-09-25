@@ -2,9 +2,10 @@
 
 import { Canvas, CARD_MIN_H, CARD_MIN_W } from "./canvas.js";
 import { engine, engineReady, generate, hasModel, initSettings, onEngineChange, openSettings } from "./engine.js";
-import { forRequest, readAttachment, sampleCsvAttachment } from "./files.js";
+import { forRequest } from "./files.js";
 import { Inspector } from "./inspector.js";
-import { acceptStorage, buildSrcdoc, exportHtml, FRAME_SANDBOX, isAccent } from "./sandbox.js";
+import { run } from "./offload.js";
+import { acceptStorage, bootSrcdoc, buildSrcdoc, exportHtml, FRAME_SANDBOX, isAccent, needsBoot } from "./sandbox.js";
 import { cardStore, loadView, saveView } from "./store.js";
 
 const $ = (id) => document.getElementById(id);
@@ -13,7 +14,9 @@ const saveTimers = new Map();
 const SIZES = { widget: { w: 460, h: 420 }, file: { w: 640, h: 480 } };
 const DRAFT_KEY = "prism:draft";
 const PLACEHOLDER = "Décrivez un widget, ou glissez un fichier CSV, JSON ou TXT…";
+const REVEAL_TIMEOUT_MS = 6000; // widget muet (pas de signal « ready ») : affiché quand même
 let attachment = null;
+let reading = null; // nom du fichier en cours d'analyse dans le Web Worker
 
 // ============================================================================
 // Utilitaires
@@ -37,7 +40,7 @@ function titleFrom(html, fallback) {
 }
 
 function slug(text) {
-  const s = text.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const s = text.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return s.slice(0, 60) || "widget";
 }
 
@@ -168,6 +171,7 @@ const inspector = new Inspector({
 
 function updateEmpty() {
   $("canvas-empty").hidden = cards.size > 0;
+  document.body.classList.toggle("is-empty", cards.size === 0); // fond animé seulement à vide
   $("card-count").textContent = cards.size ? `${cards.size} widget${cards.size > 1 ? "s" : ""}` : "";
 }
 
@@ -201,10 +205,46 @@ function stopTimer(card) {
   card.timer = null;
 }
 
-/** (Re)charge le widget dans son iframe sandbox. */
+// ----------------------------------------------------------------------------
+// Montage des widgets : le squelette holographique reste affiché jusqu'au signal « ready » du
+// widget (chargé ET stylé, cf. sandbox.js), puis fondu enchaîné. Les documents sont injectés en
+// début d'image (requestAnimationFrame), une carte par image : restaurer un canvas chargé ne
+// provoque pas de rafale de travail qui figerait l'interface.
+// ----------------------------------------------------------------------------
+const mountQueue = new Map(); // id -> carte, dans l'ordre d'arrivée
+let mountScheduled = false;
+
 function mountWidget(card) {
   const el = canvas.element(card.id);
   if (!el || !card.html) return;
+  card.runtimeError = null;
+  card.showCode = false;
+  el.querySelector(".card-code").hidden = true;
+  el.querySelector(".card-body").dataset.frame = "pending";
+  if (card.status === "warn") setStatus(card, "ready");
+  mountQueue.delete(card.id);
+  mountQueue.set(card.id, card);
+  if (!mountScheduled) {
+    mountScheduled = true;
+    requestAnimationFrame(flushMount);
+  }
+}
+
+function flushMount() {
+  mountScheduled = false;
+  const next = mountQueue.values().next();
+  if (next.done) return;
+  mountQueue.delete(next.value.id);
+  injectFrame(next.value);
+  if (mountQueue.size) {
+    mountScheduled = true;
+    requestAnimationFrame(flushMount);
+  }
+}
+
+function injectFrame(card) {
+  const el = canvas.element(card.id);
+  if (!el || !cards.has(card.id)) return;
   let frame = el.querySelector("iframe.card-frame");
   if (!frame) {
     frame = document.createElement("iframe");
@@ -214,11 +254,30 @@ function mountWidget(card) {
     el.querySelector(".card-body").prepend(frame);
   }
   frame.title = `Widget : ${card.title}`;
-  card.runtimeError = null;
-  card.showCode = false;
-  el.querySelector(".card-code").hidden = true;
-  frame.srcdoc = buildSrcdoc(card, engine.libs);
-  if (card.status === "warn") setStatus(card, "ready");
+  if (needsBoot(card)) {
+    // Fichier joint : chargeur minuscule, le document et le Blob partent sur sa demande (« boot »).
+    card.boot = { html: buildSrcdoc(card, engine.libs), file: card.file.blob };
+    frame.srcdoc = bootSrcdoc(engine.libs);
+  } else {
+    card.boot = null;
+    frame.srcdoc = buildSrcdoc(card, engine.libs);
+  }
+  clearTimeout(card.revealTimer);
+  card.revealTimer = setTimeout(() => revealFrame(card), REVEAL_TIMEOUT_MS);
+}
+
+function revealFrame(card) {
+  clearTimeout(card.revealTimer);
+  card.revealTimer = null;
+  const body = canvas.element(card.id)?.querySelector(".card-body");
+  if (body) body.dataset.frame = "live";
+}
+
+function unmount(card) {
+  card.boot = null;
+  mountQueue.delete(card.id);
+  clearTimeout(card.revealTimer);
+  card.revealTimer = null;
 }
 
 // ============================================================================
@@ -302,6 +361,7 @@ function undoRefactor(card) {
 
 /** Retire une carte sans possibilité de retour (génération annulée ou échouée). */
 function discard(card) {
+  unmount(card);
   cards.delete(card.id);
   canvas.remove(card.id);
   if (inspector.card?.id === card.id) inspector.close();
@@ -351,10 +411,19 @@ function toggleCode(card) {
 }
 
 async function copyCode(card) {
-  const html = exportHtml(card);
+  const pending = exportHtml(card); // lecture du Blob du fichier joint : asynchrone
+  let html;
   try {
-    await navigator.clipboard.writeText(html);
+    if (window.ClipboardItem && navigator.clipboard?.write) {
+      // Promesse confiée au presse-papiers : la copie reste rattachée au clic (exigence de Safari).
+      const blob = pending.then((text) => new Blob([text], { type: "text/plain" }));
+      await navigator.clipboard.write([new ClipboardItem({ "text/plain": blob })]);
+    } else {
+      await navigator.clipboard.writeText(await pending);
+    }
+    html = await pending;
   } catch {
+    html = await pending;
     const area = document.createElement("textarea");
     area.value = html;
     area.style.cssText = "position:fixed;opacity:0";
@@ -367,8 +436,8 @@ async function copyCode(card) {
   toast(`Code complet copié (${(html.length / 1024).toFixed(1).replace(".", ",")} Ko)`);
 }
 
-function downloadHtml(card) {
-  const blob = new Blob([exportHtml(card)], { type: "text/html;charset=utf-8" });
+async function downloadHtml(card) {
+  const blob = new Blob([await exportHtml(card)], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -396,7 +465,12 @@ window.addEventListener("message", (event) => {
   if (!data || typeof data.prism !== "string") return;
   const card = cardFromSource(event.source);
   if (!card) return;
-  if (data.prism === "storage") {
+  if (data.prism === "boot") {
+    // Une seule livraison par montage.
+    const payload = card.boot;
+    card.boot = null;
+    if (payload) canvas.frame(card.id)?.contentWindow?.postMessage({ prism: "boot", ...payload }, "*");
+  } else if (data.prism === "storage") {
     const clean = acceptStorage(data.data);
     if (!clean) return toast(`« ${card.title} » : données refusées (plus de 1 Mo ou format invalide)`, { tone: "error" });
     card.storage = clean;
@@ -413,6 +487,7 @@ window.addEventListener("message", (event) => {
     const scale = frame.offsetWidth ? r.width / frame.offsetWidth : 1;
     canvas.wheelZoom(r.left + x * scale, r.top + y * scale, Math.max(-500, Math.min(500, dy)));
   } else if (data.prism === "ready") {
+    revealFrame(card);
     const runtimeTitle = typeof data.title === "string" ? data.title.trim().slice(0, 80) : "";
     if (runtimeTitle && runtimeTitle !== card.title) {
       card.title = runtimeTitle;
@@ -450,10 +525,19 @@ function saveDraft() {
 
 function setAttachment(att) {
   attachment = att;
-  $("attachment").hidden = !att;
-  $("dock").classList.toggle("has-file", Boolean(att));
+  const box = $("attachment");
+  box.hidden = !att && !reading;
+  $("dock").classList.toggle("has-file", Boolean(att || reading));
+  if (reading && !att) {
+    box.dataset.state = "reading";
+    delete box.dataset.kind;
+    $("file-name").textContent = reading;
+    $("file-meta").textContent = "Analyse en cours…";
+  } else {
+    delete box.dataset.state;
+  }
   if (att) {
-    $("attachment").dataset.kind = att.kind;
+    box.dataset.kind = att.kind;
     $("file-name").textContent = att.name;
     $("file-meta").textContent = att.meta;
   }
@@ -461,16 +545,37 @@ function setAttachment(att) {
   updateComposer();
 }
 
-async function handleFiles(fileList) {
+/** Analyse dans le Web Worker : l'interface reste fluide, même pour 5 Mo de CSV. */
+let readToken = 0; // un nouveau dépôt (ou « retirer ») rend caduque l'analyse en cours
+async function attach(job, name) {
+  const token = ++readToken;
+  reading = name;
+  setAttachment(null);
+  try {
+    const att = await job;
+    if (token !== readToken) return;
+    reading = null;
+    setAttachment(att);
+    promptEl.focus();
+  } catch (err) {
+    if (token !== readToken) return;
+    reading = null;
+    setAttachment(null);
+    toast(`Fichier refusé : ${err.message}`, { tone: "error", timeout: 6000 });
+  }
+}
+
+function clearAttachment() {
+  readToken += 1;
+  reading = null;
+  setAttachment(null);
+}
+
+function handleFiles(fileList) {
   const file = fileList && fileList[0];
   if (!file) return;
   if (fileList.length > 1) toast("Un fichier à la fois : seul le premier est joint.");
-  try {
-    setAttachment(await readAttachment(file));
-    promptEl.focus();
-  } catch (err) {
-    toast(`Fichier refusé : ${err.message}`, { tone: "error", timeout: 6000 });
-  }
+  attach(run("attach", { file }), file.name);
 }
 
 function newCardSize(kind) {
@@ -484,6 +589,10 @@ function newCardSize(kind) {
 
 function submitPrompt() {
   const text = promptEl.value.trim();
+  if (reading) {
+    toast(`Analyse de ${reading} en cours… un instant.`);
+    return;
+  }
   if (!text && !attachment) {
     $("dock").classList.add("is-invalid");
     setTimeout(() => $("dock").classList.remove("is-invalid"), 600);
@@ -514,7 +623,7 @@ function submitPrompt() {
   canvas.ensureVisible(card);
   promptEl.value = "";
   saveDraft();
-  setAttachment(null);
+  clearAttachment();
   runGeneration(card);
 }
 
@@ -541,7 +650,7 @@ promptEl.addEventListener("paste", (e) => {
 $("examples").addEventListener("click", (e) => {
   const chip = e.target.closest(".chip");
   if (!chip) return;
-  if (chip.dataset.sample === "csv") setAttachment(sampleCsvAttachment());
+  if (chip.dataset.sample === "csv") attach(run("sample"), "ventes-2025.csv");
   else promptEl.value = chip.dataset.prompt;
   updateComposer();
   promptEl.focus();
@@ -552,7 +661,7 @@ $("file-input").addEventListener("change", (e) => {
   e.target.value = "";
 });
 $("file-remove").addEventListener("click", () => {
-  setAttachment(null);
+  clearAttachment();
   promptEl.focus();
 });
 
@@ -630,6 +739,12 @@ async function start() {
   }
   saved.sort((a, b) => (a.z || 0) - (b.z || 0)).forEach((record) => {
     const card = { ...record, storage: record.storage || {}, history: record.history || [], status: "ready" };
+    if (card.file && card.file.data !== undefined && !card.file.blob) {
+      // Carte v2 : données en objets → Blob JSON (une fois pour toutes).
+      const { data, ...rest } = card.file;
+      card.file = { ...rest, blob: new Blob([JSON.stringify(data)], { type: "application/json" }) };
+      persist(card);
+    }
     cards.set(card.id, card);
     canvas.add(card, { animate: false });
     setStatus(card, "ready");

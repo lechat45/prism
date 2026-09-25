@@ -174,6 +174,49 @@
       "doc": "<!DOCTYPE html><html><body><canvas id=\"c\"></canvas><script>new Chart(document.getElementById(\"c\"), {type: \"bar\"});</script></body></html>",
       "pinned": 1,
       "absent": []
+    },
+    {
+      "name": "Tailwind : Play CDN remplacé par la version épinglée",
+      "doc": "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><script src=\"https://cdn.tailwindcss.com\"></script></head><body><p>ok</p></body></html>",
+      "pinned": 0,
+      "tailwind": 1,
+      "absent": [
+        "cdn.tailwindcss.com"
+      ]
+    },
+    {
+      "name": "Tailwind : version v3 non épinglée remplacée",
+      "doc": "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><script src='https://cdn.tailwindcss.com/3.4.1?plugins=forms'></script></head><body><p>ok</p></body></html>",
+      "pinned": 0,
+      "tailwind": 1,
+      "absent": [
+        "3.4.1",
+        "plugins=forms"
+      ]
+    },
+    {
+      "name": "Tailwind : classes utilitaires sans balise, ajout",
+      "doc": "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"></head><body><main class=\"rounded-2xl bg-white/10 p-6\"><h1 class=\"text-xl font-semibold\">T</h1><button class=\"px-3 py-2 rounded-xl\">ok</button></main></body></html>",
+      "pinned": 0,
+      "tailwind": 1,
+      "absent": []
+    },
+    {
+      "name": "Tailwind : CSS maison, pas d'ajout",
+      "doc": "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><style>.card{padding:8px}</style></head><body><main class=\"card\"><p class=\"sub\">x</p></main></body></html>",
+      "pinned": 0,
+      "tailwind": 0,
+      "absent": []
+    },
+    {
+      "name": "Tailwind et Chart.js ensemble",
+      "doc": "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><script src=\"https://cdn.tailwindcss.com\"></script><script src=\"https://cdn.jsdelivr.net/npm/chart.js\"></script></head><body><canvas id=\"c\"></canvas><script>new Chart(document.getElementById(\"c\"), {type: \"bar\"});</script></body></html>",
+      "pinned": 1,
+      "tailwind": 1,
+      "absent": [
+        "cdn.tailwindcss.com",
+        "npm/chart.js\""
+      ]
     }
   ],
   "routing": [

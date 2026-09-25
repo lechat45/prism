@@ -178,7 +178,7 @@ class ApiTests(DbTestCase):
         before = res.json()["sparks"]
         refused = self.post({"prompt": "change", "widget_id": res.json()["widget"]["id"]})
         self.assertEqual(refused.status_code, 409)
-        self.assertIn("GROQ_API_KEY", refused.json()["detail"])
+        self.assertIn("GEMINI_API_KEY", refused.json()["detail"])
         me = self.client.get("/api/auth/me", headers=self.auth).json()
         self.assertEqual(me["sparks"], before, "refus sans débit")
 

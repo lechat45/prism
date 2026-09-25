@@ -131,8 +131,8 @@ export class Inspector {
     note.hidden = canRefactor;
     $("refactor-settings").hidden = canRefactor || a.engineKind() === "server";
     note.textContent = a.engineKind() === "server"
-      ? "La refactorisation utilise un modèle : ajoutez GROQ_API_KEY dans backend/.env."
-      : "La refactorisation utilise un modèle : ajoutez votre clé Groq gratuite.";
+      ? "La refactorisation utilise un modèle : ajoutez GEMINI_API_KEY dans backend/.env."
+      : "La refactorisation utilise un modèle : ajoutez votre clé Gemini gratuite.";
     $("undo-btn").hidden = !(card.history && card.history.length) || busy;
 
     document.querySelectorAll("#swatches button.swatch").forEach((sw) => {

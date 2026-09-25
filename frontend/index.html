@@ -100,7 +100,7 @@
       </form>
       <p class="fine">Seule cette carte est modifiée ; ses données enregistrées sont conservées.</p>
       <p class="fine warn" id="refactor-note" hidden></p>
-      <button type="button" class="tool" id="refactor-settings" hidden>Ajouter une clé Groq</button>
+      <button type="button" class="tool" id="refactor-settings" hidden>Ajouter une clé Gemini</button>
     </section>
 
     <section class="insp-section" aria-labelledby="h-accent">
@@ -147,17 +147,17 @@
       <div id="settings-browser">
         <p class="hint">
           Aucun serveur Prism ici&nbsp;: sans clé, Prism affiche des widgets de démo.
-          Avec votre clé Groq gratuite (<a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">console.groq.com</a>),
+          Avec votre clé Gemini gratuite (<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>),
           il génère et refactorise pour de vrai, directement depuis ce navigateur.
         </p>
-        <label class="field-label" for="groq-key">Clé API Groq</label>
-        <input id="groq-key" type="password" autocomplete="off" spellcheck="false" placeholder="gsk_…">
+        <label class="field-label" for="gemini-key">Clé API Gemini</label>
+        <input id="gemini-key" type="password" autocomplete="off" spellcheck="false" placeholder="AIza…">
         <label class="check"><input type="checkbox" id="remember-key"> Mémoriser sur cet appareil</label>
-        <p class="fine">La clé reste dans ce navigateur et n'est envoyée qu'à api.groq.com. Sans «&nbsp;Mémoriser&nbsp;», elle est oubliée à la fermeture de l'onglet.</p>
+        <p class="fine">La clé reste dans ce navigateur et n'est envoyée qu'à l'API Gemini de Google. Sans «&nbsp;Mémoriser&nbsp;», elle est oubliée à la fermeture de l'onglet.</p>
         <details class="advanced">
           <summary>Modèles (avancé)</summary>
-          <label class="field-label" for="groq-models">Chaîne de modèles, séparés par des virgules</label>
-          <input id="groq-models" type="text" autocomplete="off" spellcheck="false">
+          <label class="field-label" for="gemini-models">Chaîne de modèles, séparés par des virgules</label>
+          <input id="gemini-models" type="text" autocomplete="off" spellcheck="false">
         </details>
       </div>
 

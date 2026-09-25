@@ -1,0 +1,7 @@
+{
+  "_doc": "Réglages Gemini (API REST officielle, celle qu'appellent les SDK), partagés par le backend (surchargés par les variables d'environnement) et le moteur navigateur. {model} est remplacé par l'identifiant du modèle.",
+  "url": "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+  "models": ["gemini-3.8-flash", "gemini-3.6-flash"],
+  "temperature": 0.6,
+  "max_output_tokens": 32768
+}

@@ -79,22 +79,24 @@ kbd {
   color: var(--muted);
 }
 
-/* --- Fond : dégradés fluides animés sous le verre --------------------------- */
-.backdrop { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; animation: hue 40s ease-in-out infinite alternate; }
-.blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(90px);
-  mix-blend-mode: screen;
-  will-change: transform;
-}
-.b1 { width: 52vmax; height: 52vmax; left: -16vmax; top: -22vmax; background: #2a52ff; opacity: 0.5; animation: float-a 34s var(--ease) infinite alternate; }
-.b2 { width: 48vmax; height: 48vmax; right: -18vmax; bottom: -24vmax; background: #8f36ff; opacity: 0.45; animation: float-b 41s var(--ease) infinite alternate; }
-.b3 { width: 30vmax; height: 30vmax; left: 42%; top: 28%; background: #ff3d8b; opacity: 0.2; animation: float-c 29s var(--ease) infinite alternate; }
-.b4 { width: 26vmax; height: 26vmax; right: 12%; top: -8vmax; background: #00c2c7; opacity: 0.2; animation: float-b 47s var(--ease) infinite alternate-reverse; }
-.b5 { width: 24vmax; height: 24vmax; left: 8%; bottom: -6vmax; background: #ff9f1c; opacity: 0.12; animation: float-a 53s var(--ease) infinite alternate-reverse; }
+/* --- Fond : aurore sous le verre ---------------------------------------------
+   Performance : dégradés radiaux (aucun filter: blur, aucun mode de fusion), peints une fois.
+   Ils ne dérivent que canvas vide ; dès la première carte, fond immobile : les panneaux de verre
+   (backdrop-filter) n'ont plus à re-flouter leur arrière-plan à chaque image. */
+.backdrop { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.blob { position: absolute; border-radius: 50%; }
+.b1 { width: 60vmax; height: 60vmax; left: -20vmax; top: -26vmax; background: radial-gradient(closest-side, rgba(42, 82, 255, 0.5), rgba(42, 82, 255, 0.22) 55%, transparent); }
+.b2 { width: 56vmax; height: 56vmax; right: -22vmax; bottom: -28vmax; background: radial-gradient(closest-side, rgba(143, 54, 255, 0.46), rgba(143, 54, 255, 0.2) 55%, transparent); }
+.b3 { width: 36vmax; height: 36vmax; left: 40%; top: 26%; background: radial-gradient(closest-side, rgba(255, 61, 139, 0.2), rgba(255, 61, 139, 0.08) 55%, transparent); }
+.b4 { width: 32vmax; height: 32vmax; right: 10%; top: -10vmax; background: radial-gradient(closest-side, rgba(0, 194, 199, 0.2), rgba(0, 194, 199, 0.08) 55%, transparent); }
+.b5 { width: 30vmax; height: 30vmax; left: 6%; bottom: -8vmax; background: radial-gradient(closest-side, rgba(255, 159, 28, 0.13), rgba(255, 159, 28, 0.05) 55%, transparent); }
+body.is-empty .b1 { animation: float-a 34s var(--ease) infinite alternate; }
+body.is-empty .b2 { animation: float-b 41s var(--ease) infinite alternate; }
+body.is-empty .b3 { animation: float-c 29s var(--ease) infinite alternate; }
+body.is-empty .b4 { animation: float-b 47s var(--ease) infinite alternate-reverse; }
+body.is-empty .b5 { animation: float-a 53s var(--ease) infinite alternate-reverse; }
 .grain {
-  position: absolute; inset: -50%;
+  position: absolute; inset: 0;
   opacity: 0.06;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
@@ -102,8 +104,6 @@ kbd {
 @keyframes float-a { to { transform: translate(14vmax, 9vmax) scale(1.12); } }
 @keyframes float-b { to { transform: translate(-12vmax, -10vmax) scale(0.9); } }
 @keyframes float-c { 50% { transform: translate(-10vmax, 8vmax) scale(1.25); } to { transform: translate(8vmax, -6vmax) scale(0.85); } }
-/* Dérive de teinte douce autour de l'identité bleu-violet (un tour complet virait au rouge puis au vert). */
-@keyframes hue { from { filter: hue-rotate(-28deg); } to { filter: hue-rotate(38deg); } }
 
 /* --- Matériau verre ------------------------------------------------------- */
 .glass {
@@ -136,7 +136,7 @@ kbd {
   background: var(--faint);
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
 }
-[data-state="groq"] .dot,
+[data-state="live"] .dot,
 [data-state="ready"] .dot { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
 [data-state="mock"] .dot,
 [data-state="warn"] .dot { background: var(--warn); box-shadow: 0 0 10px var(--warn); }
@@ -298,15 +298,16 @@ body.is-dragging { cursor: grabbing; user-select: none; }
 @keyframes fade-up { from { opacity: 0; transform: translate(-50%, calc(-50% + 16px)); } }
 
 /* --- Cartes ----------------------------------------------------------------------- */
+/* Pas de backdrop-filter sur les cartes : le corps (opaque) en couvre presque toute la surface, et
+   chaque déplacement du canvas obligeait à re-flouter l'arrière-plan de chaque carte à chaque image.
+   Verre fumé quasi opaque à la place : même rendu, coût nul. */
 .card {
   --card-accent: #7cc4ff;
   position: absolute;
   display: flex; flex-direction: column;
   border-radius: var(--r-lg);
-  background: var(--glass-solid);
+  background: linear-gradient(180deg, rgba(30, 35, 50, 0.92), rgba(13, 15, 22, 0.94));
   border: 1px solid var(--line);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  backdrop-filter: blur(18px) saturate(160%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 24px 60px -22px rgba(0, 0, 0, 0.8);
   transition: box-shadow 0.3s var(--ease), border-color 0.3s, translate 0.3s var(--ease);
   cursor: default;
@@ -320,8 +321,8 @@ body.is-dragging { cursor: grabbing; user-select: none; }
 .card.is-moving { translate: 0 -3px; box-shadow: 0 40px 90px -20px rgba(0, 0, 0, 0.9), 0 0 0 1px color-mix(in srgb, var(--card-accent) 60%, transparent); }
 .card.is-entering { animation: card-in 0.55s var(--ease) both; }
 .card.is-leaving { animation: card-out 0.25s ease-in both; pointer-events: none; }
-@keyframes card-in { from { opacity: 0; transform: scale(0.9) translateY(14px); filter: blur(10px); } }
-@keyframes card-out { to { opacity: 0; transform: scale(0.94); filter: blur(6px); } }
+@keyframes card-in { from { opacity: 0; transform: scale(0.92) translateY(14px); } }
+@keyframes card-out { to { opacity: 0; transform: scale(0.94); } }
 
 .card-bar {
   flex: none;
@@ -363,30 +364,92 @@ body.is-dragging { cursor: grabbing; user-select: none; }
   background: #0b0d12;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
-.card-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #0b0d12; }
+/* L'iframe reste invisible tant que le widget n'a pas signalé « ready » (chargé et stylé),
+   puis fondu enchaîné avec le squelette. */
+.card-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #0b0d12; transition: opacity 0.4s var(--ease); }
+.card-body[data-frame="pending"] .card-frame { opacity: 0; transition: none; }
 
 .card-overlay {
   position: absolute; inset: 0; z-index: 2;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
   padding: 20px;
   text-align: center;
   background: #0b0d12;
   overflow: hidden;
+  transition: opacity 0.4s var(--ease), display 0.4s allow-discrete;
 }
-.card:not([data-state="loading"]):not([data-state="busy"]) .card-overlay { display: none; }
+.card:not([data-state="loading"]):not([data-state="busy"]) .card-overlay { pointer-events: none; }
+.card:not([data-state="loading"]):not([data-state="busy"]) .card-body:not([data-frame="pending"]) .card-overlay { display: none; opacity: 0; }
+.card:not([data-state="loading"]):not([data-state="busy"]) .card-status { display: none; }
 .card[data-state="busy"] .card-overlay { background: rgba(6, 7, 11, 0.62); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
-.card-overlay-text { margin: 0; color: var(--text); font-size: 13.5px; font-weight: 550; }
-.card-elapsed { margin: 0 0 8px; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
-.beam {
-  position: absolute; top: 0; bottom: 0; left: -40%;
-  width: 40%;
-  background: var(--spectrum);
-  opacity: 0.16;
-  filter: blur(28px);
-  animation: sweep 2.2s var(--ease) infinite;
+
+/* --- Squelette holographique : silhouette de la future carte, balayée par un reflet irisé.
+   Seuls transform et opacity sont animés : tout tourne sur le compositeur, rien sur le fil principal. */
+.holo {
+  position: absolute; inset: 0;
+  display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); gap: 12px;
+  padding: 22px 20px 20px;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 70% at 0% 0%, color-mix(in srgb, var(--card-accent) 16%, transparent), transparent 60%),
+    radial-gradient(90% 60% at 100% 100%, rgba(166, 107, 255, 0.13), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 4px),
+    #0b0d12;
+}
+.holo-bone {
+  display: block;
+  border-radius: 10px;
+  background: linear-gradient(115deg, rgba(124, 196, 255, 0.11), rgba(166, 107, 255, 0.08) 45%, rgba(255, 94, 138, 0.07));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.holo-title { width: 58%; height: 18px; }
+.holo-sub { width: 36%; height: 11px; margin-top: -4px; }
+.holo-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.holo-tiles .holo-bone { height: 54px; border-radius: 14px; }
+.holo-panel { display: flex; align-items: flex-end; gap: 6%; min-height: 0; padding: 16px 18px; border-radius: 16px; }
+.holo-panel i {
+  flex: 1;
+  height: var(--h, 50%);
+  border-radius: 6px 6px 3px 3px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--card-accent) 80%, transparent), color-mix(in srgb, #a66bff 22%, transparent));
+  box-shadow: 0 0 18px -4px color-mix(in srgb, var(--card-accent) 60%, transparent);
+  opacity: 0.7;
+  transform-origin: bottom;
+  animation: holo-bar 1.4s var(--ease) infinite alternate;
+}
+.holo-panel i:nth-child(1) { --h: 38%; animation-delay: -0.1s; }
+.holo-panel i:nth-child(2) { --h: 62%; animation-delay: -0.5s; }
+.holo-panel i:nth-child(3) { --h: 48%; animation-delay: -0.9s; }
+.holo-panel i:nth-child(4) { --h: 80%; animation-delay: -0.3s; }
+.holo-panel i:nth-child(5) { --h: 56%; animation-delay: -1.1s; }
+.holo-panel i:nth-child(6) { --h: 70%; animation-delay: -0.7s; }
+.holo-panel i:nth-child(7) { --h: 44%; animation-delay: -1.3s; }
+.holo::after {
+  content: "";
+  position: absolute; top: -20%; bottom: -20%; left: 0;
+  width: 55%;
+  background: linear-gradient(100deg, transparent, rgba(124, 196, 255, 0.14) 30%, rgba(166, 107, 255, 0.24) 50%, rgba(255, 94, 138, 0.14) 70%, transparent);
+  transform: translateX(-110%) skewX(-14deg);
+  animation: holo-sweep 2.4s var(--ease) infinite;
   pointer-events: none;
 }
-@keyframes sweep { to { left: 100%; } }
+@keyframes holo-bar { from { transform: scaleY(0.7); opacity: 0.35; } }
+@keyframes holo-sweep { to { transform: translateX(260%) skewX(-14deg); } }
+/* Refactorisation : le widget actuel reste visible, flouté ; seul le reflet le balaie. */
+.card[data-state="busy"] .holo { background: transparent; }
+.card[data-state="busy"] .holo > * { visibility: hidden; }
+
+.card-status {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  max-width: 100%;
+  padding: 14px 18px 12px;
+  border-radius: 16px;
+  background: rgba(8, 10, 16, 0.8);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 14px 34px -14px rgba(0, 0, 0, 0.85);
+}
+.card-overlay-text { margin: 0; color: var(--text); font-size: 13.5px; font-weight: 550; }
+.card-elapsed { margin: 0 0 8px; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
 
 .card-error {
   position: absolute; inset: 0; z-index: 2;
@@ -469,6 +532,11 @@ body.has-inspector .dock { left: calc((100vw - 380px) / 2); }
 .attachment[data-kind="json"] .file-badge::before { content: "JSON"; }
 .attachment[data-kind="txt"] .file-badge { background: #a6b4ff; }
 .attachment[data-kind="txt"] .file-badge::before { content: "TXT"; }
+/* Analyse en cours dans le Web Worker. */
+.attachment[data-state="reading"] .file-badge { background: rgba(255, 255, 255, 0.14); color: var(--muted); }
+.attachment[data-state="reading"] .file-badge::before { content: "···"; }
+.attachment[data-state="reading"] .file-info span { animation: breathe 1.2s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: 0.4; } }
 .file-info { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
 .file-info strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-info span { font-size: 11.5px; color: var(--muted); }

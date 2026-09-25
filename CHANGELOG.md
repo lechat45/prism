@@ -1,5 +1,33 @@
 # Changelog
 
+## 3.5.0-alpha.1 — 2026-09-25 (Velocity & Elegance)
+
+- **Gemini** remplace Groq comme fournisseur principal, côté serveur (`GEMINI_API_KEY`) comme dans le
+  navigateur (clé Google AI Studio). Appel REST `generateContent` asynchrone (`httpx`), sans SDK : le paquet
+  `google-generativeai` n'est plus maintenu. Chaîne `gemini-3.8-flash` → `gemini-3.6-flash` ; la réflexion
+  du modèle (`thought`) est écartée ; quota, modèle retiré, troncature (`MAX_TOKENS`), blocage de sécurité :
+  modèle suivant ; clé refusée : arrêt immédiat, Sparks remboursés. Groq reste un secours facultatif.
+- **Design system Tailwind** : le prompt système impose les classes Tailwind (mode sombre élégant, verre,
+  `rounded-2xl`, ombres subtiles), sans `<style>`. Tout CDN Tailwind écrit par le modèle est remplacé par
+  `@tailwindcss/browser@4.3.3` épinglé avec SRI (et autorisé par la CSP) ; ajouté aussi quand le document
+  utilise des classes Tailwind sans balise. Règles d'épinglage génériques (`libs.json`), partagées Python/JS.
+- **Web Worker** : analyse des fichiers joints et moteur navigateur (appel, nettoyage, validation) hors du
+  fil principal ; repli automatique si le worker est indisponible. Dépôt d'un CSV de 5 Mo : 0 ms de blocage
+  (contre 4,5 à 15 s).
+- **Données en Blob** : les données du fichier joint circulent en Blob (worker → IndexedDB → widget) ; un
+  chargeur minimal les remet au widget, qui les parse dans son propre processus. Plus de `srcdoc` de 7 Mo ni
+  de re-sérialisation à chaque sauvegarde. Cartes v2 migrées au chargement.
+- **Injection au rythme des images** : documents injectés via `requestAnimationFrame`, une carte par image ;
+  signal « prêt » émis par le widget une fois ses styles Tailwind compilés, puis fondu enchaîné.
+- **Squelette holographique** à la place du faisceau de chargement : silhouette de carte irisée, barres
+  animées et reflet balayant, en `transform`/`opacity` uniquement.
+- **Rendu allégé** : aurore en dégradés radiaux (plus de flou ni de `hue-rotate` plein écran animés), animée
+  seulement canvas vide ; cartes sans `backdrop-filter`. Canvas au repos : 60 images/s (contre 31–35).
+- Pièce jointe : état « Analyse en cours… » pendant le travail du worker ; retirer le fichier annule l'analyse.
+- Copie du code : `ClipboardItem` avec promesse (compatible Safari) ; export `.html` avec les données du Blob.
+- Outils : `tools/perf_probe.mjs` (images/s, blocages attribués page/widget, profils CPU) ; E2E : faux Gemini,
+  contrôle du fondu squelette → widget. Tests : 77 Python, 34 Node, E2E statique 29/29.
+
 ## 3.0.0-alpha.1 — 2026-09-25 (phase 1 : backend)
 
 Socle SaaS côté serveur. **Le frontend n'est pas encore adapté** (phase 2) : en mode serveur,

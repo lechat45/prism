@@ -1,7 +1,8 @@
-// Import de fichiers : lecture et analyse dans le navigateur (CSV, JSON, TXT).
+// Import de fichiers : lecture et analyse dans le navigateur (CSV, JSON, TXT), exécutées
+// dans le Web Worker (tasks.js) pour ne jamais figer l'interface.
 //
 // Le fichier complet ne passe jamais par le LLM (quota de tokens) : on lui envoie un
-// résumé de sa structure, et les données entières sont injectées dans le widget sous
+// résumé de sa structure, et les données entières sont remises au widget sous
 // window.PRISM_FILE (voir sandbox.js). Forme de PRISM_FILE : cf. engine/system-prompt.txt.
 
 export const MAX_BYTES = 5 * 1024 * 1024;

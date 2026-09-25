@@ -2,9 +2,9 @@
  *
  * Utilisé quand aucun backend ne répond (GitHub Pages, fichier ouvert seul) :
  *  - sans clé : mode démo, à partir des gabarits partagés frontend/engine/mocks/ ;
- *  - avec une clé Groq fournie par l'utilisateur : appel direct à api.groq.com
- *    (CORS autorisé par Groq), même prompt système et même validation que le backend.
- * La clé n'est jamais envoyée ailleurs qu'à l'URL définie dans engine/groq.json.
+ *  - avec une clé Gemini fournie par l'utilisateur : appel direct à l'API Gemini
+ *    (CORS autorisé par Google), même prompt système et même validation que le backend.
+ * La clé n'est jamais envoyée ailleurs qu'à l'URL définie dans engine/gemini.json.
  */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory(require("./sanitize.js"));
@@ -18,7 +18,7 @@
   const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch]);
   // JSON sûr dans un <script> : aucun « < » ne peut fermer la balise.
   const jsValue = (value) => JSON.stringify(value).replace(/</g, "\\u003c");
-  const normalize = (text) => text.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
+  const normalize = (text) => text.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
   const replaceAll = (text, token, value) => text.split(token).join(value);
   const allowedUrls = (libs) => Object.keys(libs).filter((k) => !k.startsWith("_")).map((k) => libs[k].url);
   const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
@@ -95,27 +95,25 @@
       return err;
     }
 
-    async function callGroq(model, userMessage, key, ctx, signal) {
+    // Raisons de fin Gemini qui signifient « pas de document exploitable » (mêmes règles que providers.py).
+    const BLOCKED = new Set(["SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "LANGUAGE", "OTHER"]);
+
+    async function callGemini(model, userMessage, key, ctx, signal) {
       const { cfg, system, libs } = ctx;
       const body = {
-        model,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: userMessage },
-        ],
-        temperature: cfg.temperature,
-        max_completion_tokens: cfg.max_completion_tokens,
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: "user", parts: [{ text: userMessage }] }],
+        generationConfig: { temperature: cfg.temperature, maxOutputTokens: cfg.max_output_tokens },
       };
-      if (model.startsWith(cfg.reasoning_models_prefix)) body.reasoning_effort = cfg.reasoning_effort;
-
       const timeout = typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(TIMEOUT_MS) : null;
       const combined = signal && timeout && AbortSignal.any ? AbortSignal.any([signal, timeout]) : signal || timeout || undefined;
 
       let res;
       try {
-        res = await fetchImpl(cfg.url, {
+        // Clé dans un en-tête (autorisé par la CORS de Google), jamais dans l'URL.
+        res = await fetchImpl(replaceAll(cfg.url, "{model}", encodeURIComponent(model)), {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+          headers: { "Content-Type": "application/json", "x-goog-api-key": key },
           body: JSON.stringify(body),
           signal: combined,
         });
@@ -125,23 +123,32 @@
         throw new Error(`${model}: erreur réseau`);
       }
 
-      if (res.status === 401) throw fatal("Clé Groq refusée (401). Vérifiez-la dans les réglages du moteur.");
-      if (!res.ok) {
-        const detail = (await res.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 200);
-        throw new Error(`${model}: HTTP ${res.status} — ${detail}`);
+      const text = await res.text().catch(() => "");
+      if (res.status === 400 && text.includes("API_KEY_INVALID")) {
+        throw fatal("Clé Gemini refusée (API_KEY_INVALID). Vérifiez-la dans les réglages du moteur.");
       }
+      if (res.status === 401 || res.status === 403) throw fatal(`Accès Gemini refusé (HTTP ${res.status}).`);
+      if (res.status === 402) throw fatal("Crédits Gemini épuisés (HTTP 402).");
+      if (!res.ok) throw new Error(`${model}: HTTP ${res.status} — ${text.replace(/\s+/g, " ").slice(0, 200)}`);
 
-      let choice;
+      let data;
       try {
-        choice = (await res.json()).choices[0];
+        data = JSON.parse(text);
       } catch {
-        throw new Error(`${model}: réponse Groq illisible`);
+        throw new Error(`${model}: réponse illisible`);
       }
-      if (choice.finish_reason === "length") {
-        throw new Error(`${model}: réponse tronquée (max_completion_tokens=${cfg.max_completion_tokens})`);
+      const blocked = data.promptFeedback && data.promptFeedback.blockReason;
+      if (blocked) throw new Error(`${model}: demande bloquée (${blocked})`);
+      const candidate = (data.candidates || [])[0];
+      if (!candidate) throw new Error(`${model}: aucune réponse`);
+      if (candidate.finishReason === "MAX_TOKENS") {
+        throw new Error(`${model}: réponse tronquée (maxOutputTokens=${cfg.max_output_tokens})`);
       }
+      if (BLOCKED.has(candidate.finishReason)) throw new Error(`${model}: réponse interrompue (${candidate.finishReason})`);
+      // Les parties « thought » sont la réflexion du modèle, pas le document.
+      const raw = ((candidate.content && candidate.content.parts) || []).filter((p) => !p.thought).map((p) => p.text || "").join("");
 
-      const cleaned = S.cleanLlmOutput((choice.message && choice.message.content) || "");
+      const cleaned = S.cleanLlmOutput(raw);
       if (!S.hasMarkup(cleaned)) throw new Error(`${model}: aucune balise HTML dans la réponse`);
       const html = S.normalizeLibraries(S.ensureDocument(cleaned), libs);
       const issues = S.validateDocument(html, allowedUrls(libs));
@@ -158,7 +165,7 @@
 
       if (!key) {
         if (baseHtml) {
-          const err = new Error("La refactorisation a besoin d'un modèle : ajoutez votre clé Groq (mode démo actif).");
+          const err = new Error("La refactorisation a besoin d'un modèle : ajoutez votre clé Gemini (mode démo actif).");
           err.code = "needs_key";
           throw err;
         }
@@ -167,21 +174,22 @@
       }
 
       const [cfg, libs, system, user, fileTpl, refactor] = await Promise.all([
-        load("groq.json", "json"),
+        load("gemini.json", "json"),
         load("libs.json", "json"),
         load("system-prompt.txt"),
         load("user-template.txt"),
         load("file-template.txt"),
         load("refactor-template.txt"),
       ]);
-      const ctx = { cfg, libs, system: replaceAll(system.trim(), "{{chartjs_url}}", libs.chartjs.url) };
+      const prompt0 = replaceAll(system.trim(), "{{chartjs_url}}", libs.chartjs.url);
+      const ctx = { cfg, libs, system: replaceAll(prompt0, "{{tailwind_url}}", libs.tailwind.url) };
       const templates = { user: user.trim(), file: fileTpl.trim(), refactor: refactor.trim() };
       const userMessage = buildUserMessage(prompt, file, baseHtml, templates);
       const errors = [];
       for (const model of models.length ? models : cfg.models) {
         try {
-          const { html, warnings } = await callGroq(model, userMessage, key, ctx, signal);
-          return { html, mode: "groq", model, elapsed_ms: elapsed(), warnings };
+          const { html, warnings } = await callGemini(model, userMessage, key, ctx, signal);
+          return { html, mode: "gemini", model, elapsed_ms: elapsed(), warnings };
         } catch (err) {
           if (err.fatal || (err.name === "AbortError" && signal && signal.aborted)) throw err;
           errors.push(err.message);
@@ -190,7 +198,7 @@
       throw new Error(`Tous les modèles ont échoué : ${errors.join(" | ")}`);
     }
 
-    return { generate, mock, defaults: () => load("groq.json", "json"), libs: () => load("libs.json", "json") };
+    return { generate, mock, defaults: () => load("gemini.json", "json"), libs: () => load("libs.json", "json") };
   }
 
   return { createLocalEngine, extractSeries, route, escapeHtml, buildUserMessage, allowedUrls };

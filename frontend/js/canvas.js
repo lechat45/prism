@@ -215,10 +215,17 @@ export class Canvas {
       </header>
       <div class="card-body">
         <div class="card-overlay">
-          <div class="beam" aria-hidden="true"></div>
-          <p class="card-overlay-text"></p>
-          <p class="card-elapsed"></p>
-          <button type="button" class="tool" data-action="cancel">Annuler</button>
+          <div class="holo" aria-hidden="true">
+            <span class="holo-bone holo-title"></span>
+            <span class="holo-bone holo-sub"></span>
+            <span class="holo-tiles"><span class="holo-bone"></span><span class="holo-bone"></span><span class="holo-bone"></span></span>
+            <span class="holo-bone holo-panel"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+          </div>
+          <div class="card-status">
+            <p class="card-overlay-text"></p>
+            <p class="card-elapsed"></p>
+            <button type="button" class="tool" data-action="cancel">Annuler</button>
+          </div>
         </div>
         <div class="card-error" hidden>
           <p class="card-error-text"></p>

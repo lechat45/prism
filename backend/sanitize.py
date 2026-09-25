@@ -75,9 +75,6 @@ def ensure_document(html: str, lang: str = "fr") -> str:
 
 _EMPTY_SCRIPT_RE = re.compile(r"<script\b([^>]*)>\s*</script\s*>", re.I)
 _SRC_ATTR_RE = re.compile(r"""\bsrc\s*=\s*(["']?)([^"'\s>]+)\1""", re.I)
-# chart.js, chart.js@4…, Chart.js/4.4.0/…, …/chart.umd.min.js — mais pas les plugins (chartjs-plugin-…).
-_CHARTJS_SRC_RE = re.compile(r"chart\.js(?:@|/|$)|/chart(?:\.umd)?(?:\.min)?\.js(?:$|\?)", re.I)
-_USES_CHART_RE = re.compile(r"\bnew\s+Chart\s*\(|\bChart\s*\.\s*(?:register|defaults|getChart|helpers)\b")
 
 
 def _insert_in_head(html: str, tag: str) -> str:
@@ -91,18 +88,29 @@ def _insert_in_head(html: str, tag: str) -> str:
 
 
 def normalize_libraries(html: str, libs: dict) -> str:
-    """Remplace toute balise Chart.js (version ou CDN quelconque) par la version épinglée avec SRI,
-    injectée en tête de <head> si le document utilise Chart. Idempotent."""
-    chart = libs["chartjs"]
+    """Remplace toute balise d'une bibliothèque autorisée (Tailwind, Chart.js — version ou CDN
+    quelconque) par la version épinglée avec SRI, en tête de <head>. Règles dans libs.json :
+    réinjectée si la balise était présente (`keep_if_tag`) ou si `uses` apparaît `min_uses` fois.
+    Idempotent."""
+    for name, lib in libs.items():
+        if name.startswith("_"):
+            continue
+        src_re = re.compile(lib["match"], re.I)
+        found = False
 
-    def drop_chartjs(match: re.Match) -> str:
-        src = _SRC_ATTR_RE.search(match.group(1))
-        return "" if src and _CHARTJS_SRC_RE.search(src.group(2)) else match.group(0)
+        def drop(match: re.Match) -> str:
+            nonlocal found
+            src = _SRC_ATTR_RE.search(match.group(1))
+            if src and src_re.search(src.group(2)):
+                found = True
+                return ""
+            return match.group(0)
 
-    html = _EMPTY_SCRIPT_RE.sub(drop_chartjs, html)
-    if _USES_CHART_RE.search(html):
-        tag = f'<script src="{chart["url"]}" integrity="{chart["integrity"]}" crossorigin="anonymous"></script>'
-        html = _insert_in_head(html, tag)
+        html = _EMPTY_SCRIPT_RE.sub(drop, html)
+        used = len(re.findall(lib["uses"], html)) >= lib["min_uses"]
+        if (found and lib["keep_if_tag"]) or used:
+            tag = f'<script src="{lib["url"]}" integrity="{lib["integrity"]}" crossorigin="anonymous"></script>'
+            html = _insert_in_head(html, tag)
     return html
 
 

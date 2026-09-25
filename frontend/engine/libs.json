@@ -1,8 +1,21 @@
 {
-  "_doc": "Seules bibliothèques externes autorisées dans un widget (CSP + SRI). Partagé par les deux moteurs et la sandbox.",
+  "_doc": "Seules bibliothèques externes autorisées dans un widget (CSP + SRI). Partagé par les deux moteurs et la sandbox. Toute balise dont le src correspond à `match` est remplacée par la version épinglée, réinjectée si la balise était présente (`keep_if_tag`) ou si `uses` apparaît au moins `min_uses` fois.",
+  "tailwind": {
+    "version": "4.3.3",
+    "url": "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3/dist/index.global.js",
+    "integrity": "sha384-2ql948lIdLcGEE0/qxNiudyTjgauA3RDJERu5xW75kFCvSl5a9odyQYCb6tEjnmB",
+    "match": "tailwindcss",
+    "keep_if_tag": true,
+    "uses": "\\bclass\\s*=\\s*[\"'][^\"']*\\b(?:bg|text|rounded|px|py|gap|shadow|backdrop|border|grid-cols|items|justify)-",
+    "min_uses": 3
+  },
   "chartjs": {
     "version": "4.5.1",
     "url": "https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js",
-    "integrity": "sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ"
+    "integrity": "sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ",
+    "match": "chart\\.js(?:@|/|$)|/chart(?:\\.umd)?(?:\\.min)?\\.js(?:$|\\?)",
+    "keep_if_tag": false,
+    "uses": "\\bnew\\s+Chart\\s*\\(|\\bChart\\s*\\.\\s*(?:register|defaults|getChart|helpers)\\b",
+    "min_uses": 1
   }
 }

@@ -6,7 +6,7 @@
 // isolation, persistance après rechargement et fermeture d'une carte.
 //
 // Usage : node tools/e2e_canvas.mjs [--base URL] [--screenshot capture.png] [--refactor]
-//   --refactor : exige un modèle (ex. tools/e2e_server.py, faux Groq) et teste la refactorisation.
+//   --refactor : exige un modèle (ex. tools/e2e_server.py, faux Gemini) et teste la refactorisation.
 // Aucune dépendance : WebSocket natif de Node >= 22. Navigateur : PRISM_BROWSER ou détection auto.
 
 import { spawn } from "node:child_process";
@@ -197,13 +197,16 @@ async function main() {
       await cdp.send("Input.dispatchDragEvent", { type, x: dock.cx, y: dock.cy, data: dragData }, S);
     }
     let dropMode = "glisser-déposer natif (Input.dispatchDragEvent)";
-    const attached = await waitFor(() => evaluate(`!document.getElementById("attachment").hidden && document.getElementById("file-meta").textContent`), "fichier joint", 4000)
+    // Le fichier s'affiche tout de suite (« Analyse en cours… »), puis le Web Worker livre son analyse.
+    await waitFor(() => evaluate(`!document.getElementById("attachment").hidden`), "fichier joint", 4000)
       .catch(async () => {
         dropMode = "évènement drop synthétique (repli)";
         await evaluate(`(() => { const dt = new DataTransfer(); dt.items.add(new File([${JSON.stringify(readFileSync(csvPath, "utf8"))}], "ventes-test.csv", { type: "text/csv" }));
           for (const t of ["dragenter", "dragover", "drop"]) document.getElementById("dock").dispatchEvent(new DragEvent(t, { bubbles: true, cancelable: true, dataTransfer: dt })); })()`);
-        return waitFor(() => evaluate(`!document.getElementById("attachment").hidden && document.getElementById("file-meta").textContent`), "fichier joint (repli)");
+        return waitFor(() => evaluate(`!document.getElementById("attachment").hidden`), "fichier joint (repli)");
       });
+    const attached = await waitFor(() => evaluate(`(() => { const a = document.getElementById("attachment");
+      return !a.hidden && a.dataset.state !== "reading" && document.getElementById("file-meta").textContent; })()`), "analyse du fichier (Web Worker)", 30000);
     check("CSV joint par glisser-déposer et analysé", /12 lignes × 3 colonnes/.test(attached), `${attached} — ${dropMode}`);
     await clickSel("#prompt");
     await typeText("Visualise les ventes par région");
@@ -211,6 +214,11 @@ async function main() {
     await waitFor(async () => (await readyCount()) === 2, "widget 2 prêt", 60000);
     const [, csvCard] = await cards();
     check("deux widgets sur le canvas", (await cards()).length === 2, `${counterCard.title} + ${csvCard.title}`);
+    // Squelette holographique jusqu'au signal « ready » du widget, puis iframe révélée.
+    const live = await waitFor(() => evaluate(`(() => { const b = [...document.querySelectorAll(".card-body")];
+      const o = b.map((x) => getComputedStyle(x.querySelector(".card-frame")).opacity);
+      return b.length === 2 && b.every((x) => x.dataset.frame === "live") && o.every((v) => v === "1") && o.join("/"); })()`), "iframes révélées (fondu terminé)", 20000);
+    check("widgets révélés après leur signal « ready » (squelette → iframe)", live === "1/1", `opacité ${live}`);
     const [a, b] = await cards();
     const overlap = !(a.left + a.width <= b.left || b.left + b.width <= a.left || a.top + a.height <= b.top || b.top + b.height <= a.top);
     check("placement automatique sans chevauchement", !overlap);

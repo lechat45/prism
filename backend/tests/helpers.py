@@ -23,12 +23,19 @@ class DbTestCase(unittest.TestCase):
     """Chaque test part d'une base vide et de limiteurs de débit remis à zéro."""
 
     def setUp(self):
+        import app  # noqa: PLC0415 — clés des fournisseurs neutralisées : seuls les tests les activent
+
+        self._keys = (app.GEMINI_API_KEY, app.GROQ_API_KEY)
+        app.GEMINI_API_KEY = app.GROQ_API_KEY = ""
         self._tmp = tempfile.mkdtemp(prefix="prism-test-")
         db.configure(f"sqlite:///{Path(self._tmp, 'test.db').as_posix()}")
         auth.login_failures.reset()
         auth.registrations.reset()
 
     def tearDown(self):
+        import app  # noqa: PLC0415
+
+        app.GEMINI_API_KEY, app.GROQ_API_KEY = self._keys
         db.engine().dispose()
         shutil.rmtree(self._tmp, ignore_errors=True)
 

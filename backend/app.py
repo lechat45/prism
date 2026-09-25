@@ -10,8 +10,9 @@ Routes :
     /api/sparks   solde, tarifs et grand livre (billing.py)
     /api/health   état du serveur
 
-Moteurs :
-    - Groq (API OpenAI-compatible) si GROQ_API_KEY est définie ;
+Moteurs (providers.py), appelés en HTTP asynchrone :
+    - Gemini si GEMINI_API_KEY est définie (principal) ;
+    - Groq si GROQ_API_KEY est définie (secours facultatif) ;
     - sinon mode démo (mock) avec des composants pré-écrits.
 
 Lancement :  python backend/app.py   (puis http://127.0.0.1:8000)
@@ -40,6 +41,7 @@ import billing
 import db
 import widgets
 from mocks import mock_component
+from providers import FatalGenerationError, GenerationError, Provider
 from models import User, Widget
 from widgets import WidgetSummary
 from sanitize import (
@@ -52,7 +54,7 @@ from sanitize import (
     validate_document,
 )
 
-__version__ = "3.0.0a1"
+__version__ = "3.5.0a1"
 
 BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
@@ -75,16 +77,25 @@ _load_dotenv(BACKEND_DIR / ".env", BACKEND_DIR.parent / ".env")
 
 ENGINE_DIR = FRONTEND_DIR / "engine"  # fichiers partagés avec le moteur navigateur (GitHub Pages)
 GROQ_DEFAULTS = json.loads((ENGINE_DIR / "groq.json").read_text(encoding="utf-8"))
+GEMINI_DEFAULTS = json.loads((ENGINE_DIR / "gemini.json").read_text(encoding="utf-8"))
 LIBS = json.loads((ENGINE_DIR / "libs.json").read_text(encoding="utf-8"))
 ALLOWED_URLS = tuple(lib["url"] for key, lib in LIBS.items() if not key.startswith("_"))
 
+
+def _models(env: str, defaults: dict) -> list[str]:
+    return [m.strip() for m in os.getenv(env, ",".join(defaults["models"])).split(",") if m.strip()]
+
+
+# Gemini, fournisseur principal (clé gratuite sur https://aistudio.google.com/apikey).
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_URL = os.getenv("GEMINI_URL", GEMINI_DEFAULTS["url"])  # surcharge : faux serveur des tests E2E
+GEMINI_MODELS = _models("GEMINI_MODELS", GEMINI_DEFAULTS)
+GEMINI_MAX_OUTPUT_TOKENS = int(os.getenv("GEMINI_MAX_OUTPUT_TOKENS", str(GEMINI_DEFAULTS["max_output_tokens"])))
+
+# Groq, secours facultatif : essayé seulement si GROQ_API_KEY est défini et que Gemini échoue.
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
-# Surcharge réservée aux tests locaux (faux serveur Groq, cf. tools/e2e_server.py).
-GROQ_URL = os.getenv("GROQ_URL", GROQ_DEFAULTS["url"])
-# Chaîne de modèles essayés dans l'ordre (le suivant prend le relais en cas d'échec).
-GROQ_MODELS = [
-    m.strip() for m in os.getenv("GROQ_MODELS", ",".join(GROQ_DEFAULTS["models"])).split(",") if m.strip()
-]
+GROQ_URL = os.getenv("GROQ_URL", GROQ_DEFAULTS["url"])  # surcharge : faux serveur de test
+GROQ_MODELS = _models("GROQ_MODELS", GROQ_DEFAULTS)
 GROQ_REASONING_EFFORT = os.getenv("GROQ_REASONING_EFFORT", GROQ_DEFAULTS["reasoning_effort"])
 MAX_TOKENS = int(os.getenv("PRISM_MAX_TOKENS", str(GROQ_DEFAULTS["max_completion_tokens"])))
 TIMEOUT_S = float(os.getenv("PRISM_TIMEOUT", "90"))
@@ -103,7 +114,11 @@ def _engine_text(name: str) -> str:
     return (ENGINE_DIR / name).read_text(encoding="utf-8").strip()
 
 
-SYSTEM_PROMPT = _engine_text("system-prompt.txt").replace("{{chartjs_url}}", LIBS["chartjs"]["url"])
+SYSTEM_PROMPT = (
+    _engine_text("system-prompt.txt")
+    .replace("{{chartjs_url}}", LIBS["chartjs"]["url"])
+    .replace("{{tailwind_url}}", LIBS["tailwind"]["url"])
+)
 USER_TEMPLATE = _engine_text("user-template.txt")
 FILE_TEMPLATE = _engine_text("file-template.txt")
 REFACTOR_TEMPLATE = _engine_text("refactor-template.txt")
@@ -164,14 +179,6 @@ async def read_generate_request(request: Request) -> GenerateRequest:
         raise RequestValidationError(exc.errors(include_url=False)) from exc
 
 
-class GenerationError(Exception):
-    """Échec d'un modèle : on peut tenter le suivant de la chaîne."""
-
-
-class FatalGenerationError(Exception):
-    """Échec qui ne dépend pas du modèle (clé refusée…) : inutile d'insister."""
-
-
 app = FastAPI(title="Prism", version=__version__)
 app.add_middleware(
     CORSMiddleware,
@@ -194,50 +201,27 @@ async def revalidate_frontend(request, call_next):
 
 
 def _http_client() -> httpx.AsyncClient:
-    """Point d'injection : les tests y substituent un transport Groq simulé."""
+    """Point d'injection : les tests y substituent un transport simulé (faux Gemini/Groq)."""
     return httpx.AsyncClient()
 
 
-async def _call_groq(client: httpx.AsyncClient, model: str, user_message: str) -> tuple[str, list[str]]:
-    payload: dict = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
-        ],
-        "temperature": GROQ_DEFAULTS["temperature"],
-        "max_completion_tokens": MAX_TOKENS,
-    }
-    if model.startswith(GROQ_DEFAULTS["reasoning_models_prefix"]):
-        payload["reasoning_effort"] = GROQ_REASONING_EFFORT
+def active_providers() -> list[Provider]:
+    """Fournisseurs configurés, dans l'ordre d'essai (lu à chaque appel : les tests ajustent les clés)."""
+    providers = []
+    if GEMINI_API_KEY:
+        providers.append(Provider("gemini", GEMINI_API_KEY, GEMINI_MODELS, GEMINI_URL, {
+            "temperature": GEMINI_DEFAULTS["temperature"], "max_output_tokens": GEMINI_MAX_OUTPUT_TOKENS}))
+    if GROQ_API_KEY:
+        providers.append(Provider("groq", GROQ_API_KEY, GROQ_MODELS, GROQ_URL, {
+            "temperature": GROQ_DEFAULTS["temperature"], "max_completion_tokens": MAX_TOKENS,
+            "reasoning_effort": GROQ_REASONING_EFFORT, "reasoning_models_prefix": GROQ_DEFAULTS["reasoning_models_prefix"]}))
+    return providers
 
+
+async def _produce(client: httpx.AsyncClient, provider: Provider, model: str, user_message: str) -> tuple[str, list[str]]:
+    """Appel du modèle puis nettoyage/validation communs à tous les fournisseurs."""
     t0 = time.perf_counter()
-    try:
-        resp = await client.post(
-            GROQ_URL,
-            json=payload,
-            headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
-            timeout=TIMEOUT_S,
-        )
-    except httpx.TimeoutException as exc:
-        raise GenerationError(f"{model}: délai dépassé ({TIMEOUT_S:.0f}s)") from exc
-    except httpx.HTTPError as exc:
-        raise GenerationError(f"{model}: erreur réseau ({exc.__class__.__name__})") from exc
-
-    if resp.status_code == 401:
-        raise FatalGenerationError("Clé Groq refusée (401). Vérifiez GROQ_API_KEY.")
-    if resp.status_code >= 400:
-        detail = resp.text[:300].replace("\n", " ")
-        raise GenerationError(f"{model}: HTTP {resp.status_code} — {detail}")
-
-    try:
-        choice = resp.json()["choices"][0]
-        raw = choice.get("message", {}).get("content") or ""
-    except (ValueError, KeyError, IndexError, AttributeError) as exc:
-        raise GenerationError(f"{model}: réponse Groq illisible") from exc
-    if choice.get("finish_reason") == "length":
-        raise GenerationError(f"{model}: réponse tronquée (max_completion_tokens={MAX_TOKENS})")
-
+    raw = await provider.complete(client, model, SYSTEM_PROMPT, user_message, TIMEOUT_S)
     t1 = time.perf_counter()
     cleaned = clean_llm_output(raw)
     if not has_markup(cleaned):
@@ -245,10 +229,11 @@ async def _call_groq(client: httpx.AsyncClient, model: str, user_message: str) -
     document = normalize_libraries(ensure_document(cleaned), LIBS)
     issues = validate_document(document, ALLOWED_URLS)
     t2 = time.perf_counter()
+    # Vérification JS (sous-processus Node) dans un thread : la boucle d'évènements reste libre.
     js_errors = await asyncio.to_thread(js_syntax_errors, document)
     log.info(
-        "%s : modèle %d ms, nettoyage %d ms, vérification JS %d ms",
-        model, (t1 - t0) * 1000, (t2 - t1) * 1000, (time.perf_counter() - t2) * 1000,
+        "%s/%s : modèle %d ms, nettoyage %d ms, vérification JS %d ms",
+        provider.name, model, (t1 - t0) * 1000, (t2 - t1) * 1000, (time.perf_counter() - t2) * 1000,
     )
     if js_errors:
         issues.append("js_syntax")
@@ -262,8 +247,10 @@ async def health() -> dict:
     return {
         "status": "ok",
         "version": __version__,
-        "mode": "groq" if GROQ_API_KEY else "mock",
-        "models": GROQ_MODELS if GROQ_API_KEY else ["mock"],
+        # Fournisseur principal (« gemini », « groq ») ou « mock » ; modèles dans l'ordre d'essai.
+        "mode": (providers[0].name if (providers := active_providers()) else "mock"),
+        "models": [m for p in providers for m in p.models] or ["mock"],
+        "providers": [p.name for p in providers],
         "auth": True,
         "pricing": {action: billing.as_sparks(cents) for action, cents in billing.PRICES.items()},
         "signup_sparks": billing.as_sparks(billing.SIGNUP_BONUS),
@@ -285,22 +272,29 @@ def sparks(user: User = Depends(auth.current_user)) -> dict:
 
 
 async def run_model(user_message: str, prompt: str, file_kind: str | None) -> tuple[str, str, str, list[str]]:
-    """Produit un document : (html, mode, modèle, avertissements). Lève HTTPException 502 si tout échoue."""
-    if not GROQ_API_KEY:
+    """Produit un document : (html, fournisseur, modèle, avertissements). Lève HTTPException 502 si tout échoue."""
+    providers = active_providers()
+    if not providers:
         document, template = mock_component(prompt, file_kind)
         return document, "mock", f"mock:{template}", validate_document(document, ALLOWED_URLS)
     errors: list[str] = []
     async with _http_client() as client:
-        for model in GROQ_MODELS:
-            try:
-                document, issues = await _call_groq(client, model, user_message)
-            except FatalGenerationError as exc:
-                raise HTTPException(status_code=502, detail=str(exc)) from exc
-            except GenerationError as exc:
-                log.warning("échec génération: %s", exc)
-                errors.append(str(exc))
-                continue
-            return document, "groq", model, issues
+        for provider in providers:
+            for model in provider.models:
+                try:
+                    document, issues = await _produce(client, provider, model, user_message)
+                except FatalGenerationError as exc:
+                    # Clé refusée : on passe au fournisseur suivant s'il y en a un, sinon on s'arrête.
+                    log.warning("fournisseur %s indisponible : %s", provider.name, exc)
+                    errors.append(str(exc))
+                    break
+                except GenerationError as exc:
+                    log.warning("échec génération: %s", exc)
+                    errors.append(str(exc))
+                    continue
+                return document, provider.name, model, issues
+    if len(errors) == 1:
+        raise HTTPException(status_code=502, detail=errors[0])
     raise HTTPException(status_code=502, detail="Tous les modèles ont échoué : " + " | ".join(errors))
 
 
@@ -364,10 +358,10 @@ async def generate(
     base_html = None
     if action == "refactor":
         base_html = await asyncio.to_thread(_load_for_refactor, user, req.widget_id)  # 404 si pas à lui
-        if not GROQ_API_KEY:
+        if not active_providers():
             raise HTTPException(
                 status_code=409,
-                detail="La refactorisation a besoin d'un modèle : ajoutez GROQ_API_KEY (mode démo actif).",
+                detail="La refactorisation a besoin d'un modèle : ajoutez GEMINI_API_KEY (mode démo actif).",
             )
 
     # Réserver avant d'appeler le modèle : aucune génération parallèle ne peut dépasser le solde.
@@ -413,5 +407,5 @@ UVICORN_LOOP = "asyncio:SelectorEventLoop" if sys.platform == "win32" else "auto
 if __name__ == "__main__":
     import uvicorn
 
-    log.info("Prism %s — mode %s — http://%s:%d", __version__, "groq" if GROQ_API_KEY else "mock", HOST, PORT)
+    log.info("Prism %s — %s — http://%s:%d", __version__, ", ".join(p.name for p in active_providers()) or "mode démo", HOST, PORT)
     uvicorn.run(app, host=HOST, port=PORT, loop=UVICORN_LOOP)
