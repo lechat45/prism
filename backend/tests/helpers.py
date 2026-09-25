@@ -1,0 +1,38 @@
+"""Outils de test partagés : base SQLite temporaire par test et comptes prêts à l'emploi."""
+from __future__ import annotations
+
+import shutil
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import auth  # noqa: E402
+import db  # noqa: E402
+import security  # noqa: E402
+
+# Secret fixe : les tests n'écrivent jamais de secret dans data/.
+security._SECRET = "secret-de-test-" + "x" * 48
+
+PASSWORD = "motdepasse-solide"
+
+
+class DbTestCase(unittest.TestCase):
+    """Chaque test part d'une base vide et de limiteurs de débit remis à zéro."""
+
+    def setUp(self):
+        self._tmp = tempfile.mkdtemp(prefix="prism-test-")
+        db.configure(f"sqlite:///{Path(self._tmp, 'test.db').as_posix()}")
+        auth.login_failures.reset()
+        auth.registrations.reset()
+
+    def tearDown(self):
+        db.engine().dispose()
+        shutil.rmtree(self._tmp, ignore_errors=True)
+
+    def register(self, client, email: str = "alice@exemple.fr", password: str = PASSWORD) -> dict[str, str]:
+        res = client.post("/api/auth/register", json={"email": email, "password": password})
+        self.assertEqual(res.status_code, 201, res.text)
+        return {"Authorization": f"Bearer {res.json()['token']}"}

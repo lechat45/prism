@@ -2,6 +2,7 @@
 
 Couvre le chemin « clé présente » sans consommer de quota : nettoyage du Markdown,
 bascule vers le modèle suivant (429, troncature, JS invalide), clé refusée.
+Depuis la v3, /api/generate exige un compte : chaque test s'inscrit sur une base temporaire.
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import httpx  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from helpers import DbTestCase  # noqa: E402
 
 import app as prism  # noqa: E402
 
@@ -45,15 +47,21 @@ class FakeGroq:
         return self.responses[body["model"]]
 
 
-class ApiTests(unittest.TestCase):
+class ApiTests(DbTestCase):
     def setUp(self):
+        super().setUp()
         self._saved = (prism.GROQ_API_KEY, prism.GROQ_MODELS, prism._http_client)
         prism.GROQ_API_KEY = "test-key"
         prism.GROQ_MODELS = [PRIMARY, SECONDARY]
         self.client = TestClient(prism.app)
+        self.auth = self.register(self.client)
 
     def tearDown(self):
         prism.GROQ_API_KEY, prism.GROQ_MODELS, prism._http_client = self._saved
+        super().tearDown()
+
+    def post(self, body: dict):
+        return self.client.post("/api/generate", json=body, headers=self.auth)
 
     def fake(self, **responses: httpx.Response) -> FakeGroq:
         groq = FakeGroq({PRIMARY: responses.get("primary"), SECONDARY: responses.get("secondary")})
@@ -61,7 +69,7 @@ class ApiTests(unittest.TestCase):
         return groq
 
     def generate(self, prompt: str = "Crée un bouton qui compte les clics"):
-        return self.client.post("/api/generate", json={"prompt": prompt})
+        return self.post({"prompt": prompt})
 
     def test_markdown_wrapped_output_is_cleaned(self):
         groq = self.fake(primary=completion(f"Voici votre composant :\n```html\n{GOOD}\n```\nBonne utilisation !"))
@@ -120,8 +128,8 @@ class ApiTests(unittest.TestCase):
 
     def test_blank_prompt_is_rejected(self):
         self.assertEqual(self.generate("   ").status_code, 422)
-        self.assertEqual(self.client.post("/api/generate", json={}).status_code, 422)
-        bad = self.client.post("/api/generate", content=b"{pas du json", headers={"Content-Type": "application/json"})
+        self.assertEqual(self.post({}).status_code, 422)
+        bad = self.client.post("/api/generate", content=b"{pas du json", headers={"Content-Type": "application/json", **self.auth})
         self.assertEqual(bad.status_code, 422)
 
     def test_windows_cp1252_body_is_accepted(self):
@@ -130,7 +138,7 @@ class ApiTests(unittest.TestCase):
         for encoding in ("utf-8", "cp1252"):
             with self.subTest(encoding=encoding):
                 res = self.client.post(
-                    "/api/generate", content=body.encode(encoding), headers={"Content-Type": "application/json"}
+                    "/api/generate", content=body.encode(encoding), headers={"Content-Type": "application/json", **self.auth}
                 )
                 self.assertEqual(res.status_code, 200)
                 self.assertIn("Crée un minuteur à café", res.json()["html"])
@@ -138,7 +146,7 @@ class ApiTests(unittest.TestCase):
     def test_attached_file_summary_reaches_the_model(self):
         groq = self.fake(primary=completion(GOOD))
         file = {"name": "ventes.csv", "kind": "csv", "summary": "Colonnes : mois (text), total (number)"}
-        res = self.client.post("/api/generate", json={"prompt": "un graphique", "file": file})
+        res = self.post({"prompt": "un graphique", "file": file})
         self.assertEqual(res.status_code, 200)
         message = groq.calls[0][0]["messages"][1]["content"]
         self.assertIn("ATTACHED FILE", message)
@@ -149,10 +157,12 @@ class ApiTests(unittest.TestCase):
         answer = GOOD.replace("<head>", '<head><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>').replace(
             "let n = 0;", "let n = 0; new Chart(document.body, {});"
         )
-        groq = self.fake(primary=completion(answer))
-        res = self.client.post("/api/generate", json={"prompt": "ajoute un graphique", "base_html": GOOD})
+        groq = self.fake(primary=completion(GOOD))
+        widget_id = self.generate().json()["widget"]["id"]
+        groq.responses[PRIMARY] = completion(answer)
+        res = self.post({"prompt": "ajoute un graphique", "widget_id": widget_id})
         self.assertEqual(res.status_code, 200)
-        message = groq.calls[0][0]["messages"][1]["content"]
+        message = groq.calls[1][0]["messages"][1]["content"]
         self.assertIn("current source of an existing widget", message)
         self.assertIn(GOOD, message)
         html = res.json()["html"]
@@ -163,14 +173,17 @@ class ApiTests(unittest.TestCase):
     def test_demo_mode_routes_files_and_refuses_refactor(self):
         prism.GROQ_API_KEY = ""
         file = {"name": "arbre.json", "kind": "json", "summary": "objet, 3 clés"}
-        res = self.client.post("/api/generate", json={"prompt": "explore", "file": file})
+        res = self.post({"prompt": "explore", "file": file})
         self.assertEqual(res.json()["model"], "mock:json-tree")
-        refused = self.client.post("/api/generate", json={"prompt": "change", "base_html": GOOD})
+        before = res.json()["sparks"]
+        refused = self.post({"prompt": "change", "widget_id": res.json()["widget"]["id"]})
         self.assertEqual(refused.status_code, 409)
         self.assertIn("GROQ_API_KEY", refused.json()["detail"])
+        me = self.client.get("/api/auth/me", headers=self.auth).json()
+        self.assertEqual(me["sparks"], before, "refus sans débit")
 
     def test_invalid_file_kind_is_rejected(self):
-        res = self.client.post("/api/generate", json={"prompt": "x", "file": {"name": "a.exe", "kind": "exe", "summary": ""}})
+        res = self.post({"prompt": "x", "file": {"name": "a.exe", "kind": "exe", "summary": ""}})
         self.assertEqual(res.status_code, 422)
 
     def test_openapi_documents_request_body(self):
@@ -182,10 +195,11 @@ class ApiTests(unittest.TestCase):
         res = self.client.options(
             "/api/generate",
             headers={"Origin": "http://localhost:5500", "Access-Control-Request-Method": "POST",
-                     "Access-Control-Request-Headers": "content-type"},
+                     "Access-Control-Request-Headers": "authorization, content-type"},
         )
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.headers["access-control-allow-origin"], "*")
+        self.assertIn("authorization", res.headers["access-control-allow-headers"].lower())
 
     def test_frontend_is_served(self):
         res = self.client.get("/")

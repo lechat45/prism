@@ -1,5 +1,31 @@
 # Changelog
 
+## 3.0.0-alpha.1 — 2026-09-25 (phase 1 : backend)
+
+Socle SaaS côté serveur. **Le frontend n'est pas encore adapté** (phase 2) : en mode serveur,
+la génération répond désormais 401 tant qu'on n'est pas connecté. Le site GitHub Pages
+(moteur navigateur, sans compte) n'est pas concerné.
+
+- **Base de données** : SQLAlchemy 2 + SQLite (`data/prism.db`), PostgreSQL possible via
+  `PRISM_DATABASE_URL`. Tables `users`, `widgets`, `spark_ledger`.
+- **Comptes** (`/api/auth/register`, `/login`, `/me`) : mots de passe en scrypt (bibliothèque
+  standard, sel aléatoire), jetons JWT HS256 (Bearer, 7 jours, révocables par `token_version`),
+  e-mails normalisés, anti-force brute (10 échecs / 15 min par IP + e-mail), inscriptions limitées
+  par IP, temps de réponse identique pour un compte inexistant.
+- **Prism Sparks** : 50 à l'inscription ; génération 1 Spark, refactorisation 0,5 Spark. Coût
+  réservé atomiquement avant l'appel au modèle, remboursé en cas d'échec : des générations
+  parallèles ne peuvent pas dépasser le solde (contrainte CHECK en dernier rempart). Grand livre
+  de tous les mouvements ; `GET /api/sparks`. Solde insuffisant : **403** `insufficient_sparks`,
+  sans appel au modèle.
+- **Mon Hub (API)** : chaque génération est enregistrée ; `GET/PATCH/DELETE /api/widgets[/id]`,
+  `POST /api/widgets/{id}/undo`. Disposition, état du widget, couleur, miniature et données du
+  fichier joint synchronisables. Les widgets d'un autre compte répondent 404.
+- **Refactorisation** : la requête désigne un `widget_id` ; le serveur part de sa copie du code
+  (plus de `base_html` envoyé par le client) et garde les 5 versions précédentes.
+- CORS : en-tête `Authorization` et méthodes `PATCH`/`DELETE` autorisés.
+- Tests : 71 tests Python (comptes, jetons falsifiés/expirés/`alg: none`, Sparks, concurrence,
+  cloisonnement des widgets).
+
 ## 2.0.0 — 2026-09-24
 
 Prism devient un canvas spatial multi-widgets.

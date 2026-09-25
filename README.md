@@ -110,13 +110,39 @@ node tools/e2e_canvas.mjs --base http://127.0.0.1:8001/
 node tools/e2e_canvas.mjs --base http://127.0.0.1:8003 --refactor
 ```
 
-Validation d'une réponse brute :
+> Depuis la v3 (phase 1), `/api/generate` exige un compte : les E2E en mode serveur (8000, 8003)
+> seront remis à jour avec l'écran de connexion (phase 2). Le mode statique (8001) n'est pas concerné.
+
+Validation d'une réponse brute (inscription, puis génération avec le jeton) :
 
 ```bash
-curl -s -X POST http://127.0.0.1:8000/api/generate -H "Content-Type: application/json" \
+TOKEN=$(curl -s -X POST http://127.0.0.1:8000/api/auth/register -H "Content-Type: application/json" \
+     -d '{"email":"moi@exemple.fr","password":"un-mot-de-passe-solide"}' | python -c "import json,sys; print(json.load(sys.stdin)['token'])")
+curl -s -X POST http://127.0.0.1:8000/api/generate -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
      -d '{"prompt":"Crée un bouton interactif qui change de couleur au clic et compte le nombre de clics"}' \
      -o resp.json && .venv/Scripts/python tools/check_generate.py resp.json
 ```
+
+## Prism v3 (en cours) — plateforme SaaS
+
+| Phase | Contenu | État |
+| --- | --- | --- |
+| 1. Backend | comptes (JWT + scrypt), Sparks (réservation atomique, remboursement, grand livre), historique des widgets, API | **fait** (`3.0.0-alpha.1`) |
+| 2. Comptes côté interface | fenêtre de connexion/inscription Liquid Glass, jauge de Sparks en anneau, fenêtre « Prism Pro » sur 403 | à faire |
+| 3. Mon Hub | panneau d'historique, miniatures générées dans la sandbox, synchronisation du canvas avec le serveur | à faire |
+| 4. Bus d'évènements | `prism.emit` / `prism.on` entre widgets, relayés par le canvas ; le prompt connaît les sujets des widgets présents | à faire |
+| 5. Spotlight et reflets | invite flottante Ctrl/Cmd + K ; reflets des bords via IntersectionObserver et position du pointeur | à faire |
+| 6. Déploiement | hébergement gratuit de l'API, PostgreSQL, secrets, frontend Pages pointé vers l'API | à faire |
+
+API ajoutée en phase 1 (jeton `Authorization: Bearer …` sauf `register`/`login`/`health`) :
+
+| Route | Rôle |
+| --- | --- |
+| `POST /api/auth/register`, `POST /api/auth/login` | `{ email, password }` → `{ token, user }` (50 Sparks offerts à l'inscription) |
+| `GET /api/auth/me` | profil et solde |
+| `POST /api/generate` | `{ prompt, file?, widget_id? }` : génère (1 Spark) ou refactorise ce widget (0,5 Spark) ; **403** `insufficient_sparks` si le solde manque |
+| `GET /api/sparks` | solde, tarifs, derniers mouvements |
+| `GET /api/widgets`, `GET/PATCH/DELETE /api/widgets/{id}`, `POST /api/widgets/{id}/undo` | historique « Mon Hub » |
 
 ## Configuration du serveur
 
@@ -129,5 +155,9 @@ curl -s -X POST http://127.0.0.1:8000/api/generate -H "Content-Type: application
 | `PRISM_TIMEOUT` | `90` | délai par appel, en secondes |
 | `PRISM_HOST` / `PRISM_PORT` | `127.0.0.1` / `8000` | adresse d'écoute |
 | `PRISM_CORS_ORIGINS` | `*` | origines autorisées, séparées par des virgules |
+| `PRISM_JWT_SECRET` | secret de développement dans `data/` | signature des sessions : **obligatoire en production** |
+| `PRISM_DATABASE_URL` | `sqlite:///data/prism.db` | base de données (PostgreSQL en production) |
+| `PRISM_SIGNUP_SPARKS` | `50` | Sparks offerts à l'inscription |
+| `PRISM_TOKEN_TTL_HOURS` | `168` | durée d'une session |
 
 Régénérer le logo : `python tools/pixel_logo.py`.
