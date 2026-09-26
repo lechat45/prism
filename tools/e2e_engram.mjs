@@ -487,6 +487,17 @@ async function main() {
       check("un quart de Spark par message", Math.abs(parseFloat(sparksBefore.replace(",", ".")) - parseFloat(sparksAfter.replace(",", ".")) - 0.25) <= 0.05 /* compteur arrondi au dixième */, `${sparksBefore} → ${sparksAfter}`);
     }
     await clickSel("#chat-close");
+    // Paramètres (roue dentée) : la conversation figure dans « Mes écrits », la version dans « À propos ».
+    await clickSel("#btn-prefs");
+    await waitFor(() => evaluate(`document.getElementById("prefs").open`), "paramètres", 5000);
+    await evaluate(`document.querySelector('#prefs [data-tab="writings"]').click()`);
+    const writings = await waitFor(() => evaluate(`(() => { const t = document.getElementById("prefs-body").textContent; return t.includes("Conversations") ? t : null; })()`), "mes écrits", 5000);
+    await evaluate(`document.querySelector('#prefs [data-tab="about"]').click()`);
+    const about = await evaluate(`document.getElementById("prefs-body").textContent`);
+    const badge = await evaluate(`document.getElementById("app-version").textContent.trim()`);
+    check("Paramètres : mes écrits (conversation avec Marie Curie) et version", writings.includes("Marie Curie") && writings.includes("Reprendre") && about.includes(badge) && /^v\d+\.\d+\.\d+/.test(badge),
+      `${badge} · ${writings.slice(0, 80)}…`);
+    await clickSel("#prefs-close");
     check("conversation fermée : la trace quitte la carte", await waitFor(async () => (await evaluate(`window.__engram.state().trace.length`, EF)) === 0, "trace effacée", 5000).then(() => true).catch(() => false));
     if (serverMode) {
       // Mon Hub : la personne apparaît en tête, avec « Discuter ».

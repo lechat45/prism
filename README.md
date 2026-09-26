@@ -25,6 +25,7 @@ dans une carte que l'on déplace, redimensionne, refactorise, recolore et export
 | **Liquid Glass** | aurore sous le verre dépoli, reflets des bords qui suivent le pointeur, squelette holographique pendant la génération, fondu enchaîné vers le widget une fois prêt |
 | **Engramme cognitif** (V4) | « Engramme : Marie Curie » : carte interprétative de l'esprit d'une personnalité publique en 36 à 44 bulles vivantes (noyau, caractère et émotions, moteurs, ombres, artefacts datés), moteur physique ressort-masse natif ; chaque bulle devient un **filtre ADN** pour vos générations |
 | **Zoom fractal** (V4) | double-clic sur une partie d'un widget : Prism propose d'en faire un widget complet, qui émerge du point cliqué |
+| **Paramètres** | roue dentée : compte et solde, « Mes écrits » (conversations, demandes, export JSON), moteur et clés, version |
 | **Incantation** (V4) | maintenir Espace et parler : la demande dictée devient une carte sous le pointeur ; pendant l'écoute, le **verre organique** respire avec la voix |
 
 ## Deux façons de l'utiliser

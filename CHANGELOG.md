@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.0.0-alpha.6 — 2026-09-26 (Paramètres)
+
+- **Bouton Paramètres** (roue dentée, barre du haut ; aussi dans Spotlight) : **Compte** (e-mail, solde, tarifs,
+  Mon Hub, Prism Pro, déconnexion ou connexion), **Mes écrits** (conversations avec les Engrammes à reprendre, demandes
+  de widgets à retrouver, export JSON de tout), **Moteur** (serveur ou navigateur, modèles, clés), **À propos** (versions
+  de l'interface et du serveur, liens).
+- E2E : les paramètres sont vérifiés après une conversation (mes écrits, version).
+
 ## 4.0.0-alpha.5 — 2026-09-26 (version affichée)
 
 - La version de Prism s'affiche à côté du nom, dans la barre du haut ; en mode serveur, l'info-bulle donne aussi la
