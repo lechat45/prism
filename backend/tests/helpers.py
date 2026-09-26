@@ -1,6 +1,7 @@
 """Outils de test partagés : base SQLite temporaire par test et comptes prêts à l'emploi."""
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 import tempfile
@@ -19,6 +20,11 @@ security._SECRET = "secret-de-test-" + "x" * 48
 PASSWORD = "motdepasse-solide"
 
 
+# PRISM_TEST_DATABASE_URL (ex. PostgreSQL de la CI) : toute la suite tourne sur cette base,
+# vidée avant chaque test. Sinon : un fichier SQLite temporaire par test.
+TEST_DATABASE_URL = os.getenv("PRISM_TEST_DATABASE_URL", "").strip()
+
+
 class DbTestCase(unittest.TestCase):
     """Chaque test part d'une base vide et de limiteurs de débit remis à zéro."""
 
@@ -28,7 +34,12 @@ class DbTestCase(unittest.TestCase):
         self._keys = (app.GEMINI_API_KEY, app.GROQ_API_KEY)
         app.GEMINI_API_KEY = app.GROQ_API_KEY = ""
         self._tmp = tempfile.mkdtemp(prefix="prism-test-")
-        db.configure(f"sqlite:///{Path(self._tmp, 'test.db').as_posix()}")
+        if TEST_DATABASE_URL:
+            engine = db.configure(TEST_DATABASE_URL)
+            db.Base.metadata.drop_all(engine)
+            db.Base.metadata.create_all(engine)
+        else:
+            db.configure(f"sqlite:///{Path(self._tmp, 'test.db').as_posix()}")
         auth.login_failures.reset()
         auth.registrations.reset()
 

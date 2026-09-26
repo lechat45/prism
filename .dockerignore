@@ -1,0 +1,12 @@
+.git
+.github
+.venv
+.claude
+data
+tools
+**/tests
+**/__pycache__
+**/*.pyc
+backend/.env
+*.db
+*.db-*

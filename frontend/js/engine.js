@@ -3,11 +3,14 @@
 //  - "browser" : sans backend (GitHub Pages…) — démo, ou Gemini en direct avec la clé de l'utilisateur.
 //    L'appel, le nettoyage et la validation du code reçu tournent dans le Web Worker (offload.js).
 
-import { api, API_BASE, initAccount } from "./account.js";
+import { api, API_BASE, initAccount, REMOTE_API, STATIC_HOST } from "./account.js";
 import { run } from "./offload.js";
 
-// Hébergement purement statique connu : inutile de chercher un backend (évite un 404 en console).
-const STATIC_HOST = /\.github\.io$/i.test(location.hostname);
+// GitHub Pages sans API configurée : inutile de chercher un backend (évite un 404 en console).
+// Avec une API distante (déploiement) : elle peut dormir (hébergement gratuit) — on la réveille.
+const PROBE_MS = REMOTE_API ? 8000 : 5000;
+const WAKE_EVERY_MS = 10000;
+const WAKE_TRIES = 12; // ~2 minutes : largement le temps de réveil d'un service gratuit
 const KEY_STORAGE = "prism:gemini-key";
 const MODELS_STORAGE = "prism:gemini-models";
 const PROVIDER_LABELS = { gemini: "Gemini", groq: "Groq" };
@@ -69,22 +72,48 @@ function writeModels(value) {
 // --------------------------------------------------------------------------
 // Détection
 // --------------------------------------------------------------------------
+async function probe() {
+  const signal = typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(PROBE_MS) : undefined;
+  const res = await fetch(`${API_BASE}/api/health`, { cache: "no-store", signal });
+  const info = res.ok ? await res.json() : null;
+  return info && info.status === "ok" ? info : null;
+}
+
+function useServer(info) {
+  engine.kind = "server";
+  engine.info = info;
+  engine.waking = false;
+  initAccount(info); // session relue tout de suite ; vérification (/api/auth/me) en arrière-plan
+}
+
+/** API distante endormie : Prism démarre en moteur navigateur et bascule dès qu'elle répond. */
+function wake() {
+  engine.waking = true;
+  let tries = 0;
+  const timer = setInterval(async () => {
+    tries += 1;
+    let info = null;
+    try { info = await probe(); } catch { /* toujours endormie */ }
+    if (info) useServer(info);
+    if (info || tries >= WAKE_TRIES) {
+      clearInterval(timer);
+      engine.waking = false;
+      render();
+    }
+  }, WAKE_EVERY_MS);
+}
+
 async function detect() {
   engine.libs = await local.libs();
-  if (!STATIC_HOST) {
+  if (!STATIC_HOST || REMOTE_API) {
     try {
-      const res = await fetch(`${API_BASE}/api/health`, { cache: "no-store" });
-      const info = res.ok ? await res.json() : null;
-      if (info && info.status === "ok") {
-        engine.kind = "server";
-        engine.info = info;
-        initAccount(info); // session relue tout de suite ; vérification (/api/auth/me) en arrière-plan
-        return;
-      }
-    } catch { /* pas de backend : moteur navigateur */ }
+      const info = await probe();
+      if (info) return useServer(info);
+    } catch { /* pas de backend (ou endormi) */ }
   }
   engine.kind = "browser";
   engine.defaults = await local.defaults().catch(() => null);
+  if (REMOTE_API) wake();
 }
 
 export const engineReady = detect().finally(() => render());
@@ -111,6 +140,10 @@ function render() {
     badge.title = live
       ? `Serveur Prism v${info.version} · modèles : ${info.models.join(" → ")}`
       : "Serveur sans GEMINI_API_KEY : widgets de démonstration. Ajoutez la clé dans backend/.env.";
+  } else if (engine.waking) {
+    badge.dataset.state = "pending";
+    text.textContent = "Réveil du serveur…";
+    badge.title = "Le serveur Prism se réveille (hébergement gratuit, environ une minute). En attendant, le moteur du navigateur répond.";
   } else {
     const models = readModels().length ? readModels() : (engine.defaults && engine.defaults.models) || [];
     const live = Boolean(readKey());

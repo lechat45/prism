@@ -53,12 +53,17 @@ def verify_password(password: str, stored: str) -> bool:
 DUMMY_HASH = hash_password(secrets.token_urlsafe(16))
 
 
+MIN_SECRET_LENGTH = 32
+
+
 def _load_secret() -> str:
     env = os.getenv("PRISM_JWT_SECRET", "").strip()
     if env:
         return env
+    if os.getenv("PRISM_ENV", "").strip().lower() == "production":
+        # Disque éphémère, instances multiples : un secret local invaliderait les sessions au hasard.
+        raise RuntimeError("PRISM_JWT_SECRET est obligatoire en production")
     # Développement : secret aléatoire persistant (les sessions survivent aux redémarrages).
-    # En production, définir PRISM_JWT_SECRET.
     try:
         if SECRET_FILE.is_file():
             return SECRET_FILE.read_text(encoding="utf-8").strip()

@@ -1,0 +1,33 @@
+# Blueprint Render : service web gratuit construit depuis le Dockerfile (cf. DEPLOY.md).
+# Offre gratuite : mise en veille après 15 min sans trafic, réveil en ~1 min, disque éphémère
+# → la base doit être externe (Neon, PostgreSQL gratuit et permanent).
+services:
+  - type: web
+    name: prism-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: PRISM_ENV
+        value: production
+      # Secret de signature des sessions : généré par Render à la création, jamais dans le dépôt.
+      - key: PRISM_JWT_SECRET
+        generateValue: true
+      # Chaîne de connexion Neon (postgresql://…?sslmode=require), saisie dans le tableau de bord.
+      - key: PRISM_DATABASE_URL
+        sync: false
+      # Clé Gemini (Google AI Studio), saisie dans le tableau de bord.
+      - key: GEMINI_API_KEY
+        sync: false
+      # Frontend GitHub Pages autorisé à appeler l'API (le frontend servi par Render est de même origine).
+      - key: PRISM_CORS_ORIGINS
+        value: https://lechat45.github.io
+      # Le proxy de Render fournit l'IP réelle (limites anti-abus par IP).
+      - key: FORWARDED_ALLOW_IPS
+        value: "*"
+      # Base gratuite de 0,5 Go : données de fichier joint plafonnées à 4 Mo par widget.
+      - key: PRISM_MAX_FILE_DATA_MB
+        value: "4"

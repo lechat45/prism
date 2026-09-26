@@ -24,11 +24,32 @@ SessionLocal = sessionmaker(autoflush=False, expire_on_commit=False)
 _engine: Engine | None = None
 
 
+def normalize_url(url: str) -> str:
+    """Les hébergeurs (Neon, Render, Heroku…) donnent « postgres://… » ou « postgresql://… » :
+    SQLAlchemy veut le pilote explicite (psycopg 3)."""
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
+    return url
+
+
+def database_url() -> str:
+    return normalize_url(os.getenv("PRISM_DATABASE_URL") or DEFAULT_URL)
+
+
 def configure(url: str | None = None) -> Engine:
     """(Re)crée le moteur et les tables. Idempotent pour une même URL."""
     global _engine
-    url = url or os.getenv("PRISM_DATABASE_URL") or DEFAULT_URL
+    url = normalize_url(url) if url else database_url()
     kwargs: dict = {}
+    if not url.startswith("sqlite"):
+        # Bases managées (Neon…) : connexions fermées pendant la mise en veille → vérifiées avant usage.
+        kwargs["pool_pre_ping"] = True
+        kwargs["pool_recycle"] = 300
+    if url.startswith("postgresql+psycopg"):
+        # Pas de requêtes préparées côté serveur : compatibles avec les poolers en mode transaction
+        # (PgBouncer, adresse « -pooler » de Neon).
+        kwargs["connect_args"] = {"prepare_threshold": None}
     if url.startswith("sqlite"):
         path = url.removeprefix("sqlite:///")
         if path and path != ":memory:":

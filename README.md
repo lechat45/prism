@@ -198,10 +198,28 @@ tools/
   e2e_canvas.mjs        E2E : Chrome headless via CDP (deux widgets, vrais clics et glisser-déposer…)
   e2e_server.py         backend branché sur un faux Gemini local (génération « réelle », refactorisation)
   perf_probe.mjs        mesures de fluidité (images/s, blocages du fil principal), profils CPU facultatifs
+  e2e_pages_api.mjs     E2E : frontend servi comme GitHub Pages, API distante endormie puis réveillée
+  prod_local.py         Prism en configuration de production, en local (port 8005)
+  check_deploy.py       contrôles d'un déploiement (santé, en-têtes, CORS, frontend, authentification)
   serve_static.py       sert le site en statique, comme GitHub Pages
   check_generate.py     valide une réponse enregistrée par curl
   pixel_logo.py         génère le logo pixel art
+Dockerfile, render.yaml  image de production et blueprint Render (cf. DEPLOY.md)
+.github/workflows/ci.yml tests Python (SQLite + PostgreSQL), Node, E2E Chrome, image Docker
 ```
+
+## Mise en ligne
+
+Tout est prêt pour un déploiement gratuit : **API + frontend sur Render** (image Docker), **base PostgreSQL
+sur Neon**, **GitHub Pages** branché sur l'API par une balise `<meta name="prism-api">`. Pas à pas, limites
+des offres gratuites, sécurité et dépannage : **[DEPLOY.md](DEPLOY.md)**.
+
+- En production (`PRISM_ENV=production`, déjà dans l'image), le serveur **refuse de démarrer** sans secret de
+  session d'au moins 32 caractères ni base PostgreSQL ; il envoie des en-têtes de sécurité et lit l'IP réelle
+  derrière le proxy de l'hébergeur.
+- Hébergement gratuit endormi : le frontend démarre en moteur navigateur (« Réveil du serveur… ») et bascule
+  en mode serveur au réveil, sans rechargement.
+- `python tools/check_deploy.py https://…` contrôle un déploiement en lecture seule.
 
 ## Tests
 
@@ -215,11 +233,17 @@ node tools/e2e_canvas.mjs --base http://127.0.0.1:8001/
 node tools/perf_probe.mjs --base http://127.0.0.1:8001/           # fluidité (--profile dossier : profils CPU)
 .venv/Scripts/python tools/e2e_server.py &                        # faux Gemini : génération et refactorisation
 node tools/e2e_canvas.mjs --base http://127.0.0.1:8003 --refactor
+node tools/e2e_pages_api.mjs --api http://127.0.0.1:8004          # GitHub Pages → API (serveur démo lancé)
+.venv/Scripts/python tools/prod_local.py &                       # configuration de production, port 8005
+.venv/Scripts/python tools/check_deploy.py http://127.0.0.1:8005 --allow-demo
 ```
+
+La CI GitHub (`.github/workflows/ci.yml`) rejoue tout cela à chaque envoi, la suite Python aussi sur
+PostgreSQL (`PRISM_TEST_DATABASE_URL`), et construit l'image Docker de production.
 
 > Face à un serveur, l'E2E crée un compte jetable par la vraie fenêtre d'inscription (saisie clavier),
 > vérifie la reprise de la demande, l'anneau de Sparks, la session après rechargement et « Prism Pro »
-> (le faux Gemini n'offre que 3 Sparks pour atteindre le solde épuisé). `tools/e2e_server.py` utilise
+> (le faux Gemini n'offre que 5 Sparks pour atteindre le solde épuisé). `tools/e2e_server.py` utilise
 > une base SQLite temporaire : `data/prism.db` n'est jamais touchée.
 
 Validation d'une réponse brute (inscription, puis génération avec le jeton) :
@@ -232,7 +256,7 @@ curl -s -X POST http://127.0.0.1:8000/api/generate -H "Content-Type: application
      -o resp.json && .venv/Scripts/python tools/check_generate.py resp.json
 ```
 
-## Prism v3 (en cours) — plateforme SaaS
+## Prism v3 — plateforme SaaS
 
 | Phase | Contenu | État |
 | --- | --- | --- |
@@ -242,7 +266,7 @@ curl -s -X POST http://127.0.0.1:8000/api/generate -H "Content-Type: application
 | 3. Mon Hub | panneau d'historique, miniatures générées dans la sandbox, synchronisation du canvas avec le serveur | **fait** (`3.5.0-alpha.3`) |
 | 4. Bus d'évènements | `prism.emit` / `prism.on` entre widgets, relayés par le canvas ; le prompt connaît les sujets des widgets présents | **fait** (`3.5.0-alpha.4`) |
 | 5. Spotlight et reflets | invite flottante Ctrl/Cmd + K ; reflets des bords via IntersectionObserver et position du pointeur | **fait** (`3.5.0-alpha.5`) |
-| 6. Déploiement | hébergement gratuit de l'API, PostgreSQL, secrets, frontend Pages pointé vers l'API | à faire |
+| 6. Déploiement | image Docker, blueprint Render, PostgreSQL (Neon), garde-fous de production, en-têtes, CI, frontend Pages pointé vers l'API | **prêt** (`3.5.0-rc.1`) — mise en ligne : [DEPLOY.md](DEPLOY.md) |
 
 API ajoutée en phase 1 (jeton `Authorization: Bearer …` sauf `register`/`login`/`health`) :
 
@@ -254,7 +278,7 @@ API ajoutée en phase 1 (jeton `Authorization: Bearer …` sauf `register`/`logi
 | `GET /api/sparks` | solde, tarifs, derniers mouvements |
 | `GET /api/widgets[?on_canvas=true]`, `GET/PATCH/DELETE /api/widgets/{id}`, `POST /api/widgets/{id}/undo` | « Mon Hub » : liste légère, détail, état de la carte (`layout`, `clear_layout`, `storage`, `accent`, `title`, `thumbnail`), annulation, suppression |
 | `POST /api/widgets` | importe une carte créée hors compte (gratuit, 1 000 widgets par compte au plus) |
-| `GET/PUT /api/widgets/{id}/file` | données du fichier joint (`window.PRISM_FILE`) en JSON brut, 16 Mo au plus |
+| `GET/PUT /api/widgets/{id}/file` | données du fichier joint (`window.PRISM_FILE`) en JSON brut, 16 Mo au plus (`PRISM_MAX_FILE_DATA_MB`) |
 
 ## Configuration du serveur
 
@@ -268,10 +292,14 @@ API ajoutée en phase 1 (jeton `Authorization: Bearer …` sauf `register`/`logi
 | `GROQ_REASONING_EFFORT` | `medium` | effort de raisonnement (modèles gpt-oss uniquement) |
 | `PRISM_MAX_TOKENS` | `6000` | tokens de sortie max côté Groq |
 | `PRISM_TIMEOUT` | `90` | délai par appel, en secondes |
-| `PRISM_HOST` / `PRISM_PORT` | `127.0.0.1` / `8000` | adresse d'écoute |
+| `PRISM_ENV` | `development` | `production` : refus de démarrer sans secret ni PostgreSQL, HSTS |
+| `PRISM_HOST` / `PRISM_PORT` (ou `PORT`) | `127.0.0.1` / `8000` | adresse d'écoute (`PORT` : fourni par l'hébergeur) |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | proxys de confiance (`X-Forwarded-For`) : `*` derrière le proxy d'un hébergeur |
 | `PRISM_CORS_ORIGINS` | `*` | origines autorisées, séparées par des virgules |
 | `PRISM_JWT_SECRET` | secret de développement dans `data/` | signature des sessions : **obligatoire en production** |
-| `PRISM_DATABASE_URL` | `sqlite:///data/prism.db` | base de données (PostgreSQL en production) |
+| `PRISM_DATABASE_URL` | `sqlite:///data/prism.db` | base de données ; `postgres://…` / `postgresql://…` acceptés (pilote psycopg 3) |
+| `PRISM_ALLOW_SQLITE` | vide | `1` : SQLite tolérée en production (disque persistant seulement) |
+| `PRISM_MAX_FILE_DATA_MB` | `16` | données de fichier joint par widget |
 | `PRISM_SIGNUP_SPARKS` | `50` | Sparks offerts à l'inscription |
 | `PRISM_TOKEN_TTL_HOURS` | `168` | durée d'une session |
 

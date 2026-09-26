@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 from datetime import UTC, datetime
 from typing import Literal
@@ -31,7 +32,7 @@ MAX_THUMBNAIL = 300_000  # caractères (~220 Ko d'image)
 MAX_STORAGE = 1_000_000  # même plafond que la sandbox côté navigateur
 # window.PRISM_FILE en JSON : un CSV de 5 Mo (plafond du navigateur) grossit une fois en objets,
 # les noms de colonnes étant répétés à chaque ligne.
-MAX_FILE_DATA = 16_000_000  # octets
+MAX_FILE_DATA = int(float(os.getenv("PRISM_MAX_FILE_DATA_MB", "16")) * 1_000_000)  # octets (base gratuite : réduire)
 MAX_HTML = 1_000_000  # code d'un widget importé (un widget généré pèse quelques dizaines de Ko)
 MAX_WIDGETS = 1000  # par compte, pour les imports (la génération, elle, coûte des Sparks)
 

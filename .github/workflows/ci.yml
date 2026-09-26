@@ -1,0 +1,106 @@
+# Intégration continue de Prism : tests unitaires (SQLite et PostgreSQL), tests Node, E2E dans Chrome
+# headless (statique, serveur démo, faux Gemini, GitHub Pages → API) et image Docker de production.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests (Python SQLite + PostgreSQL, Node)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: prism
+          POSTGRES_PASSWORD: prism
+          POSTGRES_DB: prism_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U prism"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: pip install -r backend/requirements.txt
+      - name: Python (SQLite)
+        working-directory: backend
+        run: python -m unittest discover -s tests
+      - name: Python (PostgreSQL)
+        working-directory: backend
+        env:
+          PRISM_TEST_DATABASE_URL: postgresql://prism:prism@localhost:5432/prism_test
+        run: python -m unittest discover -s tests
+      - name: Node
+        run: node --test frontend/tests/*.test.*
+
+  e2e:
+    name: E2E (Chrome headless)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: pip install -r backend/requirements.txt
+      - name: Serveurs de test
+        run: |
+          python tools/serve_static.py > static.log 2>&1 &
+          python tools/e2e_server.py > fake-gemini.log 2>&1 &
+          python tools/e2e_server.py --demo > demo.log 2>&1 &
+          for url in http://127.0.0.1:8001/frontend/ http://127.0.0.1:8003/api/health http://127.0.0.1:8004/api/health; do
+            for i in $(seq 90); do curl -sf "$url" > /dev/null && break; sleep 1; done
+          done
+      - name: Statique (GitHub Pages sans API)
+        run: node tools/e2e_canvas.mjs --base http://127.0.0.1:8001/frontend/
+      - name: Serveur avec faux Gemini
+        run: node tools/e2e_canvas.mjs --base http://127.0.0.1:8003 --refactor
+      - name: Serveur en mode démo
+        run: node tools/e2e_canvas.mjs --base http://127.0.0.1:8004
+      - name: GitHub Pages → API distante (serveur endormi puis réveillé)
+        run: node tools/e2e_pages_api.mjs --api http://127.0.0.1:8004
+      - name: Journaux des serveurs
+        if: failure()
+        run: tail -n 80 static.log fake-gemini.log demo.log
+
+  docker:
+    name: Image Docker de production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t prism .
+      - name: Refus de démarrer sans secret de session
+        run: |
+          if timeout 90 docker run --rm -e PRISM_ALLOW_SQLITE=1 prism; then
+            echo "le conteneur aurait dû refuser de démarrer sans PRISM_JWT_SECRET"; exit 1
+          fi
+      - name: Conteneur configuré, contrôles de déploiement
+        run: |
+          docker run -d --name prism -p 8000:8000 \
+            -e PRISM_JWT_SECRET="$(openssl rand -hex 32)" -e PRISM_ALLOW_SQLITE=1 \
+            -e PRISM_CORS_ORIGINS=https://lechat45.github.io prism
+          for i in $(seq 60); do curl -sf http://127.0.0.1:8000/api/health > /dev/null && break; sleep 1; done
+          python3 tools/check_deploy.py http://127.0.0.1:8000 --allow-demo
+      - name: Journal du conteneur
+        if: failure()
+        run: docker logs prism || true

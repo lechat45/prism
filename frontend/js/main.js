@@ -1078,6 +1078,7 @@ function onWidgetDeleted(serverId) {
 
 /** Connexion (ou démarrage) : les cartes posées sur le canvas depuis un autre appareil arrivent ici. */
 let syncing = null;
+let started = false; // canvas local restauré (cf. start)
 function syncCanvasFromServer() {
   if (engine.kind !== "server" || !account.user || syncing) return syncing;
   syncing = (async () => {
@@ -1116,7 +1117,12 @@ async function start() {
   onAccountChange((state, change) => {
     if (change.signedIn) syncCanvasFromServer();
   });
-  onEngineChange(() => inspector.refresh(inspector.card));
+  onEngineChange(() => {
+    inspector.refresh(inspector.card);
+    // API distante réveillée après le démarrage : le canvas rejoint « Mon Hub » (jamais avant la
+    // restauration locale, sinon des cartes seraient ajoutées en double).
+    if (started && engine.kind === "server") syncCanvasFromServer();
+  });
   try {
     promptEl.value = localStorage.getItem(DRAFT_KEY) || "";
   } catch { /* stockage indisponible */ }
@@ -1149,6 +1155,7 @@ async function start() {
   updateEmpty();
   redrawLinks();
   document.body.classList.add("is-ready");
+  started = true;
   syncCanvasFromServer();
 }
 

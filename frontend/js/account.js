@@ -4,7 +4,13 @@
 // sessionStorage, ou en localStorage si « Rester connecté ». Les widgets n'y ont jamais accès
 // (sandbox sans allow-same-origin). Sur GitHub Pages (moteur navigateur), pas de compte.
 
-export const API_BASE = location.protocol === "file:" ? "http://127.0.0.1:8000" : "";
+// API distante (déploiement) : seulement sur GitHub Pages, jamais en local.
+export const STATIC_HOST = /\.github\.io$/i.test(location.hostname);
+const configuredApi = (document.querySelector('meta[name="prism-api"]')?.content || "").trim().replace(/\/+$/, "");
+// HTTPS obligatoire (la page l'est), sauf API sur la machine elle-même (développement, tests).
+const acceptableApi = /^https:\/\/[^/]+$|^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(configuredApi);
+export const REMOTE_API = STATIC_HOST && acceptableApi ? configuredApi : "";
+export const API_BASE = location.protocol === "file:" ? "http://127.0.0.1:8000" : REMOTE_API;
 const SESSION_KEY = "prism:session";
 
 /** État observable : enabled (serveur à comptes), user ({ id, email, sparks, plan } | null). */

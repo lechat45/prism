@@ -1,5 +1,32 @@
 # Changelog
 
+## 3.5.0-rc.1 — 2026-09-26 (phase 6 : prêt pour la mise en ligne)
+
+Candidate à la version 3.5.0 : tout le nécessaire au déploiement gratuit est là ; la 3.5.0 finale suivra
+la première mise en ligne vérifiée (`tools/check_deploy.py`) et le premier passage de la CI GitHub.
+
+- **Image Docker** de production (Python 3.13, Node pour la vérification du JS généré, utilisateur non root)
+  et **blueprint Render** (`render.yaml` : service gratuit, contrôle de santé, secret de session généré,
+  base et clé Gemini saisies dans le tableau de bord). Guide pas à pas : `DEPLOY.md`.
+- **PostgreSQL** : pilote psycopg 3, adresses `postgres://` / `postgresql://` des hébergeurs acceptées,
+  connexions vérifiées avant usage (bases qui s'endorment), requêtes préparées côté serveur désactivées
+  (poolers de type PgBouncer) ; la suite Python peut tourner sur PostgreSQL (`PRISM_TEST_DATABASE_URL`).
+- **Garde-fous de production** (`PRISM_ENV=production`) : refus de démarrer sans secret de session de
+  32 caractères au moins ni base PostgreSQL (sauf `PRISM_ALLOW_SQLITE=1`) ; jamais de secret de
+  développement généré en production.
+- **En-têtes** : `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`,
+  HSTS en production ; IP réelle derrière le proxy (`FORWARDED_ALLOW_IPS`) pour les limites anti-abus ;
+  port fourni par l'hébergeur (`PORT`). CORS : `PUT` autorisé (oubli de la phase 3, requis depuis GitHub Pages).
+- **GitHub Pages → API** : balise `<meta name="prism-api">` (utilisée seulement sur `*.github.io`, HTTPS
+  ou machine locale) ; serveur endormi : démarrage en moteur navigateur, « Réveil du serveur… », bascule
+  en mode serveur au réveil et synchronisation du canvas.
+- **CI GitHub** : Python sur SQLite et PostgreSQL (conteneur de service), Node, 4 E2E Chrome, construction
+  et contrôle de l'image Docker (refus sans secret, puis `check_deploy.py`).
+- Outils : `check_deploy.py` (contrôles en lecture seule d'un déploiement), `prod_local.py` (production en
+  local), `e2e_pages_api.mjs` (page servie comme github.io via le CDP, API endormie puis réveillée).
+- Tests : 94 Python (+ 9 de déploiement), 50 Node ; E2E contre la configuration de production locale 47/47 ;
+  GitHub Pages → API 5/5 ; `check_deploy.py` 10/10 en local.
+
 ## 3.5.0-alpha.5 — 2026-09-26 (phase 5 : Spotlight et reflets)
 
 - **Spotlight (Ctrl/Cmd + K)** : invite flottante pour générer, refactoriser la carte sélectionnée, sauter à une

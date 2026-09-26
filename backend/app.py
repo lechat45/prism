@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from contextlib import asynccontextmanager
 import logging
 import os
 import re
@@ -40,6 +41,7 @@ from pydantic import BaseModel, Field, StringConstraints, ValidationError, field
 import auth
 import billing
 import db
+import security
 import widgets
 from mocks import mock_component
 from providers import FatalGenerationError, GenerationError, Provider
@@ -55,7 +57,7 @@ from sanitize import (
     validate_document,
 )
 
-__version__ = "3.5.0a5"
+__version__ = "3.5.0rc1"
 
 BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
@@ -101,8 +103,13 @@ GROQ_REASONING_EFFORT = os.getenv("GROQ_REASONING_EFFORT", GROQ_DEFAULTS["reason
 MAX_TOKENS = int(os.getenv("PRISM_MAX_TOKENS", str(GROQ_DEFAULTS["max_completion_tokens"])))
 TIMEOUT_S = float(os.getenv("PRISM_TIMEOUT", "90"))
 HOST = os.getenv("PRISM_HOST", "127.0.0.1")
-PORT = int(os.getenv("PRISM_PORT", "8000"))
+# PORT : fourni par la plupart des hébergeurs (Render, Cloud Run, Koyeb…).
+PORT = int(os.getenv("PRISM_PORT") or os.getenv("PORT") or "8000")
 CORS_ORIGINS = [o.strip() for o in os.getenv("PRISM_CORS_ORIGINS", "*").split(",") if o.strip()]
+PRISM_ENV = os.getenv("PRISM_ENV", "development").strip().lower()
+IS_PRODUCTION = PRISM_ENV == "production"
+# Adresses des proxys dont on croit X-Forwarded-For (IP réelle pour les limites anti-abus).
+FORWARDED_ALLOW_IPS = os.getenv("FORWARDED_ALLOW_IPS", "127.0.0.1")
 
 log = logging.getLogger("prism")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -220,11 +227,37 @@ async def read_generate_request(request: Request) -> GenerateRequest:
         raise RequestValidationError(exc.errors(include_url=False)) from exc
 
 
-app = FastAPI(title="Prism", version=__version__)
+def production_problems() -> list[str]:
+    """Configuration refusée en production (vide = prête). Vérifiée au démarrage du serveur."""
+    problems = []
+    secret = os.getenv("PRISM_JWT_SECRET", "").strip()
+    if len(secret) < security.MIN_SECRET_LENGTH:
+        problems.append(f"PRISM_JWT_SECRET absent ou trop court (au moins {security.MIN_SECRET_LENGTH} caractères)")
+    if db.database_url().startswith("sqlite") and os.getenv("PRISM_ALLOW_SQLITE", "") != "1":
+        problems.append("PRISM_DATABASE_URL doit viser PostgreSQL : le disque d'un hébergeur gratuit est éphémère "
+                        "(PRISM_ALLOW_SQLITE=1 pour passer outre, disque persistant uniquement)")
+    if not active_providers():
+        log.warning("production sans GEMINI_API_KEY ni GROQ_API_KEY : widgets de démonstration seulement")
+    if CORS_ORIGINS == ["*"]:
+        log.warning("PRISM_CORS_ORIGINS=* : précisez l'origine du frontend (ex. https://lechat45.github.io)")
+    return problems
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    if IS_PRODUCTION:
+        problems = production_problems()
+        if problems:
+            raise RuntimeError("Configuration de production incomplète : " + " ; ".join(problems))
+    await asyncio.to_thread(db.engine)  # base prête (tables, colonnes) avant la première requête
+    yield
+
+
+app = FastAPI(title="Prism", version=__version__, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
-    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     # Jeton Bearer, pas de cookie : le frontend peut être servi ailleurs que l'API.
     allow_headers=["Content-Type", "Authorization"],
 )
@@ -232,10 +265,24 @@ app.include_router(auth.router)
 app.include_router(widgets.router)
 
 
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    # Prism ne s'affiche jamais dans le cadre d'un autre site (clic détourné). En-tête de réponse :
+    # sans effet sur les widgets, documents srcdoc sans réponse HTTP.
+    "X-Frame-Options": "DENY",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+}
+
+
 @app.middleware("http")
 async def revalidate_frontend(request, call_next):
-    """Le navigateur revalide les fichiers du frontend (ETag) : jamais de CSS/JS périmé."""
+    """En-têtes de sécurité partout ; le navigateur revalide le frontend (ETag) : jamais de CSS/JS périmé."""
     response = await call_next(request)
+    for name, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    if IS_PRODUCTION:
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
     if not request.url.path.startswith("/api/"):
         response.headers.setdefault("Cache-Control", "no-cache")
     return response
@@ -448,5 +495,7 @@ UVICORN_LOOP = "asyncio:SelectorEventLoop" if sys.platform == "win32" else "auto
 if __name__ == "__main__":
     import uvicorn
 
-    log.info("Prism %s — %s — http://%s:%d", __version__, ", ".join(p.name for p in active_providers()) or "mode démo", HOST, PORT)
-    uvicorn.run(app, host=HOST, port=PORT, loop=UVICORN_LOOP)
+    log.info("Prism %s (%s) — %s — http://%s:%d", __version__, PRISM_ENV,
+             ", ".join(p.name for p in active_providers()) or "mode démo", HOST, PORT)
+    # Derrière le proxy de l'hébergeur : IP et schéma réels (X-Forwarded-For / -Proto).
+    uvicorn.run(app, host=HOST, port=PORT, loop=UVICORN_LOOP, proxy_headers=True, forwarded_allow_ips=FORWARDED_ALLOW_IPS)
