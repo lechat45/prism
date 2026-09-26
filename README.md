@@ -20,6 +20,7 @@ dans une carte que l'on déplace, redimensionne, refactorise, recolore et export
 | **Persistance** | les cartes (position, taille, code, fichier) sont sauvées en IndexedDB ; chaque widget dispose d'un `localStorage` persistant qui survit au rechargement (cases cochées, compteurs, saisies…) |
 | **Inspecteur** | clic sur une carte : refactorisation de cette carte seule (avec annulation), couleur d'accent à chaud, copie du code complet, téléchargement d'un `.html` autonome, code source, relance, effacement des données |
 | **Graphiques** | Chart.js 4.5.1 via jsDelivr, épinglé avec empreinte SRI ; toute autre ressource externe reste bloquée |
+| **Bus d'évènements** | les widgets se parlent : `prism.emit(sujet, données)` / `prism.on(sujet, fn)` ; liaisons tracées sur le canvas ; une nouvelle génération connaît les sujets des widgets présents et peut s'y brancher |
 | **Liquid Glass** | aurore sous le verre dépoli, squelette holographique pendant la génération, fondu enchaîné vers le widget une fois prêt, micro-interactions |
 
 ## Deux façons de l'utiliser
@@ -70,7 +71,7 @@ Le code généré est non fiable par principe. Chaque widget tourne dans
 | CSP `default-src 'none'` + `script-src` limité aux fichiers Tailwind et Chart.js épinglés | aucune requête réseau (pas d'exfiltration) ; bibliothèques vérifiées par SRI |
 | `localStorage` fourni par Prism | persistant **et** isolé : chaque écriture est envoyée à la page par `postMessage`, validée (≤ 1 Mo, chaînes uniquement) et rangée avec la carte. Un vrai `localStorage` aurait exigé `allow-same-origin`, qui rend la sandbox contournable |
 | `window.PRISM_FILE` | données du fichier joint : un Blob JSON remis par un chargeur minimal (même CSP), lu et parsé dans le processus du widget ; une seule livraison, au seul demandeur |
-| Prélude | remonte les erreurs JS (statut de la carte), relaie Ctrl + molette vers le canvas, applique l'accent à chaud, fabrique la miniature du Hub à la demande de la page (image matricielle seulement, vérifiée avant envoi) |
+| Prélude | remonte les erreurs JS (statut de la carte), relaie Ctrl + molette vers le canvas, applique l'accent à chaud, fabrique la miniature du Hub à la demande de la page (image matricielle seulement, vérifiée avant envoi), fournit `window.prism` (bus d'évènements : tout passe par la page, qui filtre) |
 | Messages entrants | Prism n'accepte que ceux de ses propres iframes, et les valide |
 
 ## Performance (v3.5 « Velocity »)
@@ -117,6 +118,27 @@ Machine de mesure : 2 cœurs, souvent saturée ; les chiffres absolus varient, l
 - Limites actuelles : fusion additive (une carte fermée sur un appareil reste ouverte sur un autre jusqu'à
   sa fermeture là-bas) ; données de fichier au-delà de 16 Mo gardées sur l'appareil d'origine.
 
+## Bus d'évènements (widgets connectés)
+
+Chaque widget dispose de `window.prism` (fourni par le prélude de sa sandbox) :
+
+```js
+prism.emit("sales.region.selected", { region: "Nord", value: 12400 }); // publie aux autres widgets
+const stop = prism.on("sales.region.selected", (data, meta) => { … });  // reçoit (et la dernière valeur connue)
+prism.on("*", (data, { topic, from }) => { … });                       // tout le trafic
+```
+
+- **La page relaie**, jamais d'un widget à l'autre directement : seulement aux abonnés, jamais à l'émetteur,
+  après validation (sujet `[A-Za-z0-9._:-]`, 64 caractères, données JSON de 64 Ko au plus) et sous un débit
+  plafonné par carte (rafales tolérées, boucles infinies coupées et signalées).
+- **Dernière valeur** gardée par sujet : un widget ouvert après coup la reçoit à l'abonnement (`meta.replay`).
+- **Liaisons** émetteur → auditeur tracées sur le canvas ; une lueur les parcourt à chaque évènement.
+  L'inspecteur liste les sujets émis et écoutés (compte, dernière valeur) et permet d'**isoler** une carte.
+- **Contexte du modèle** : chaque génération ou refactorisation envoie les autres widgets du canvas avec leurs
+  sujets et un exemple de données (section `CANVAS` du message, même texte côté serveur et navigateur) ; le prompt
+  système apprend au modèle à publier ses sorties et à se brancher sur l'existant quand la demande s'y prête.
+- Export `.html` : `window.prism` inerte, le widget fonctionne seul.
+
 ## Architecture
 
 ```
@@ -143,10 +165,12 @@ frontend/
   js/account-ui.js      anneau de Sparks, menu du compte, fenêtres connexion/inscription et « Prism Pro »
   js/hub.js             « Mon Hub » : bibliothèque des widgets (miniatures, recherche, réouverture, suppression)
   js/sync.js            copie des cartes vers le serveur, import des cartes locales, restauration
+  js/bus.js             bus d'évènements entre widgets : relais filtré, dernière valeur, liaisons, contexte du modèle
+  js/links.js           liaisons du bus dessinées sur le canvas (SVG), lueur à chaque évènement
   js/store.js           persistance IndexedDB
   engine/               ── partagé par les deux moteurs ──
     system-prompt.txt     contrat de sortie : HTML seul, Tailwind uniquement, persistance, --accent, Chart.js, PRISM_FILE
-    user-template.txt, file-template.txt, refactor-template.txt
+    user-template.txt, file-template.txt, refactor-template.txt, canvas-template.txt
     gemini.json, groq.json, libs.json  modèles et bibliothèques autorisées (URL + SRI)
     mocks/                gabarits de démo (compteur, calculatrice, dashboard, CSV, JSON, TXT…)
     sanitize.js, local.js portage JS du nettoyage et moteur navigateur
@@ -197,7 +221,7 @@ curl -s -X POST http://127.0.0.1:8000/api/generate -H "Content-Type: application
 | 3.5 Velocity & Elegance | Gemini, design system Tailwind, Web Worker, données en Blob, injection au rythme des images, squelette holographique | **fait** (`3.5.0-alpha.1`) |
 | 2. Comptes côté interface | fenêtre de connexion/inscription Liquid Glass, jauge de Sparks en anneau, fenêtre « Prism Pro » sur 403 | **fait** (`3.5.0-alpha.2`) |
 | 3. Mon Hub | panneau d'historique, miniatures générées dans la sandbox, synchronisation du canvas avec le serveur | **fait** (`3.5.0-alpha.3`) |
-| 4. Bus d'évènements | `prism.emit` / `prism.on` entre widgets, relayés par le canvas ; le prompt connaît les sujets des widgets présents | à faire |
+| 4. Bus d'évènements | `prism.emit` / `prism.on` entre widgets, relayés par le canvas ; le prompt connaît les sujets des widgets présents | **fait** (`3.5.0-alpha.4`) |
 | 5. Spotlight et reflets | invite flottante Ctrl/Cmd + K ; reflets des bords via IntersectionObserver et position du pointeur | à faire |
 | 6. Déploiement | hébergement gratuit de l'API, PostgreSQL, secrets, frontend Pages pointé vers l'API | à faire |
 
@@ -207,7 +231,7 @@ API ajoutée en phase 1 (jeton `Authorization: Bearer …` sauf `register`/`logi
 | --- | --- |
 | `POST /api/auth/register`, `POST /api/auth/login` | `{ email, password }` → `{ token, user }` (50 Sparks offerts à l'inscription) |
 | `GET /api/auth/me` | profil et solde |
-| `POST /api/generate` | `{ prompt, file?, widget_id? }` : génère (1 Spark) ou refactorise ce widget (0,5 Spark) ; **403** `insufficient_sparks` si le solde manque |
+| `POST /api/generate` | `{ prompt, file?, widget_id?, canvas? }` : génère (1 Spark) ou refactorise ce widget (0,5 Spark) ; `canvas` = autres widgets et sujets du bus (20 au plus) ; **403** `insufficient_sparks` si le solde manque |
 | `GET /api/sparks` | solde, tarifs, derniers mouvements |
 | `GET /api/widgets[?on_canvas=true]`, `GET/PATCH/DELETE /api/widgets/{id}`, `POST /api/widgets/{id}/undo` | « Mon Hub » : liste légère, détail, état de la carte (`layout`, `clear_layout`, `storage`, `accent`, `title`, `thumbnail`), annulation, suppression |
 | `POST /api/widgets` | importe une carte créée hors compte (gratuit, 1 000 widgets par compte au plus) |

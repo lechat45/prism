@@ -43,13 +43,29 @@
     return extractSeries(prompt, spec).length >= spec.series_min ? "dashboard" : spec.fallback;
   }
 
+  /** Section CANVAS (autres widgets et sujets du bus) : même texte que canvas_block() côté Python. */
+  function buildCanvasBlock(canvas, template) {
+    const lines = [];
+    for (const w of canvas || []) {
+      const emits = w.emits || [];
+      const listens = w.listens || [];
+      if (!emits.length && !listens.length) continue;
+      const samples = w.samples || {};
+      const parts = [];
+      if (emits.length) parts.push("emits " + emits.map((t) => (samples[t] ? `${t} (e.g. ${samples[t]})` : t)).join(", "));
+      if (listens.length) parts.push("listens to " + listens.join(", "));
+      lines.push(`- ${JSON.stringify(w.title)}: ${parts.join("; ")}`);
+    }
+    return lines.length ? replaceAll(template, "{{widgets}}", lines.join("\n")) + "\n" : "";
+  }
+
   /** Même construction que build_user_message() côté Python. */
-  function buildUserMessage(prompt, file, baseHtml, t) {
+  function buildUserMessage(prompt, file, baseHtml, t, canvas = null) {
     const fileBlock = file ? replaceAll(replaceAll(t.file, "{{kind}}", file.kind), "{{summary}}", file.summary) + "\n" : "";
     const template = baseHtml ? t.refactor : t.user;
-    // {{html}} en dernier : le code existant ne doit pas être réinterprété comme gabarit.
-    const message = replaceAll(replaceAll(template, "{{file}}", fileBlock), "{{prompt}}", prompt);
-    return replaceAll(message, "{{html}}", baseHtml || "");
+    const values = { file: fileBlock, canvas: buildCanvasBlock(canvas, t.canvas || ""), prompt, html: baseHtml || "" };
+    // Une seule passe : rien de ce qui est inséré (code, demande, titres…) n'est réinterprété comme gabarit.
+    return template.replace(/\{\{(file|canvas|prompt|html)\}\}/g, (_, key) => values[key]);
   }
 
   function createLocalEngine(options = {}) {
@@ -158,8 +174,8 @@
       return { html, warnings: issues };
     }
 
-    /** Même contrat que POST /api/generate : { prompt, file?: {name, kind, summary}, baseHtml? }. */
-    async function generate(prompt, { key = "", models = [], signal, file = null, baseHtml = null } = {}) {
+    /** Même contrat que POST /api/generate : { prompt, file?: {name, kind, summary}, baseHtml?, canvas? }. */
+    async function generate(prompt, { key = "", models = [], signal, file = null, baseHtml = null, canvas = null } = {}) {
       const started = now();
       const elapsed = () => Math.round(now() - started);
 
@@ -173,18 +189,19 @@
         return { html, mode: "mock", model: `mock:${template}`, elapsed_ms: elapsed(), warnings: S.validateDocument(html, allowedUrls(libs)) };
       }
 
-      const [cfg, libs, system, user, fileTpl, refactor] = await Promise.all([
+      const [cfg, libs, system, user, fileTpl, refactor, canvasTpl] = await Promise.all([
         load("gemini.json", "json"),
         load("libs.json", "json"),
         load("system-prompt.txt"),
         load("user-template.txt"),
         load("file-template.txt"),
         load("refactor-template.txt"),
+        load("canvas-template.txt"),
       ]);
       const prompt0 = replaceAll(system.trim(), "{{chartjs_url}}", libs.chartjs.url);
       const ctx = { cfg, libs, system: replaceAll(prompt0, "{{tailwind_url}}", libs.tailwind.url) };
-      const templates = { user: user.trim(), file: fileTpl.trim(), refactor: refactor.trim() };
-      const userMessage = buildUserMessage(prompt, file, baseHtml, templates);
+      const templates = { user: user.trim(), file: fileTpl.trim(), refactor: refactor.trim(), canvas: canvasTpl.trim() };
+      const userMessage = buildUserMessage(prompt, file, baseHtml, templates, canvas);
       const errors = [];
       for (const model of models.length ? models : cfg.models) {
         try {
@@ -201,5 +218,5 @@
     return { generate, mock, defaults: () => load("gemini.json", "json"), libs: () => load("libs.json", "json") };
   }
 
-  return { createLocalEngine, extractSeries, route, escapeHtml, buildUserMessage, allowedUrls };
+  return { createLocalEngine, extractSeries, route, escapeHtml, buildUserMessage, buildCanvasBlock, allowedUrls };
 });

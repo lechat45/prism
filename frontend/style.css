@@ -297,6 +297,29 @@ body.is-dragging { cursor: grabbing; user-select: none; }
 @keyframes bob { 50% { transform: translateY(-8px); } }
 @keyframes fade-up { from { opacity: 0; transform: translate(-50%, calc(-50% + 16px)); } }
 
+/* --- Liaisons du bus d'évènements (SVG sous les cartes, coordonnées du monde) ------------ */
+.links { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; z-index: 0; }
+/* Épaisseur et pointillés en pixels d'écran : la liaison reste lisible à 20 % de zoom. */
+.link-line { fill: none; stroke: rgba(166, 107, 255, 0.6); stroke-width: 2; stroke-dasharray: 6 6; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.link-arrow { fill: rgba(166, 107, 255, 0.75); }
+.link-glow {
+  fill: none;
+  stroke: #9fd8ff;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 14 100;
+  stroke-dashoffset: 114;
+  opacity: 0;
+}
+.link-glow.is-pulsing { animation: link-pulse 0.85s var(--ease); }
+@keyframes link-pulse {
+  0% { stroke-dashoffset: 114; opacity: 1; }
+  85% { opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+.link.is-muted .link-line { stroke: rgba(255, 255, 255, 0.14); }
+.link.is-muted .link-glow { display: none; }
+
 /* --- Cartes ----------------------------------------------------------------------- */
 /* Pas de backdrop-filter sur les cartes : le corps (opaque) en couvre presque toute la surface, et
    chaque déplacement du canvas obligeait à re-flouter l'arrière-plan de chaque carte à chaque image.
@@ -630,6 +653,13 @@ body.is-dropping .dock { scale: 1.02; }
 .fine.warn { color: #ffe2b3; }
 .insp-prompt { margin: 0; font-size: 13px; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 9em; overflow: auto; scrollbar-width: none; }
 #refactor-settings { margin-top: 8px; }
+.bus-topics { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.bus-topics:empty { display: none; }
+.bus-topics li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 12.5px; }
+.bus-dir { padding: 1px 7px; font-size: 11px; font-weight: 650; border-radius: 999px; color: #0a0c12; background: var(--info); }
+.bus-topics li[data-dir="listens"] .bus-dir { background: #c9a8ff; }
+.bus-topics code { font: 12px var(--mono); color: var(--text); overflow-wrap: anywhere; }
+.bus-last { flex-basis: 100%; min-width: 0; font: 11.5px var(--mono); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
 .swatch {

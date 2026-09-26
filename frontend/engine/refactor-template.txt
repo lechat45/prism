@@ -9,4 +9,4 @@ Instruction:
 <<<
 {{prompt}}
 >>>
-{{file}}Return only the complete updated HTML document, starting with <!DOCTYPE html> and ending with </html>.
+{{file}}{{canvas}}Return only the complete updated HTML document, starting with <!DOCTYPE html> and ending with </html>.

@@ -63,6 +63,25 @@ class GeminiTests(DbTestCase):
     def generate(self, prompt: str = "un compteur"):
         return self.client.post("/api/generate", json={"prompt": prompt}, headers=self.auth)
 
+    def test_canvas_context_reaches_the_model(self):
+        canvas = [{"title": "Filtre des régions", "emits": ["sales.region.selected"], "listens": ["filters.reset"],
+                   "samples": {"sales.region.selected": '{"region":"Nord"}'}}]
+        res = self.client.post("/api/generate", json={"prompt": "un graphique relié au filtre", "canvas": canvas}, headers=self.auth)
+        self.assertEqual(res.status_code, 200, res.text)
+        _, body, _ = self.calls[0]
+        message = body["contents"][0]["parts"][0]["text"]
+        self.assertIn('- "Filtre des régions": emits sales.region.selected (e.g. {"region":"Nord"}); listens to filters.reset', message)
+        self.assertIn("EVENT BUS", body["systemInstruction"]["parts"][0]["text"])
+
+    def test_canvas_context_is_validated(self):
+        ok = {"title": "A", "emits": ["a.b"], "listens": ["*"]}
+        for bad in ([{**ok, "emits": ["pas un sujet !"]}], [{**ok, "listens": ["**"]}], [{**ok, "emits": ["x"] * 21}],
+                    [{**ok, "samples": {"a.b": "x" * 301}}], [ok] * 21, [{**ok, "title": "t" * 121}]):
+            with self.subTest(bad=str(bad)[:60]):
+                res = self.client.post("/api/generate", json={"prompt": "x", "canvas": bad}, headers=self.auth)
+                self.assertEqual(res.status_code, 422, res.text)
+        self.assertEqual(self.calls, [], "rien n'est parti au modèle")
+
     def test_request_format_and_tailwind_design_system(self):
         self.answers[M1] = [gemini_ok(f"Voici :\n```html\n{GOOD}\n```", thought="je réfléchis au design")]
         res = self.generate()

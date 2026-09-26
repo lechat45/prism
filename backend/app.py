@@ -23,18 +23,19 @@ import asyncio
 import json
 import logging
 import os
+import re
 import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, StringConstraints, ValidationError, field_validator
 
 import auth
 import billing
@@ -54,7 +55,7 @@ from sanitize import (
     validate_document,
 )
 
-__version__ = "3.5.0a3"
+__version__ = "3.5.0a4"
 
 BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
@@ -122,6 +123,8 @@ SYSTEM_PROMPT = (
 USER_TEMPLATE = _engine_text("user-template.txt")
 FILE_TEMPLATE = _engine_text("file-template.txt")
 REFACTOR_TEMPLATE = _engine_text("refactor-template.txt")
+CANVAS_TEMPLATE = _engine_text("canvas-template.txt")
+TOPIC_RE = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$"  # même règle que frontend/js/bus.js
 
 
 # --------------------------------------------------------------------------- #
@@ -136,22 +139,60 @@ class AttachedFile(BaseModel):
     summary: str = Field(..., max_length=8_000)
 
 
+Topic = Annotated[str, StringConstraints(pattern=TOPIC_RE, max_length=64)]
+
+
+class CanvasWidget(BaseModel):
+    """Autre widget du canvas, joignable par le bus d'évènements (window.prism)."""
+
+    title: str = Field(..., max_length=120)
+    emits: list[Topic] = Field([], max_length=20)
+    listens: list[Topic | Literal["*"]] = Field([], max_length=20)
+    samples: dict[Topic, str] = Field({}, max_length=20)  # dernière donnée émise, en JSON abrégé
+
+    @field_validator("samples")
+    @classmethod
+    def short_samples(cls, v: dict[str, str]) -> dict[str, str]:
+        if any(len(s) > 300 for s in v.values()):
+            raise ValueError("échantillon de plus de 300 caractères")
+        return v
+
+
 class GenerateRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=12_000)
     file: AttachedFile | None = None
     # Présent = refactorisation de ce widget (seule cette carte change) : le serveur part du code
     # qu'il a enregistré, jamais d'un code envoyé par le client.
     widget_id: str | None = Field(None, max_length=36)
+    # Autres widgets du canvas (sujets du bus), pour que le nouveau widget puisse s'y brancher.
+    canvas: list[CanvasWidget] = Field([], max_length=20)
 
 
-def build_user_message(prompt: str, file: AttachedFile | None = None, base_html: str | None = None) -> str:
+def canvas_block(canvas: list[CanvasWidget] | None) -> str:
+    """Section CANVAS du message ; même texte que buildCanvasBlock() dans engine/local.js."""
+    lines = []
+    for w in canvas or []:
+        if not (w.emits or w.listens):
+            continue
+        parts = []
+        if w.emits:
+            parts.append("emits " + ", ".join(f"{t} (e.g. {w.samples[t]})" if w.samples.get(t) else t for t in w.emits))
+        if w.listens:
+            parts.append("listens to " + ", ".join(w.listens))
+        lines.append(f"- {json.dumps(w.title, ensure_ascii=False)}: " + "; ".join(parts))
+    return CANVAS_TEMPLATE.replace("{{widgets}}", "\n".join(lines)) + "\n" if lines else ""
+
+
+def build_user_message(
+    prompt: str, file: AttachedFile | None = None, base_html: str | None = None, canvas: list[CanvasWidget] | None = None
+) -> str:
     file_block = ""
     if file:
         file_block = FILE_TEMPLATE.replace("{{kind}}", file.kind).replace("{{summary}}", file.summary) + "\n"
     template = REFACTOR_TEMPLATE if base_html else USER_TEMPLATE
-    # {{html}} en dernier : le code existant ne doit pas être réinterprété comme gabarit.
-    message = template.replace("{{file}}", file_block).replace("{{prompt}}", prompt)
-    return message.replace("{{html}}", base_html or "")
+    values = {"file": file_block, "canvas": canvas_block(canvas), "prompt": prompt, "html": base_html or ""}
+    # Une seule passe : rien de ce qui est inséré (code, demande, titres…) n'est réinterprété comme gabarit.
+    return re.sub(r"\{\{(file|canvas|prompt|html)\}\}", lambda m: values[m.group(1)], template)
 
 
 class GenerateResponse(BaseModel):
@@ -371,7 +412,7 @@ async def generate(
         raise insufficient(exc) from exc
 
     try:
-        user_message = build_user_message(prompt, req.file, base_html)
+        user_message = build_user_message(prompt, req.file, base_html, req.canvas)
         document, mode, model, issues = await run_model(user_message, prompt, req.file.kind if req.file else None)
         widget = await asyncio.to_thread(_save_widget, user, req, document, mode, model)
     except BaseException:

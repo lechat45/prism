@@ -1,0 +1,3 @@
+CANVAS: the user's canvas already holds these widgets, reachable through the event bus (window.prism):
+{{widgets}}
+When it serves the request, connect to them: listen to the topics they emit (same names, same data shape) and emit the topics they listen to.

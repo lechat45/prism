@@ -36,10 +36,24 @@ os.environ.update(
     PRISM_HOST="127.0.0.1",
     PRISM_PORT=str(PORT),
     PRISM_DATABASE_URL=f"sqlite:///{DB_PATH.as_posix()}",
-    # Avec modèle, 3 Sparks : deux générations + une refactorisation (2,5) laissent 0,5 → l'E2E
+    # Avec modèle, 5 Sparks : quatre générations + une refactorisation (4,5) laissent 0,5 → l'E2E
     # atteint « Prism Pro ». En démo : le cadeau habituel.
-    PRISM_SIGNUP_SPARKS=os.getenv("PRISM_SIGNUP_SPARKS", "50" if DEMO else "3"),
+    PRISM_SIGNUP_SPARKS=os.getenv("PRISM_SIGNUP_SPARKS", "50" if DEMO else "5"),
 )
+
+
+EMITTER = """<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Émetteur (faux Gemini)</title></head>
+<body><main><p>Valeur : <span id="n">0</span></p><button id="emit" type="button">+1</button></main>
+<script>
+const state = Object.assign({ n: 0 }, JSON.parse(localStorage.getItem("state") || "null"));
+function show() { document.getElementById("n").textContent = state.n; prism.emit("demo.valeur", { n: state.n }); }
+document.getElementById("emit").addEventListener("click", () => { state.n += 1; localStorage.setItem("state", JSON.stringify(state)); show(); });
+show();
+</script></body></html>"""
+
+RECEIVER = """<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Récepteur (faux Gemini)</title></head>
+<body data-context="{context}"><main><p>Reçu : <output id="recu">rien</output></p></main>
+<script>prism.on("demo.valeur", (data) => { document.getElementById("recu").textContent = String(data.n); });</script></body></html>"""
 
 
 def fake_widget(user_message: str) -> str:
@@ -47,6 +61,13 @@ def fake_widget(user_message: str) -> str:
         current = user_message.split("<<<\n", 1)[1].split("\n>>>", 1)[0]
         marker = '<p id="refactored" style="margin:0 0 8px;color:var(--accent)">Refactorisé par le faux Gemini</p>'
         return re.sub(r"(<main[^>]*>)", r"\1" + marker, current, count=1)
+    request = user_message.split("<<<\n", 1)[1].split("\n>>>", 1)[0].lower()
+    if "émetteur" in request and "récepteur" not in request:
+        return EMITTER
+    if "récepteur" in request:
+        # Le vrai modèle se brancherait grâce à la section CANVAS : on vérifie qu'elle est arrivée.
+        context = "yes" if "CANVAS:" in user_message and "emits demo.valeur" in user_message else "no"
+        return RECEIVER.replace("{context}", context)
     if "ATTACHED FILE" in user_message:
         return (MOCKS / "csv-chart.html").read_text(encoding="utf-8")
     html = (MOCKS / "counter.html").read_text(encoding="utf-8")

@@ -6,7 +6,7 @@ const $ = (id) => document.getElementById(id);
 const dateFmt = new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" });
 
 export class Inspector {
-  /** actions : { refactor, undo, setAccent, copy, download, toggleCode, reload, resetData, remove, openSettings, hasModel, engineKind, canUndo } */
+  /** actions : { refactor, undo, setAccent, copy, download, toggleCode, reload, resetData, remove, openSettings, hasModel, engineKind, canUndo, setMuted } */
   constructor(actions) {
     this.actions = actions;
     this.card = null;
@@ -70,6 +70,7 @@ export class Inspector {
       }
     });
     $("refactor-settings").addEventListener("click", () => a.openSettings());
+    $("bus-mute").addEventListener("change", (e) => this.card && a.setMuted(this.card, e.target.checked));
     const simple = { "undo-btn": a.undo, "copy-code": a.copy, "download-html": a.download, "toggle-code": a.toggleCode,
       "reload-card": a.reload, "reset-data": a.resetData, "delete-card": a.remove };
     for (const [id, fn] of Object.entries(simple)) {
@@ -140,10 +141,43 @@ export class Inspector {
     });
     if (card.accent) $("accent-custom").value = card.accent;
 
+    this.renderBus(card);
+
     for (const id of ["copy-code", "download-html", "toggle-code", "reload-card", "reset-data"]) $(id).disabled = !ready;
     $("toggle-code").setAttribute("aria-pressed", String(Boolean(card.showCode)));
     $("toggle-code").textContent = card.showCode ? "Voir le widget" : "Voir le code";
     const keys = Object.keys(card.storage || {}).length;
     $("reset-data").title = keys ? `${keys} clé(s) enregistrée(s) par le widget` : "Aucune donnée enregistrée";
+  }
+
+  /** Sujets émis et écoutés par la carte, avec compte et dernière valeur (textContent : données non fiables). */
+  renderBus(card) {
+    const { emits = [], listens = [] } = card.topics || {};
+    const stats = card.busStats || {};
+    const rows = [
+      ...emits.map((topic) => ({ dir: "emits", topic, stat: stats[topic] })),
+      ...listens.map((topic) => ({ dir: "listens", topic })),
+    ];
+    $("bus-topics").replaceChildren(...rows.map(({ dir, topic, stat }) => {
+      const li = document.createElement("li");
+      li.dataset.dir = dir;
+      const badge = document.createElement("span");
+      badge.className = "bus-dir";
+      badge.textContent = dir === "emits" ? "émet" : "écoute";
+      const name = document.createElement("code");
+      name.textContent = topic === "*" ? "* (tout)" : topic;
+      li.append(badge, name);
+      if (stat) {
+        const last = document.createElement("span");
+        last.className = "bus-last";
+        last.textContent = `${stat.count}× · ${stat.last}`;
+        li.append(last);
+      }
+      return li;
+    }));
+    $("bus-hint").textContent = rows.length
+      ? "Les liaisons avec les autres cartes sont tracées sur le canvas ; une lueur les parcourt à chaque évènement."
+      : "Ce widget ne communique pas encore. Demandez-le, par ex. « partage la valeur choisie avec les autres widgets ».";
+    $("bus-mute").checked = Boolean(card.busMuted);
   }
 }

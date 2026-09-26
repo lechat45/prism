@@ -20,8 +20,8 @@ const ICONS = {
 };
 
 export class Canvas {
-  constructor({ workspace, world, onViewChange, onCardChange, onSelect, onInspect, onAction, onBackground }) {
-    Object.assign(this, { workspace, world, onViewChange, onCardChange, onSelect, onInspect, onAction, onBackground });
+  constructor({ workspace, world, onViewChange, onCardChange, onSelect, onInspect, onAction, onBackground, onPlace = () => {} }) {
+    Object.assign(this, { workspace, world, onViewChange, onCardChange, onSelect, onInspect, onAction, onBackground, onPlace });
     this.view = { x: 0, y: 0, z: 1 };
     this.cards = new Map(); // id -> { card, el }
     this.selectedId = null;
@@ -197,6 +197,7 @@ export class Canvas {
     s.width = `${card.w}px`;
     s.height = `${card.h}px`;
     s.zIndex = card.z || 1;
+    this.onPlace(card); // ex. liaisons du bus d'évènements
   }
 
   add(card, { animate = true } = {}) {

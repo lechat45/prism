@@ -55,6 +55,16 @@ DATA AND FILES:
   Good defaults: CSV -> Chart.js chart with a column picker plus a sortable table; JSON -> collapsible tree viewer
   with search and type badges; TXT -> reader with statistics and search.
 
+EVENT BUS (widgets of the same canvas talk to each other):
+- `window.prism` is always available. prism.emit(topic, data) publishes small JSON-serializable data to the
+  other widgets; prism.on(topic, (data, meta) => { ... }) subscribes (it returns an unsubscribe function) and
+  immediately receives the last value already published on that topic, if any. Topic "*" receives everything.
+- Topics: lowercase, dotted, specific and stable, e.g. "sales.region.selected", "timer.finished", "todo.count".
+- When your widget has a natural output (a selection, a total, a status), emit it after each change and once at
+  startup with the restored state, as a small self-describing object: { region: "Nord", value: 12400 }.
+- If a CANVAS section lists other widgets and it serves the request, connect to them: reuse their exact topic
+  names and data shapes. Never rely on another widget being present: the widget must work alone too.
+
 BEHAVIOUR:
 - Build exactly what is asked, fully functional: no placeholder, no TODO, no lorem ipsum, no fake buttons.
 - Give the document a short, specific <title> (it names the card on the canvas).

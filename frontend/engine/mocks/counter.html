@@ -61,9 +61,12 @@ function paint(color) {
 }
 
 function render() {
+  const color = palette[state.clicks % palette.length];
   countEl.textContent = state.clicks;
-  paint(palette[state.clicks % palette.length]);
+  paint(color);
   btn.textContent = state.clicks === 0 ? "Clique-moi" : "Clic n°" + (state.clicks + 1);
+  // Bus d'évènements de Prism : les autres widgets du canvas peuvent suivre ce compteur.
+  if (window.prism) prism.emit("compteur.change", { clics: state.clicks, couleur: color });
 }
 
 btn.addEventListener("click", () => {

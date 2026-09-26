@@ -356,6 +356,83 @@
       "absent": [
         "ATTACHED FILE"
       ]
+    },
+    {
+      "name": "canvas : sujets du bus et échantillons",
+      "prompt": "un graphique qui suit la région choisie",
+      "canvas": [
+        {
+          "title": "Filtre \"régions\"",
+          "emits": [
+            "sales.region.selected"
+          ],
+          "listens": [
+            "filters.reset"
+          ],
+          "samples": {
+            "sales.region.selected": "{\"region\":\"Nord\"}"
+          }
+        },
+        {
+          "title": "Minuteur",
+          "emits": [],
+          "listens": [
+            "*"
+          ]
+        },
+        {
+          "title": "Sans bus",
+          "emits": [],
+          "listens": []
+        }
+      ],
+      "contains": [
+        "CANVAS:",
+        "- \"Filtre \\\"régions\\\"\": emits sales.region.selected (e.g. {\"region\":\"Nord\"}); listens to filters.reset",
+        "- \"Minuteur\": listens to *"
+      ],
+      "absent": [
+        "Sans bus",
+        "{{"
+      ]
+    },
+    {
+      "name": "canvas sans sujet : aucune section",
+      "prompt": "x",
+      "canvas": [
+        {
+          "title": "Seul",
+          "emits": [],
+          "listens": []
+        }
+      ],
+      "contains": [
+        "<<<\nx\n>>>"
+      ],
+      "absent": [
+        "CANVAS",
+        "{{"
+      ]
+    },
+    {
+      "name": "canvas en refactorisation, titres jamais réinterprétés",
+      "prompt": "branche-toi au filtre",
+      "base_html": "<p>{{canvas}}</p>",
+      "canvas": [
+        {
+          "title": "{{prompt}} {{html}}",
+          "emits": [
+            "a.b"
+          ],
+          "listens": []
+        }
+      ],
+      "contains": [
+        "<p>{{canvas}}</p>",
+        "- \"{{prompt}} {{html}}\": emits a.b",
+        "<<<\nbranche-toi au filtre\n>>>"
+      ],
+      "absent": []
     }
   ]
 }

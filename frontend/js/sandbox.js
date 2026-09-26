@@ -102,6 +102,39 @@ function prelude(snapshot) {
     try { Object.defineProperty(window, pair[0], { value: pair[1], configurable: true }); } catch (e) {}
   });
 
+  // Bus d'évènements entre widgets : la page relaie (et filtre) vers les widgets abonnés.
+  //   prism.emit(sujet, données)  ·  prism.on(sujet | "*", fn(données, { topic, from, replay })) → désabonnement
+  var handlers = {};
+  var bus = {
+    emit: function (topic, data) {
+      var json;
+      try { json = JSON.stringify(data === undefined ? null : data); } catch (e) { json = undefined; }
+      if (json === undefined) throw new TypeError("prism.emit : données non sérialisables en JSON");
+      send("emit", { topic: String(topic), data: JSON.parse(json) });
+    },
+    on: function (topic, fn, options) {
+      topic = String(topic);
+      if (typeof fn !== "function") throw new TypeError("prism.on : fonction attendue");
+      (handlers[topic] = handlers[topic] || []).push(fn);
+      send("subscribe", { topic: topic, replay: !(options && options.replay === false) });
+      return function () { bus.off(topic, fn); };
+    },
+    off: function (topic, fn) {
+      var list = handlers[String(topic)] || [];
+      var i = list.indexOf(fn);
+      if (i !== -1) list.splice(i, 1);
+    }
+  };
+  try { Object.defineProperty(window, "prism", { value: Object.freeze(bus) }); } catch (e) {}
+  window.addEventListener("message", function (e) {
+    if (e.source !== parent || !e.data || e.data.prism !== "event") return;
+    var d = e.data;
+    var meta = { topic: d.topic, from: d.from || null, replay: Boolean(d.replay) };
+    (handlers[d.topic] || []).concat(d.topic !== "*" ? handlers["*"] || [] : []).forEach(function (fn) {
+      try { fn(d.data, meta); } catch (err) { setTimeout(function () { throw err; }); }
+    });
+  });
+
   // Miniature pour « Mon Hub », fabriquée ICI (la page ne peut pas lire le widget) : le document est
   // cloné (graphiques <canvas> figés en images, saisies en cours reportées), rendu dans une image SVG
   // (foreignObject, sans aucun réseau), réduit sur un <canvas> puis renvoyé en data:image/webp.
@@ -262,11 +295,14 @@ export function bootSrcdoc(libs) {
   return `<!DOCTYPE html><html><head>${cspMeta(libs)}<script>${BOOT}<\/script></head><body></body></html>`;
 }
 
+// Hors de Prism, le bus n'existe pas : version inerte, pour que le widget exporté fonctionne seul.
+const BUS_SHIM = "<script>window.prism=window.prism||{emit:function(){},on:function(){return function(){};},off:function(){}};<\/script>";
+
 /** Fichier .html autonome : données et accent inclus ; ouvert hors sandbox, il utilise le vrai localStorage. */
 export async function exportHtml(card) {
   const note = `<!-- Exporté depuis Prism · ${new Date().toISOString().slice(0, 10)} -->`;
   const file = card.file && card.file.blob ? dataScript(await card.file.blob.text()) : inlineFile(card.file);
-  return injectInHead(card.html, note + accentStyle(card.accent) + file);
+  return injectInHead(card.html, note + accentStyle(card.accent) + file + BUS_SHIM);
 }
 
 const THUMBNAIL_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;

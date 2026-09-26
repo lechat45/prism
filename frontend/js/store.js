@@ -39,7 +39,9 @@ const FIELDS = ["id", "title", "prompt", "html", "file", "storage", "accent", "x
   "mode", "model", "elapsed_ms", "warnings", "history", "createdAt", "updatedAt",
   // Mode serveur (« Mon Hub ») : widget lié, son propriétaire, ses versions serveur, données du
   // fichier déjà téléversées, miniature à refaire.
-  "serverId", "serverOwner", "serverVersions", "fileSynced", "thumbStale"];
+  "serverId", "serverOwner", "serverVersions", "fileSynced", "thumbStale",
+  // Bus d'évènements : sujets émis/écoutés connus, carte isolée.
+  "topics", "busMuted"];
 
 export function serialize(card) {
   const out = {};

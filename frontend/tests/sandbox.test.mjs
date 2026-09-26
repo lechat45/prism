@@ -98,7 +98,7 @@ test("export d'une carte à Blob : données lues et échappées pour le <script>
   const html = await exportHtml({ html: DOC, file: blobFile({ rows: [{ v: `</script><b>${LS}` }] }) });
   assert.ok(html.includes("window.PRISM_FILE={"));
   assert.ok(html.includes("\\u003c/script>") && !html.includes(LS));
-  assert.equal(html.split("</script>").length - 1, 2); // données + script du widget
+  assert.equal(html.split("</script>").length - 1, 3); // données + bus inerte + script du widget
 });
 
 test("documents sans <head> ou sans <html>", () => {
@@ -113,6 +113,16 @@ test("miniature envoyée par un widget : image matricielle base64 uniquement, pl
     `data:image/png;base64,${"A".repeat(MAX_THUMBNAIL)}`]) {
     assert.equal(acceptThumbnail(bad), false, String(bad).slice(0, 40));
   }
+});
+
+test("bus d'évènements : window.prism dans la sandbox, version inerte dans l'export", async () => {
+  const doc = buildSrcdoc({ html: DOC, storage: {} }, libs);
+  assert.match(doc, /Object\.defineProperty\(window, "prism"/);
+  assert.match(doc, /send\("emit"/);
+  assert.match(doc, /send\("subscribe"/);
+  const exported = await exportHtml({ html: DOC });
+  assert.match(exported, /window\.prism=window\.prism\|\|\{emit:function\(\)\{\}/);
+  assert.ok(!exported.includes("postMessage"), "l'export ne parle à personne");
 });
 
 test("le prélude sait fabriquer une miniature (demande « snapshot » du parent uniquement)", () => {

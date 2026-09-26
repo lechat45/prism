@@ -25,6 +25,7 @@ const templates = {
   user: read("engine/user-template.txt").trim(),
   file: read("engine/file-template.txt").trim(),
   refactor: read("engine/refactor-template.txt").trim(),
+  canvas: read("engine/canvas-template.txt").trim(),
 };
 
 async function runFixtures() {
@@ -41,7 +42,7 @@ async function runFixtures() {
     series: fixtures.series.map((c) => L.extractSeries(c.prompt, manifest)),
     renders: await Promise.all(fixtures.render.map(mockHtml)),
     mock_renders: await Promise.all(fixtures.routing.map(mockHtml)),
-    messages: fixtures.messages.map((c) => L.buildUserMessage(c.prompt, c.file || null, c.base_html || null, templates)),
+    messages: fixtures.messages.map((c) => L.buildUserMessage(c.prompt, c.file || null, c.base_html || null, templates, c.canvas || null)),
   };
 }
 

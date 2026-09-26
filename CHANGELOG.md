@@ -1,5 +1,22 @@
 # Changelog
 
+## 3.5.0-alpha.4 — 2026-09-26 (phase 4 : bus d'évènements)
+
+- **Widgets connectés** : `window.prism.emit(sujet, données)` et `prism.on(sujet | "*", fn)` dans chaque widget
+  (prélude de la sandbox). La page relaie aux seuls abonnés, jamais à l'émetteur, après validation (sujet,
+  JSON ≤ 64 Ko) et sous débit plafonné par carte ; la dernière valeur de chaque sujet est remise aux nouveaux
+  abonnés. Export `.html` : bus inerte.
+- **Liaisons sur le canvas** (SVG sous les cartes, coordonnées du monde) avec lueur à chaque évènement ;
+  inspecteur : sujets émis/écoutés, compte, dernière valeur, « Isoler cette carte du bus ».
+- **Contexte du canvas pour le modèle** : `canvas` dans `POST /api/generate` (et le moteur navigateur), section
+  `CANVAS` générée à l'identique en Python et en JS (parité testée) ; message construit en une seule passe, sans
+  réinterprétation des textes insérés. Prompt système : section EVENT BUS.
+- Gabarit de démo « compteur » : publie `compteur.change`. Sujets relus dans le code des widgets et observés à
+  l'exécution, conservés avec la carte.
+- Tests : 85 Python, 45 Node (bus : relais, écho, rejeu, isolement, plafonds, liaisons, contexte) ; E2E faux
+  Gemini 47 contrôles (émetteur + récepteur : contexte transmis, rejeu, relais, liaison, isolement), démo 39,
+  statique 30.
+
 ## 3.5.0-alpha.3 — 2026-09-26 (phase 3 : Mon Hub)
 
 - **Mon Hub** : bibliothèque des widgets du compte (bouton dans la barre du haut) avec miniatures, recherche,

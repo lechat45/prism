@@ -125,7 +125,7 @@ function render() {
 
 // --------------------------------------------------------------------------
 // Génération : même contrat pour les deux moteurs.
-// request = { prompt, file?: {name, kind, summary}, baseHtml?, widgetId? }
+// request = { prompt, file?: {name, kind, summary}, baseHtml?, widgetId?, canvas?: [{ title, emits, listens, samples }] }
 //  - serveur : la refactorisation désigne le widget enregistré (widgetId), jamais du code client ;
 //    la réponse porte aussi { widget, sparks, cost }. Erreurs : ApiError (code auth_required,
 //    insufficient_sparks…).
@@ -138,9 +138,12 @@ export async function generate(request, signal) {
     const body = { prompt: request.prompt };
     if (request.file) body.file = request.file;
     if (request.widgetId) body.widget_id = request.widgetId;
+    if (request.canvas?.length) body.canvas = request.canvas;
     payload = await api("/api/generate", { method: "POST", body, signal });
   } else {
-    const options = { key: readKey(), models: readModels(), file: request.file || null, baseHtml: request.baseHtml || null };
+    const options = {
+      key: readKey(), models: readModels(), file: request.file || null, baseHtml: request.baseHtml || null, canvas: request.canvas || null,
+    };
     payload = await run("generate", { prompt: request.prompt, options }, { signal });
   }
   if (!payload || typeof payload.html !== "string" || !payload.html.trim()) throw new Error("réponse vide");

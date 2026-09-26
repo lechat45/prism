@@ -2,10 +2,12 @@
 
 import { account, api, canAfford, onAccountChange, setSparks } from "./account.js";
 import { initAccountUi, openAuth, openPro, requireAccount } from "./account-ui.js";
+import { Bus } from "./bus.js";
 import { Canvas, CARD_MIN_H, CARD_MIN_W } from "./canvas.js";
 import { engine, engineReady, generate, hasModel, initSettings, onEngineChange, openSettings } from "./engine.js";
 import { forRequest } from "./files.js";
 import { Inspector } from "./inspector.js";
+import { Links } from "./links.js";
 import { run } from "./offload.js";
 import { initHub } from "./hub.js";
 import { acceptStorage, acceptThumbnail, bootSrcdoc, buildSrcdoc, exportHtml, FRAME_SANDBOX, isAccent, needsBoot } from "./sandbox.js";
@@ -149,7 +151,25 @@ const canvas = new Canvas({
     canvas.deselect();
     inspector.close();
   },
+  onPlace: () => redrawLinks(),
 });
+
+// Bus d'évènements entre widgets (cf. bus.js) et ses liaisons dessinées sur le canvas.
+const links = new Links($("world"));
+const bus = new Bus({
+  cards: () => cards.values(),
+  post: (card, message) => canvas.frame(card.id)?.contentWindow?.postMessage(message, "*"),
+  onFlow: (from, to) => links.pulse(from.id, to.id),
+  onTopics: (card) => {
+    redrawLinks();
+    inspector.refresh(card);
+    scheduleSave(card);
+  },
+  onFlood: (card) => toast(`« ${card.title} » émet trop d'évènements : les suivants sont ignorés.`, { tone: "error", timeout: 6000 }),
+});
+function redrawLinks() {
+  links.schedule(() => bus.links());
+}
 
 const inspector = new Inspector({
   refactor: (card, instruction) => refactorCard(card, instruction),
@@ -174,6 +194,13 @@ const inspector = new Inspector({
   hasModel,
   engineKind: () => engine.kind,
   canUndo: (card) => Boolean(card.history?.length) || (isLinked(card) && card.serverVersions > 0),
+  setMuted: (card, muted) => {
+    card.busMuted = muted;
+    redrawLinks();
+    inspector.refresh(card);
+    scheduleSave(card);
+    toast(muted ? `« ${card.title} » isolée du bus` : `« ${card.title} » reconnectée au bus`);
+  },
 });
 
 function updateEmpty() {
@@ -261,6 +288,7 @@ function injectFrame(card) {
     el.querySelector(".card-body").prepend(frame);
   }
   frame.title = `Widget : ${card.title}`;
+  bus.reset(card); // le nouveau document se réabonnera
   if (needsBoot(card)) {
     // Fichier joint : chargeur minuscule, le document et le Blob partent sur sa demande (« boot »).
     card.boot = { html: buildSrcdoc(card, engine.libs), file: card.file.blob };
@@ -326,6 +354,7 @@ function applyPayload(card, payload) {
   card.warnings = payload.warnings || [];
   card.title = titleFrom(payload.html, card.title);
   card.thumbStale = true;
+  bus.learn(card);
   // Mode serveur : widget enregistré dans « Mon Hub » (sa refactorisation le désignera) et nouveau solde.
   if (payload.widget?.id) {
     card.serverId = payload.widget.id;
@@ -365,7 +394,7 @@ async function runGeneration(card) {
   setStatus(card, "loading", { text: card.file ? `Prism analyse ${card.file.name}…` : "Prism réfracte votre demande…" });
   startTimer(card);
   try {
-    const payload = await generate({ prompt: card.prompt, file: forRequest(card.file) }, controller.signal);
+    const payload = await generate({ prompt: card.prompt, file: forRequest(card.file), canvas: bus.context(card) }, controller.signal);
     if (!cards.has(card.id)) return;
     applyPayload(card, payload);
     setStatus(card, "ready");
@@ -413,7 +442,7 @@ async function refactorCard(card, instruction) {
   startTimer(card);
   try {
     const payload = await generate(
-      { prompt: instruction, file: forRequest(card.file), baseHtml: card.html, widgetId: card.serverId },
+      { prompt: instruction, file: forRequest(card.file), baseHtml: card.html, widgetId: card.serverId, canvas: bus.context(card) },
       controller.signal,
     );
     if (!cards.has(card.id)) return;
@@ -457,6 +486,7 @@ async function undoRefactor(card) {
   card.html = previous;
   card.history = rest;
   card.title = titleFrom(previous, card.title);
+  bus.learn(card);
   markChanged(card);
   setStatus(card, "ready");
   mountWidget(card);
@@ -467,8 +497,10 @@ async function undoRefactor(card) {
 /** Retire une carte sans possibilité de retour (génération annulée ou échouée). */
 function discard(card) {
   unmount(card);
+  bus.drop(card);
   cards.delete(card.id);
   canvas.remove(card.id);
+  redrawLinks();
   if (inspector.card?.id === card.id) inspector.close();
   updateEmpty();
 }
@@ -584,6 +616,11 @@ window.addEventListener("message", (event) => {
     scheduleSave(card);
     inspector.refresh(card);
     markChanged(card, 8000); // miniature rafraîchie une fois l'utilisateur au calme
+  } else if (data.prism === "emit") {
+    bus.emit(card, data.topic, data.data);
+    if (inspector.card?.id === card.id) inspector.refresh(card); // compteur et dernière valeur
+  } else if (data.prism === "subscribe") {
+    bus.subscribe(card, data.topic, data.replay !== false);
   } else if (data.prism === "thumbnail") {
     if (data.data) receiveThumbnail(card, data.data);
     else console.warn(`Prism : miniature de « ${card.title} » impossible`, data.error);
@@ -863,6 +900,7 @@ function cardFromServer({ detail, blob }, place) {
     fileSynced: Boolean(blob),
     thumbStale: !detail.thumbnail,
   };
+  bus.learn(card);
   markSynced(card);
   if (!layout) card.synced.layout = null; // nouvelle position : à envoyer
   cards.set(card.id, card);
@@ -953,12 +991,14 @@ async function start() {
       card.file = { ...rest, blob: new Blob([JSON.stringify(data)], { type: "application/json" }) };
       persist(card);
     }
+    if (!card.topics) bus.learn(card); // cartes d'avant le bus : sujets relus dans le code
     cards.set(card.id, card);
     canvas.add(card, { animate: false });
     setStatus(card, "ready");
     mountWidget(card);
   });
   updateEmpty();
+  redrawLinks();
   document.body.classList.add("is-ready");
   syncCanvasFromServer();
 }

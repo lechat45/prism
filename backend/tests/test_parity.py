@@ -33,7 +33,8 @@ NODE = shutil.which("node")
 
 def _message(case: dict) -> str:
     file = app.AttachedFile(**case["file"]) if case.get("file") else None
-    return app.build_user_message(case["prompt"], file, case.get("base_html"))
+    canvas = [app.CanvasWidget(**w) for w in case.get("canvas", [])]
+    return app.build_user_message(case["prompt"], file, case.get("base_html"), canvas)
 
 
 def python_results() -> dict:

@@ -383,6 +383,8 @@ async function main() {
     // ------------------------------------------------------------------ 8. Refactorisation
     await clickSel(`.card[data-id="${c1.id}"] .card-title`);
     await waitFor(() => evaluate(`document.getElementById("insp-title").textContent === ${JSON.stringify(moved.title)}`), "inspecteur sur la carte 1");
+    const busRows = await evaluate(`[...document.querySelectorAll("#bus-topics li")].map((li) => li.textContent).join(" | ")`);
+    check("bus d'évènements : sujets du widget listés dans l'inspecteur", busRows.includes("compteur.change"), busRows);
     if (!hasModel) {
       const disabled = await evaluate(`document.getElementById("refactor-btn").disabled && !document.getElementById("refactor-note").hidden`);
       check("refactorisation désactivée en mode démo, avec explication", disabled);
@@ -450,18 +452,6 @@ async function main() {
       await waitFor(() => evaluate(`document.getElementById("pro").open`), "fenêtre Prism Pro");
       check("menu du compte → fenêtre « Prism Pro »", (await evaluate(`document.getElementById("pro-title").textContent`)) === "Prism Pro", menu);
       await clickSel("#pro-close");
-      const balance = await evaluate(`parseFloat(document.getElementById("sparks-count").textContent.replace(",", "."))`);
-      if (balance < health.pricing.generate) {
-        // Solde insuffisant : la fenêtre s'ouvre sans créer de carte, la demande reste dans le dock.
-        await clickSel("#prompt");
-        await typeText("Un minuteur Pomodoro");
-        await pressEnter();
-        await waitFor(() => evaluate(`document.getElementById("pro").open`), "fenêtre Prism Pro (solde épuisé)");
-        check("Sparks épuisés : fenêtre « Prism Pro », aucune carte créée",
-          (await evaluate(`document.getElementById("pro-title").textContent === "Vos Sparks sont épuisés" && document.querySelectorAll(".card").length === 1 && document.getElementById("prompt").value.includes("Pomodoro")`)),
-          await evaluate(`document.getElementById("pro-reason").textContent`));
-        await clickSel("#pro-close");
-      }
     }
 
     // ------------------------------------------------------------------ 13. Mon Hub (serveur)
@@ -523,6 +513,57 @@ async function main() {
       await waitFor(async () => (await cards()).length === 1, "carte retirée du canvas");
       check("suppression depuis Mon Hub (double confirmation) : retiré du Hub et du canvas", true, csvItem.title);
       await clickSel("#hub-close");
+    }
+
+    // ------------------------------------------------------------------ 14. Bus d'évènements entre widgets (modèle requis)
+    if (hasModel) {
+      const live = () => evaluate(`document.querySelectorAll('.card-body[data-frame="live"]').length`);
+      const before = await live();
+      await clickSel("#prompt");
+      await typeText("Un émetteur de valeurs pour le bus");
+      await pressEnter();
+      await waitFor(async () => (await live()) === before + 1, "émetteur prêt", 60000);
+      await clickSel("#prompt");
+      await typeText("Un récepteur qui affiche la valeur de l'émetteur");
+      await pressEnter();
+      await waitFor(async () => (await live()) === before + 2, "récepteur prêt", 60000);
+      const recv = await findFrame(`!!document.getElementById("recu")`, "récepteur");
+      const emitter = await findFrame(`!!document.getElementById("emit")`, "émetteur");
+      check("contexte du canvas transmis au modèle (sujets de l'émetteur)", (await evaluate(`document.body.dataset.context`, recv)) === "yes");
+      check("dernière valeur rejouée au nouvel abonné", (await waitFor(() => evaluate(`document.getElementById("recu").textContent === "0"`, recv), "valeur rejouée").catch(() => false)) === true);
+      await evaluate(`document.getElementById("emit").click(); document.getElementById("emit").click(); true`, emitter);
+      const got = await waitFor(() => evaluate(`document.getElementById("recu").textContent === "2" && "2"`, recv), "valeur relayée").catch(() => evaluate(`document.getElementById("recu").textContent`, recv));
+      check("évènement relayé d'un widget à l'autre (prism.emit → prism.on)", got === "2", `reçu : ${got}`);
+      const drawn = await waitFor(() => evaluate(`(() => { const g = [...document.querySelectorAll(".links .link")];
+        return g.length === 1 && Number(g[0].dataset.pulses || 0) >= 1 ? g[0].querySelector("title").textContent : null; })()`), "liaison").catch(() => null);
+      check("liaison émetteur → récepteur tracée sur le canvas, lueur à chaque évènement", Boolean(drawn), drawn || "aucune");
+      // Isolation depuis l'inspecteur : le récepteur ne reçoit plus rien.
+      const receiverCard = (await cards()).find((c) => c.title.startsWith("Récepteur"));
+      await clickSel(`.card[data-id="${receiverCard.id}"] .card-title`);
+      await waitFor(() => evaluate(`document.getElementById("insp-title").textContent.startsWith("Récepteur")`), "inspecteur du récepteur");
+      await clickSel("#bus-mute");
+      await waitFor(() => evaluate(`document.getElementById("bus-mute").checked`), "isolement");
+      await evaluate(`document.getElementById("emit").click(); true`, emitter);
+      await sleep(800);
+      check("carte isolée du bus : plus rien ne lui parvient", (await evaluate(`document.getElementById("recu").textContent`, recv)) === "2");
+      await clickSel("#insp-close");
+    }
+
+    // ------------------------------------------------------------------ 15. Solde épuisé (serveur)
+    if (serverMode) {
+      const balance = await evaluate(`parseFloat(document.getElementById("sparks-count").textContent.replace(",", "."))`);
+      if (balance < health.pricing.generate) {
+        // Solde insuffisant : la fenêtre s'ouvre sans créer de carte, la demande reste dans le dock.
+        const count = (await cards()).length;
+        await clickSel("#prompt");
+        await typeText("Un minuteur Pomodoro");
+        await pressEnter();
+        await waitFor(() => evaluate(`document.getElementById("pro").open`), "fenêtre Prism Pro (solde épuisé)");
+        check("Sparks épuisés : fenêtre « Prism Pro », aucune carte créée",
+          (await evaluate(`document.getElementById("pro-title").textContent === "Vos Sparks sont épuisés" && document.querySelectorAll(".card").length === ${count} && document.getElementById("prompt").value.includes("Pomodoro")`)),
+          await evaluate(`document.getElementById("pro-reason").textContent`));
+        await clickSel("#pro-close");
+      }
     }
   } catch (err) {
     check("scénario complet", false, err.message);
