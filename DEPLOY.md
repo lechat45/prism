@@ -34,11 +34,13 @@ aussi, automatiquement (rien n'est jamais supprimé).
 ## 2. API : Render
 
 1. Créez un compte sur <https://render.com> et reliez-le à GitHub.
-2. **New → Blueprint**, choisissez le dépôt `lechat45/prism` et la branche à déployer (`main` une fois
-   `v3` fusionnée, ou `v3` directement). Render lit `render.yaml`.
+2. **New → Blueprint**, choisissez le dépôt `lechat45/prism` et la branche **`v3`** (celle que publie aussi
+   GitHub Pages). Render lit `render.yaml`.
 3. Renseignez les deux secrets demandés :
    - `PRISM_DATABASE_URL` : la chaîne Neon de l'étape 1 ;
-   - `GEMINI_API_KEY` : votre clé Google AI Studio (<https://aistudio.google.com/apikey>).
+   - `GEMINI_API_KEY` : votre clé Google AI Studio (<https://aistudio.google.com/apikey>) ; plusieurs clés
+     possibles, séparées par des virgules (servies à tour de rôle, relais sur quota) : copiez la valeur de
+     `backend/.env`.
 
    `PRISM_JWT_SECRET` est généré par Render ; les autres réglages sont dans `render.yaml`.
 4. **Apply**. Premier déploiement : quelques minutes (construction de l'image). Adresse du service :
@@ -66,8 +68,8 @@ L'application est alors utilisable directement à l'adresse Render.
    <meta name="prism-api" content="https://prism-api-xxxx.onrender.com">
    ```
    Elle n'est utilisée que sur `*.github.io` : en local, Prism parle toujours à votre serveur local.
-2. Fusionnez `v3` dans `main` (GitHub Pages publie `main`). Le site
-   <https://lechat45.github.io/prism/> propose alors comptes, Sparks, Mon Hub et bus d'évènements.
+2. Publiez-la sur la branche `v3` (GitHub Pages publie `v3`). Le site <https://lechat45.github.io/prism/>
+   propose alors comptes, Sparks, Mon Hub, Engrammes et conversations, sans clé côté visiteur.
 3. `PRISM_CORS_ORIGINS` doit contenir `https://lechat45.github.io` (c'est le cas dans `render.yaml`).
 
 Sans cette balise, GitHub Pages reste en moteur navigateur (démo, ou clé Gemini de l'utilisateur).
@@ -87,10 +89,9 @@ Sans cette balise, GitHub Pages reste en moteur navigateur (démo, ou clé Gemin
 
 ## 6. Mises à jour
 
-Render redéploie à chaque commit sur la branche choisie (`autoDeployTrigger: commit`). La CI GitHub
-(`.github/workflows/ci.yml`) rejoue d'abord les tests : Python sur SQLite et PostgreSQL, Node, E2E Chrome
-(statique, serveur, faux Gemini, GitHub Pages → API) et image Docker. Pour ne déployer qu'après leur
-succès, remplacez `commit` par `checksPass` dans `render.yaml`.
+Render redéploie à chaque commit sur la branche choisie, **une fois la CI GitHub verte**
+(`autoDeployTrigger: checksPass`) : Python sur SQLite et PostgreSQL, Node, E2E Chrome (statique, serveur,
+faux Gemini, GitHub Pages → API, Engramme) et image Docker. Un commit qui casse les tests n'est jamais déployé.
 
 ## 7. Dépannage
 

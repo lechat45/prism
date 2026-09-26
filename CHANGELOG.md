@@ -6,6 +6,8 @@
   version du serveur (utile quand le site GitHub Pages parle à une API déployée à part).
 - Test `test_version.py` : la version affichée, celle du serveur et la première entrée du CHANGELOG sont identiques.
 - E2E : test des reflets robuste (zone utile du canevas, pointeur redéplacé).
+- Déploiement : Render déploie la branche `v3` (celle du site) et seulement après une CI verte
+  (`autoDeployTrigger: checksPass`) ; `GEMINI_API_KEY` accepte plusieurs clés ; DEPLOY.md à jour.
 
 ## 4.0.0-alpha.4 — 2026-09-26 (Discuter avec la personne, mouvement logique, personnes dans Mon Hub)
 
