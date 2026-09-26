@@ -27,6 +27,10 @@ class FatalGenerationError(Exception):
     """Échec qui ne dépend pas du modèle (clé refusée…) : inutile d'insister."""
 
 
+class SchemaRejected(GenerationError):
+    """Le modèle refuse le schéma de réponse (HTTP 400) : réessayer en JSON simple."""
+
+
 @dataclass
 class Provider:
     name: str  # "gemini" | "groq"
@@ -35,9 +39,12 @@ class Provider:
     url: str
     options: dict = field(default_factory=dict)
 
-    async def complete(self, client: httpx.AsyncClient, model: str, system: str, user: str, timeout: float) -> str:
+    async def complete(self, client: httpx.AsyncClient, model: str, system: str, user: str, timeout: float,
+                       *, json_mode: bool = False, schema: dict | None = None) -> str:
+        """json_mode : réponse JSON (Gemini : responseMimeType, Groq : response_format) ;
+        schema : schéma de réponse imposé à Gemini (sous-ensemble OpenAPI de responseSchema)."""
         call = _gemini if self.name == "gemini" else _groq
-        return await call(self, client, model, system, user, timeout)
+        return await call(self, client, model, system, user, timeout, json_mode, schema)
 
 
 def _detail(resp: httpx.Response) -> str:
@@ -53,7 +60,8 @@ async def _post(client: httpx.AsyncClient, model: str, url: str, **kwargs) -> ht
         raise GenerationError(f"{model}: erreur réseau ({exc.__class__.__name__})") from exc
 
 
-async def _gemini(p: Provider, client: httpx.AsyncClient, model: str, system: str, user: str, timeout: float) -> str:
+async def _gemini(p: Provider, client: httpx.AsyncClient, model: str, system: str, user: str, timeout: float,
+                  json_mode: bool = False, schema: dict | None = None) -> str:
     payload = {
         "systemInstruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": user}]}],
@@ -63,6 +71,10 @@ async def _gemini(p: Provider, client: httpx.AsyncClient, model: str, system: st
             "maxOutputTokens": p.options.get("max_output_tokens", 32768),
         },
     }
+    if json_mode or schema:
+        payload["generationConfig"]["responseMimeType"] = "application/json"
+    if schema:
+        payload["generationConfig"]["responseSchema"] = schema
     # Clé dans un en-tête, jamais dans l'URL (qui finit dans les journaux).
     resp = await _post(client, model, p.url.replace("{model}", model), json=payload,
                        headers={"x-goog-api-key": p.api_key}, timeout=timeout)
@@ -72,6 +84,8 @@ async def _gemini(p: Provider, client: httpx.AsyncClient, model: str, system: st
         raise FatalGenerationError(f"Accès Gemini refusé (HTTP {resp.status_code}) : {_detail(resp)}")
     if resp.status_code == 402:
         raise FatalGenerationError("Crédits Gemini épuisés (HTTP 402).")
+    if resp.status_code == 400 and schema:
+        raise SchemaRejected(f"{model}: schéma de réponse refusé — {_detail(resp)}")
     if resp.status_code >= 400:  # 404 modèle inconnu, 429 quota, 5xx : modèle suivant
         raise GenerationError(f"{model}: HTTP {resp.status_code} — {_detail(resp)}")
     try:
@@ -95,7 +109,8 @@ async def _gemini(p: Provider, client: httpx.AsyncClient, model: str, system: st
     return "".join(part.get("text", "") for part in parts if not part.get("thought"))
 
 
-async def _groq(p: Provider, client: httpx.AsyncClient, model: str, system: str, user: str, timeout: float) -> str:
+async def _groq(p: Provider, client: httpx.AsyncClient, model: str, system: str, user: str, timeout: float,
+                json_mode: bool = False, schema: dict | None = None) -> str:
     payload: dict = {
         "model": model,
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
@@ -104,6 +119,8 @@ async def _groq(p: Provider, client: httpx.AsyncClient, model: str, system: str,
     }
     if model.startswith(p.options.get("reasoning_models_prefix", "openai/gpt-oss")):
         payload["reasoning_effort"] = p.options.get("reasoning_effort", "medium")
+    if json_mode or schema:  # schéma décrit dans le prompt ; Groq garantit seulement un objet JSON
+        payload["response_format"] = {"type": "json_object"}
     resp = await _post(client, model, p.url, json=payload,
                        headers={"Authorization": f"Bearer {p.api_key}"}, timeout=timeout)
     if resp.status_code == 401:

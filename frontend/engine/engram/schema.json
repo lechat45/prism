@@ -1,0 +1,53 @@
+{
+  "type": "OBJECT",
+  "properties": {
+    "person": { "type": "STRING", "description": "Canonical name of the public figure." },
+    "public_figure": { "type": "BOOLEAN", "description": "true only for a widely known public figure (living or historical adult) with an extensive public record." },
+    "refusal": { "type": "STRING", "nullable": true, "description": "Set (and leave nodes empty) when the request is not a public figure, is a minor, or cannot be answered from the public record." },
+    "domain": { "type": "STRING", "description": "Field and era, a few words." },
+    "summary": { "type": "STRING", "description": "One or two sentences: the mind in a nutshell." },
+    "nodes": {
+      "type": "ARRAY",
+      "maxItems": 40,
+      "items": {
+        "type": "OBJECT",
+        "properties": {
+          "id": { "type": "STRING", "description": "Short unique slug, e.g. core, e1, s4, a10." },
+          "category": { "type": "STRING", "enum": ["core", "engine", "shadow", "artifact"] },
+          "type": {
+            "type": "STRING",
+            "enum": ["axiome", "algorithme_resolution", "empreinte_syntaxique", "matrice_esthetique", "methode_travail",
+                     "paradoxe", "peur_primaire", "biais_cognitif", "succes", "echec", "tournant"]
+          },
+          "title": { "type": "STRING", "description": "At most 60 characters." },
+          "content": { "type": "STRING", "description": "The insight itself, 2 to 4 sentences, specific to this person." },
+          "directive": { "type": "STRING", "description": "How an interface generated THROUGH this node must look and behave: palette, tone, layout, emphasis, interactions. 1 to 3 sentences." },
+          "basis": { "type": "STRING", "enum": ["documente", "declare", "interpretation"] },
+          "evidence": { "type": "STRING", "description": "The public fact, statement or work this node rests on (no URL, no invented quote)." },
+          "intensity": { "type": "NUMBER", "minimum": 0, "maximum": 1 },
+          "date": { "type": "STRING", "nullable": true, "description": "Artifacts only: YYYY, YYYY-MM or YYYY-MM-DD." },
+          "impact": { "type": "STRING", "nullable": true, "description": "Artifacts only: how this event shaped the core." },
+          "palette": { "type": "ARRAY", "maxItems": 5, "items": { "type": "STRING" }, "description": "matrice_esthetique only: 2 to 5 #rrggbb colors." },
+          "keywords": { "type": "ARRAY", "maxItems": 8, "items": { "type": "STRING" }, "description": "empreinte_syntaxique only: signature words or phrasings." }
+        },
+        "required": ["id", "category", "type", "title", "content", "directive", "basis", "evidence", "intensity"],
+        "propertyOrdering": ["id", "category", "type", "title", "content", "directive", "basis", "evidence", "intensity", "date", "impact", "palette", "keywords"]
+      }
+    },
+    "links": {
+      "type": "ARRAY",
+      "maxItems": 40,
+      "items": {
+        "type": "OBJECT",
+        "properties": {
+          "from": { "type": "STRING" },
+          "to": { "type": "STRING" },
+          "kind": { "type": "STRING", "enum": ["forge", "nourrit", "contredit"] }
+        },
+        "required": ["from", "to", "kind"]
+      }
+    }
+  },
+  "required": ["person", "public_figure", "summary", "nodes", "links"],
+  "propertyOrdering": ["person", "public_figure", "refusal", "domain", "summary", "nodes", "links"]
+}

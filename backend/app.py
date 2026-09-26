@@ -41,6 +41,7 @@ from pydantic import BaseModel, Field, StringConstraints, ValidationError, field
 import auth
 import billing
 import db
+import engram
 import security
 import widgets
 from mocks import mock_component
@@ -263,6 +264,7 @@ app.add_middleware(
 )
 app.include_router(auth.router)
 app.include_router(widgets.router)
+app.include_router(engram.router)
 
 
 SECURITY_HEADERS = {

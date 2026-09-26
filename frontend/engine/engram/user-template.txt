@@ -1,0 +1,5 @@
+Build the Cognitive Engram of this person:
+<<<
+{{person}}
+>>>
+Language of every human-readable string: {{language}}.
