@@ -11,12 +11,18 @@ Chaque fonction renvoie le texte brut du modèle, ou lève :
 """
 from __future__ import annotations
 
+import asyncio
+import itertools
 from dataclasses import dataclass, field
 
 import httpx
 
 # Raisons de fin Gemini qui signifient « pas de document exploitable ».
 _GEMINI_BLOCKED = {"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "LANGUAGE", "OTHER"}
+# Surcharge passagère du modèle (« high demand ») : une nouvelle tentative après un court délai.
+_GEMINI_RETRY = {500, 503}
+# Tourniquet des clés : chaque appel commence par la clé suivante (quota réparti entre les clés).
+_rotation = itertools.count()
 
 
 class GenerationError(Exception):
@@ -34,10 +40,20 @@ class SchemaRejected(GenerationError):
 @dataclass
 class Provider:
     name: str  # "gemini" | "groq"
-    api_key: str
+    api_key: str  # une clé, ou plusieurs séparées par des virgules (Gemini : relais sur quota ou refus)
     models: list[str]
     url: str
     options: dict = field(default_factory=dict)
+
+    @property
+    def keys(self) -> list[str]:
+        return [k.strip() for k in self.api_key.split(",") if k.strip()]
+
+    def key_order(self) -> list[str]:
+        """Toutes les clés, en commençant par la suivante du tourniquet."""
+        keys = self.keys
+        start = next(_rotation) % len(keys) if keys else 0
+        return keys[start:] + keys[:start]
 
     async def complete(self, client: httpx.AsyncClient, model: str, system: str, user: str, timeout: float,
                        *, json_mode: bool = False, schema: dict | None = None) -> str:
@@ -48,7 +64,12 @@ class Provider:
 
 
 def _detail(resp: httpx.Response) -> str:
-    return resp.text[:300].replace("\n", " ")
+    """Message d'erreur du fournisseur (champ error.message du JSON s'il existe), sur une ligne."""
+    try:
+        message = resp.json()["error"]["message"]
+    except (ValueError, KeyError, TypeError):
+        message = resp.text
+    return " ".join(str(message).split())[:300]
 
 
 async def _post(client: httpx.AsyncClient, model: str, url: str, **kwargs) -> httpx.Response:
@@ -58,6 +79,32 @@ async def _post(client: httpx.AsyncClient, model: str, url: str, **kwargs) -> ht
         raise GenerationError(f"{model}: délai dépassé") from exc
     except httpx.HTTPError as exc:
         raise GenerationError(f"{model}: erreur réseau ({exc.__class__.__name__})") from exc
+
+
+async def _gemini_post(p: Provider, client: httpx.AsyncClient, model: str, payload: dict, timeout: float) -> httpx.Response:
+    """Envoie la requête avec les clés à tour de rôle. Clé refusée ou quota atteint (429) : clé suivante ;
+    surcharge passagère (500/503) : une nouvelle tentative après un court délai. Renvoie la première
+    réponse exploitable (ou l'erreur d'un autre type, traitée par l'appelant)."""
+    url = p.url.replace("{model}", model)
+    refused, exhausted = [], []
+    for index, key in enumerate(p.key_order(), 1):
+        for attempt in range(2):
+            # Clé dans un en-tête, jamais dans l'URL (qui finit dans les journaux).
+            resp = await _post(client, model, url, json=payload, headers={"x-goog-api-key": key}, timeout=timeout)
+            if resp.status_code not in _GEMINI_RETRY or attempt:
+                break
+            await asyncio.sleep(p.options.get("retry_delay", 2.0))
+        if resp.status_code == 400 and "API_KEY_INVALID" in resp.text:
+            refused.append(f"clé n°{index} refusée (API_KEY_INVALID)")
+        elif resp.status_code in (401, 403):
+            refused.append(f"clé n°{index} : accès refusé (HTTP {resp.status_code}) {_detail(resp)}")
+        elif resp.status_code == 429:
+            exhausted.append(f"clé n°{index}")
+        else:
+            return resp
+    if exhausted:  # quota d'un modèle atteint sur toutes les clés : un autre modèle a peut-être le sien
+        raise GenerationError(f"{model}: quota atteint (HTTP 429) — {', '.join(exhausted)}" + (f" ; {'; '.join(refused)}" if refused else ""))
+    raise FatalGenerationError("Clé Gemini refusée : " + " ; ".join(refused) + ". Vérifiez GEMINI_API_KEY.")
 
 
 async def _gemini(p: Provider, client: httpx.AsyncClient, model: str, system: str, user: str, timeout: float,
@@ -75,13 +122,7 @@ async def _gemini(p: Provider, client: httpx.AsyncClient, model: str, system: st
         payload["generationConfig"]["responseMimeType"] = "application/json"
     if schema:
         payload["generationConfig"]["responseSchema"] = schema
-    # Clé dans un en-tête, jamais dans l'URL (qui finit dans les journaux).
-    resp = await _post(client, model, p.url.replace("{model}", model), json=payload,
-                       headers={"x-goog-api-key": p.api_key}, timeout=timeout)
-    if resp.status_code == 400 and "API_KEY_INVALID" in resp.text:
-        raise FatalGenerationError("Clé Gemini refusée (API_KEY_INVALID). Vérifiez GEMINI_API_KEY.")
-    if resp.status_code in (401, 403):
-        raise FatalGenerationError(f"Accès Gemini refusé (HTTP {resp.status_code}) : {_detail(resp)}")
+    resp = await _gemini_post(p, client, model, payload, timeout)
     if resp.status_code == 402:
         raise FatalGenerationError("Crédits Gemini épuisés (HTTP 402).")
     if resp.status_code == 400 and schema:

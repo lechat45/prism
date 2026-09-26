@@ -339,8 +339,9 @@ API ajoutée en phase 1 (jeton `Authorization: Bearer …` sauf `register`/`logi
 
 | Variable | Défaut | Rôle |
 | --- | --- | --- |
-| `GEMINI_API_KEY` | vide (mode démo) | clé API Gemini (Google AI Studio) |
-| `GEMINI_MODELS` | `gemini.json` | chaîne de modèles, séparés par des virgules (le suivant prend le relais) |
+| `GEMINI_API_KEY` | vide (mode démo) | clé API Gemini (Google AI Studio) ; plusieurs clés séparées par des virgules : servies à tour de rôle, une clé au quota (429) ou refusée passe la main |
+| `GEMINI_RETRY_DELAY` | `2` | surcharge passagère (503 « high demand ») : nouvelle tentative après ce délai, puis modèle suivant |
+| `GEMINI_MODELS` | `gemini.json` (3.8-flash, 3.6-flash, 3.5-flash-lite) | chaîne de modèles, séparés par des virgules (le suivant prend le relais) ; le modèle « lite » final, peu demandé, répond quand Google est saturé |
 | `GEMINI_MAX_OUTPUT_TOKENS` | `32768` | tokens de sortie max par appel |
 | `GROQ_API_KEY` | vide | secours facultatif, essayé seulement si tous les modèles Gemini échouent |
 | `GROQ_MODELS` | `groq.json` | chaîne de modèles Groq |

@@ -33,6 +33,9 @@ class DefinitionTests(unittest.TestCase):
         self.assertIn("directive", engram.SCHEMA["properties"]["nodes"]["items"]["required"], "chaque nœud est un filtre de génération")
         link = engram.SCHEMA["properties"]["links"]["items"]["properties"]["kind"]["enum"]
         self.assertEqual(set(link), {"forge", "nourrit", "contredit"})
+        # Gemini refuse maxItems dans responseSchema (HTTP 400 « invalid argument », constaté le 2026-09-26) :
+        # les limites sont dans le prompt et appliquées par normalize().
+        self.assertNotIn("maxItems", json.dumps(engram.SCHEMA))
 
     def test_prompt_states_the_taxonomy_and_the_ethics(self):
         p = engram.SYSTEM_PROMPT
@@ -179,7 +182,7 @@ class EngramApiTests(DbTestCase):
         self.assertEqual(self.sparks(), 50.0)
 
     def test_all_models_fail_refund(self):
-        self.answers = {M1: [httpx.Response(500)], M2: [gemini_json("pas du json")]}
+        self.answers = {M1: [httpx.Response(500)] * 2, M2: [gemini_json("pas du json")]}
         res = self.post()
         self.assertEqual(res.status_code, 502)
         self.assertIn("Engramme impossible", res.json()["detail"])

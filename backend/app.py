@@ -58,7 +58,7 @@ from sanitize import (
     validate_document,
 )
 
-__version__ = "4.0.0a1"
+__version__ = "4.0.0a2"
 
 BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
@@ -90,8 +90,10 @@ def _models(env: str, defaults: dict) -> list[str]:
     return [m.strip() for m in os.getenv(env, ",".join(defaults["models"])).split(",") if m.strip()]
 
 
-# Gemini, fournisseur principal (clé gratuite sur https://aistudio.google.com/apikey).
+# Gemini, fournisseur principal (clé gratuite sur https://aistudio.google.com/apikey). Plusieurs clés
+# possibles, séparées par des virgules : quota atteint ou clé refusée → la suivante (tourniquet).
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_RETRY_DELAY = float(os.getenv("GEMINI_RETRY_DELAY", "2"))  # nouvelle tentative après une surcharge (503)
 GEMINI_URL = os.getenv("GEMINI_URL", GEMINI_DEFAULTS["url"])  # surcharge : faux serveur des tests E2E
 GEMINI_MODELS = _models("GEMINI_MODELS", GEMINI_DEFAULTS)
 GEMINI_MAX_OUTPUT_TOKENS = int(os.getenv("GEMINI_MAX_OUTPUT_TOKENS", str(GEMINI_DEFAULTS["max_output_tokens"])))
@@ -339,7 +341,8 @@ def active_providers() -> list[Provider]:
     providers = []
     if GEMINI_API_KEY:
         providers.append(Provider("gemini", GEMINI_API_KEY, GEMINI_MODELS, GEMINI_URL, {
-            "temperature": GEMINI_DEFAULTS["temperature"], "max_output_tokens": GEMINI_MAX_OUTPUT_TOKENS}))
+            "temperature": GEMINI_DEFAULTS["temperature"], "max_output_tokens": GEMINI_MAX_OUTPUT_TOKENS,
+            "retry_delay": GEMINI_RETRY_DELAY}))
     if GROQ_API_KEY:
         providers.append(Provider("groq", GROQ_API_KEY, GROQ_MODELS, GROQ_URL, {
             "temperature": GROQ_DEFAULTS["temperature"], "max_completion_tokens": MAX_TOKENS,

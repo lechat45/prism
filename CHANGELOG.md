@@ -1,5 +1,21 @@
 # Changelog
 
+## 4.0.0-alpha.2 — 2026-09-26 (Engramme sur le vrai Gemini, plusieurs clés)
+
+- **Correctif** : l'Engramme échouait sur le vrai Gemini (« schéma de réponse refusé », HTTP 400
+  « invalid argument ») : Gemini refuse `maxItems` dans `responseSchema`. Mot-clé retiré du schéma (les
+  limites restent dans le prompt et dans la validation) ; test qui l'interdit. Vérifié sur l'API réelle :
+  Engrammes valides par le serveur (Marie Curie) et par le moteur navigateur (Ada Lovelace).
+- **Plusieurs clés Gemini** : `GEMINI_API_KEY` (serveur) et le champ des réglages (navigateur) acceptent
+  plusieurs clés séparées par des virgules, servies à tour de rôle ; une clé au quota (429) ou refusée passe
+  la main à la suivante sur le même modèle. Toutes refusées : arrêt ; toutes au quota : modèle suivant.
+  Les clés n'apparaissent jamais dans les messages.
+- **Surcharge de Google** (503 « high demand », fréquent sur les longues générations) : une nouvelle
+  tentative après 2 s (`GEMINI_RETRY_DELAY`), puis le modèle suivant ; chaîne par défaut étendue à
+  `gemini-3.5-flash-lite`, bien moins demandé, en dernier recours.
+- Messages d'erreur lisibles : le texte de Google (`error.message`) plutôt que son JSON brut.
+- Tests : 120 Python, 67 Node.
+
 ## 4.0.0-alpha.1 — 2026-09-26 (V4 « Singularité » : l'Engramme cognitif)
 
 - **Engramme cognitif** : « Engramme : Marie Curie » (dock, Spotlight, voix) cartographie l'esprit d'une

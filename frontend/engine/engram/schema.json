@@ -8,7 +8,6 @@
     "summary": { "type": "STRING", "description": "One or two sentences: the mind in a nutshell." },
     "nodes": {
       "type": "ARRAY",
-      "maxItems": 40,
       "items": {
         "type": "OBJECT",
         "properties": {
@@ -27,8 +26,8 @@
           "intensity": { "type": "NUMBER", "minimum": 0, "maximum": 1 },
           "date": { "type": "STRING", "nullable": true, "description": "Artifacts only: YYYY, YYYY-MM or YYYY-MM-DD." },
           "impact": { "type": "STRING", "nullable": true, "description": "Artifacts only: how this event shaped the core." },
-          "palette": { "type": "ARRAY", "maxItems": 5, "items": { "type": "STRING" }, "description": "matrice_esthetique only: 2 to 5 #rrggbb colors." },
-          "keywords": { "type": "ARRAY", "maxItems": 8, "items": { "type": "STRING" }, "description": "empreinte_syntaxique only: signature words or phrasings." }
+          "palette": { "type": "ARRAY", "items": { "type": "STRING" }, "description": "matrice_esthetique only: 2 to 5 #rrggbb colors." },
+          "keywords": { "type": "ARRAY", "items": { "type": "STRING" }, "description": "empreinte_syntaxique only: signature words or phrasings." }
         },
         "required": ["id", "category", "type", "title", "content", "directive", "basis", "evidence", "intensity"],
         "propertyOrdering": ["id", "category", "type", "title", "content", "directive", "basis", "evidence", "intensity", "date", "impact", "palette", "keywords"]
@@ -36,7 +35,6 @@
     },
     "links": {
       "type": "ARRAY",
-      "maxItems": 40,
       "items": {
         "type": "OBJECT",
         "properties": {
