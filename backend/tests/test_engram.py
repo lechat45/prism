@@ -216,6 +216,15 @@ class EngramApiTests(DbTestCase):
         self.assertIn("Engramme impossible", res.json()["detail"])
         self.assertEqual(self.sparks(), 50.0)
 
+    def test_demo_mode_offers_two_people(self):
+        prism.GEMINI_API_KEY = ""
+        data = self.post("Ada Lovelace").json()
+        self.assertEqual((data["engram"]["person"], data["model"]), ("Ada Lovelace", "mock:engram-ada-lovelace"))
+        counts = {c: sum(n["category"] == c for n in data["engram"]["nodes"]) for c in engram.TYPES}
+        self.assertEqual(counts, {"core": 1, "heart": 7, "engine": 9, "shadow": 10, "artifact": 10})
+        self.assertEqual(engram.demo_key("  ADA "), "ada-lovelace")
+        self.assertEqual(engram.demo_key("Adam Smith"), "marie-curie")
+
     def test_demo_mode_without_model(self):
         prism.GEMINI_API_KEY = ""
         res = self.post("Quelqu'un")
@@ -471,6 +480,31 @@ class DnaGenerateTests(DbTestCase):
                                headers=self.auth)
         self.assertEqual(res.status_code, 200, res.text)
         self.assertNotIn("COGNITIVE DNA FILTER", self.bodies[-1]["contents"][0]["parts"][0]["text"])
+
+    def test_ghost_context_reaches_the_model(self):
+        """V5 · sédimentation : les mots des cartes dissoutes à cet endroit, après la demande, jamais en refactorisation."""
+        res = self.client.post("/api/generate", json={"prompt": "Un minuteur", "ghost": ["humeur", " tracker ", "graphique"]}, headers=self.auth)
+        self.assertEqual(res.status_code, 200, res.text)
+        message = self.bodies[0]["contents"][0]["parts"][0]["text"]
+        self.assertIn("GHOST CONTEXT", message)
+        self.assertIn("humeur, tracker, graphique", message)
+        self.assertLess(message.index("<<<\nUn minuteur\n>>>"), message.index("GHOST CONTEXT"), "la demande d'abord")
+        created = res.json()
+        res = self.client.post("/api/generate", json={"prompt": "ajoute un titre", "widget_id": created["widget"]["id"], "ghost": ["humeur"]},
+                               headers=self.auth)
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertNotIn("GHOST CONTEXT", self.bodies[-1]["contents"][0]["parts"][0]["text"])
+        self.client.post("/api/generate", json={"prompt": "Un minuteur", "ghost": []}, headers=self.auth)
+        self.assertNotIn("GHOST CONTEXT", self.bodies[-1]["contents"][0]["parts"][0]["text"])
+
+    def test_invalid_ghost_is_rejected_before_billing(self):
+        for label, ghost in {"trop de mots": [f"mot{i}" for i in range(13)], "mot vide": [""], "mot trop long": ["x" * 41],
+                             "pas une liste": "humeur"}.items():
+            with self.subTest(label):
+                res = self.client.post("/api/generate", json={"prompt": "Un minuteur", "ghost": ghost}, headers=self.auth)
+                self.assertEqual(res.status_code, 422)
+        self.assertEqual(self.bodies, [])
+        self.assertEqual(self.client.get("/api/auth/me", headers=self.auth).json()["sparks"], 50.0)
 
     def test_page_may_use_the_microphone_widgets_never(self):
         policy = self.client.get("/api/health").headers["Permissions-Policy"]

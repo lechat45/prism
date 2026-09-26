@@ -8,7 +8,7 @@
 //   --profile : enregistre un profil CPU (.cpuprofile, lisible dans DevTools) de chaque étape.
 // Chiffres relatifs : à comparer avant/après sur la même machine.
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -22,7 +22,7 @@ const BROWSER = [process.env.PRISM_BROWSER, "C:/Program Files/Google/Chrome/Appl
 
 const work = mkdtempSync(join(tmpdir(), "prism-perf-"));
 const browser = spawn(BROWSER, ["--headless=new", "--remote-debugging-port=0", `--user-data-dir=${join(work, "p")}`,
-  "--no-first-run", "--window-size=1440,900", "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
+  "--no-first-run", "--disable-gpu-shader-disk-cache", "--window-size=1440,900", "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
 
 try {
   const wsUrl = await new Promise((resolve, reject) => {
@@ -104,7 +104,12 @@ try {
     processus_des_widgets: (await send("Target.getTargets")).targetInfos.some((t) => t.type === "iframe") ? "séparé (OOPIF)" : "celui de la page",
   }, null, 2));
 } finally {
-  browser.kill();
-  await sleep(500);
-  try { rmSync(work, { recursive: true, force: true }); } catch { /* verrou Windows */ }
+  // Profil Chrome jetable : attendre la fin du navigateur (ses processus verrouillent le dossier sous Windows),
+  // puis supprimer en plusieurs essais ; un reste est signalé, jamais ignoré (des centaines de Mo par passage).
+  const exited = browser.exitCode !== null ? Promise.resolve() : new Promise((resolve) => browser.once("exit", resolve));
+  // Windows : kill() n'arrête que le processus principal, ses enfants (rendu, GPU) gardent le profil ouvert.
+  if (process.platform === "win32") spawnSync("taskkill", ["/PID", String(browser.pid), "/T", "/F"], { stdio: "ignore" });
+  else browser.kill();
+  await Promise.race([exited, sleep(5000)]);
+  try { rmSync(work, { recursive: true, force: true, maxRetries: 20, retryDelay: 400 }); } catch (err) { console.warn(`Profil temporaire non supprimé : ${work} (${err.code || err.message})`); }
 }

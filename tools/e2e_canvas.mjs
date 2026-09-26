@@ -11,7 +11,7 @@
 //   --refactor : exige un modèle (ex. tools/e2e_server.py, faux Gemini) et teste la refactorisation.
 // Aucune dépendance : WebSocket natif de Node >= 22. Navigateur : PRISM_BROWSER ou détection auto.
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -76,7 +76,7 @@ async function main() {
   writeFileSync(csvPath, csvRows.map((r) => r.join(";")).join("\n"));
 
   const browser = spawn(BROWSER, ["--headless=new", "--remote-debugging-port=0", `--user-data-dir=${join(work, "profile")}`,
-    "--no-first-run", "--no-default-browser-check", "--window-size=1440,900", "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
+    "--no-first-run", "--disable-gpu-shader-disk-cache", "--no-default-browser-check", "--window-size=1440,900", "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
   const pageErrors = [];
 
   try {
@@ -553,6 +553,43 @@ async function main() {
       await clickSel("#insp-close");
     }
 
+    // ------------------------------------------------------------------ 14 bis. V5 : confusion → « Simplifier ? » (avec modèle)
+    if (hasModel) {
+      await clickSel("#zoom-fit");
+      await sleep(900);
+      const target = await evaluate(`(() => {
+        for (const c of document.querySelectorAll(".card")) {
+          const f = c.querySelector("iframe.card-frame");
+          if (!f || !/ready|warn/.test(c.dataset.state)) continue;
+          const r = f.getBoundingClientRect();
+          const [cx, cy] = [r.left + r.width / 2, r.top + r.height / 2];
+          if (r.width > 150 && document.elementFromPoint(cx, cy) === f) return { id: c.dataset.id, title: c.querySelector(".card-title").textContent, cx, cy };
+        }
+        return null;
+      })()`);
+      const sparksBefore = serverMode ? await sparksShown() : null;
+      // Le pointeur tourne au-dessus du widget, sans clic, jusqu'à la pastille (14 s au plus sur une machine chargée).
+      const chipOf = `document.querySelector('.card[data-id="${target.id}"] .card-evolve')?.textContent || ""`;
+      const t0 = Date.now();
+      let chip = "";
+      for (let i = 0; Date.now() - t0 < 14000 && !chip; i++) {
+        const a = ((Date.now() - t0) / 1000) * 0.7 * 2 * Math.PI;
+        await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: target.cx + 45 * Math.cos(a), y: target.cy + 45 * Math.sin(a), button: "none", buttons: 0 }, S);
+        await sleep(20);
+        if (i % 15 === 0) chip = await evaluate(chipOf);
+      }
+      if (!chip) chip = await waitFor(() => evaluate(chipOf), "pastille « Simplifier ? »", 3000).catch(() => "");
+      const after = Date.now() - t0;
+      check("pointeur en rond plus de 5 s sans clic : « Simplifier ? » proposé, rien débité", chip.includes("Simplifier") && after >= 5000
+        && (!serverMode || (chip.includes("0,5 Spark") && (await sparksShown()) === sparksBefore)), `${target.title} : ${chip} après ${(after / 1000).toFixed(1)} s`);
+      await clickSel(`.card[data-id="${target.id}"] .card-evolve-go`);
+      const done = await waitFor(() => evaluate(`(() => { const t = document.getElementById("toast"); const c = document.querySelector('.card[data-id="${target.id}"]');
+        return !t.hidden && t.textContent.includes("simplifiée") && /ready|warn/.test(c.dataset.state) ? t.textContent : null; })()`), "widget simplifié", 60000).catch(() => "");
+      const simplified = await findFrame(`!!document.getElementById("refactored")`, "widget simplifié (faux Gemini)").then(() => true).catch(() => false);
+      check("« Simplifier » : la carte est refactorisée (0,5 Spark), annulable", done.includes("Annuler") && simplified
+        && (!serverMode || Math.abs(parseFloat(sparksBefore.replace(",", ".")) - parseFloat((await sparksShown()).replace(",", ".")) - 0.5) < 0.05), done);
+    }
+
     // ------------------------------------------------------------------ 15. Solde épuisé (serveur)
     if (serverMode) {
       const balance = await evaluate(`parseFloat(document.getElementById("sparks-count").textContent.replace(",", "."))`);
@@ -686,9 +723,14 @@ async function main() {
     check("scénario complet", false, err.message);
   } finally {
     check("aucune exception JS dans Prism", !pageErrors.length, pageErrors.join(" | "));
-    browser.kill();
-    await sleep(600);
-    try { rmSync(work, { recursive: true, force: true }); } catch { /* verrou Windows */ }
+    // Profil Chrome jetable : attendre la fin du navigateur (ses processus verrouillent le dossier sous Windows),
+    // puis supprimer en plusieurs essais ; un reste est signalé, jamais ignoré (des centaines de Mo par passage).
+    const exited = browser.exitCode !== null ? Promise.resolve() : new Promise((resolve) => browser.once("exit", resolve));
+    // Windows : kill() n'arrête que le processus principal, ses enfants (rendu, GPU) gardent le profil ouvert.
+    if (process.platform === "win32") spawnSync("taskkill", ["/PID", String(browser.pid), "/T", "/F"], { stdio: "ignore" });
+    else browser.kill();
+    await Promise.race([exited, sleep(5000)]);
+    try { rmSync(work, { recursive: true, force: true, maxRetries: 20, retryDelay: 400 }); } catch (err) { console.warn(`Profil temporaire non supprimé : ${work} (${err.code || err.message})`); }
   }
 
   for (const { label, ok, detail } of results) console.log(`  ${ok ? "OK   " : "ÉCHEC"}  ${label}${detail ? `  (${detail})` : ""}`);

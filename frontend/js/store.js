@@ -43,7 +43,9 @@ const FIELDS = ["id", "title", "prompt", "html", "file", "storage", "accent", "x
   // Bus d'évènements : sujets émis/écoutés connus, carte isolée.
   "topics", "busMuted",
   // Engramme : conversation « Discuter avec … » (messages et traces logiques, sur cet appareil).
-  "chat"];
+  "chat",
+  // V5 : mots du contexte fantôme (sédiments) reçus à la génération, montrés dans l'inspecteur.
+  "ghost"];
 
 export function serialize(card) {
   const out = {};

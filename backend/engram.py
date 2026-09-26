@@ -39,6 +39,8 @@ SCHEMA = json.loads((ENGRAM_DIR / "schema.json").read_text(encoding="utf-8"))
 SYSTEM_PROMPT = (ENGRAM_DIR / "system-prompt.txt").read_text(encoding="utf-8").strip()
 USER_TEMPLATE = (ENGRAM_DIR / "user-template.txt").read_text(encoding="utf-8").strip()
 DEMO = json.loads((ENGRAM_DIR / "demo-marie-curie.json").read_text(encoding="utf-8"))
+# Démonstrations sans modèle : la personne demandée si elle en a une, sinon Marie Curie.
+DEMOS = {"marie-curie": DEMO, "ada-lovelace": json.loads((ENGRAM_DIR / "demo-ada-lovelace.json").read_text(encoding="utf-8"))}
 # Conversation avec un Engramme (« Discuter avec … ») : mêmes fichiers pour le moteur navigateur.
 CHAT_SYSTEM = (ENGRAM_DIR / "chat-system.txt").read_text(encoding="utf-8").strip()
 CHAT_TEMPLATE = (ENGRAM_DIR / "chat-template.txt").read_text(encoding="utf-8").strip()
@@ -262,8 +264,14 @@ def build_user_message(person: str, language: str) -> str:
     return re.sub(r"\{\{(person|language)\}\}", lambda m: values[m.group(1)], USER_TEMPLATE)
 
 
-def demo_engram() -> dict:
-    return normalize(DEMO)
+def demo_engram(person: str = "") -> dict:
+    """Engramme de démonstration : Ada Lovelace si elle est demandée, Marie Curie sinon."""
+    return normalize(DEMOS[demo_key(person)])
+
+
+def demo_key(person: str) -> str:
+    plain = "".join(c for c in unicodedata.normalize("NFKD", person.lower()) if not 0x300 <= ord(c) <= 0x36F)
+    return "ada-lovelace" if "lovelace" in plain or re.search(r"\bada\b", plain) else "marie-curie"
 
 
 # --------------------------------------------------------------------------- #
@@ -482,8 +490,19 @@ def fusion_events(a: dict, b: dict) -> list[dict]:
     return events
 
 
+def _plain(value):
+    """JSON identique à JSON.stringify : un nombre entier s'écrit « 1 », pas « 1.0 »."""
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, dict):
+        return {k: _plain(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_plain(v) for v in value]
+    return value
+
+
 def build_fusion_message(a: dict, b: dict, events: list[dict], language: str) -> str:
-    compact = lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":"))  # noqa: E731
+    compact = lambda value: json.dumps(_plain(value), ensure_ascii=False, separators=(",", ":"))  # noqa: E731
     values = {
         "a_person": a["person"], "b_person": b["person"], "a_json": compact(a), "b_json": compact(b),
         "events": compact([{k: n[k] for k in ("id", "type", "title", "date", "impact", "sources")} for n in events]),
@@ -677,7 +696,7 @@ async def create_engram(req: EngramRequest, user: User = Depends(current_user)) 
         if providers:
             engram, mode, model = await run_models(providers, app._http_client, person, req.language, app.TIMEOUT_S)
         else:
-            engram, mode, model = demo_engram(), "mock", "mock:engram-marie-curie"
+            engram, mode, model = demo_engram(person), "mock", f"mock:engram-{demo_key(person)}"
     except EngramRefused as exc:
         await asyncio.shield(asyncio.to_thread(billing.refund, reservation))
         raise HTTPException(status_code=422, detail={"code": "engram_refused", "message": str(exc)}) from exc

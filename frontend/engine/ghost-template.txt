@@ -1,0 +1,3 @@
+GHOST CONTEXT: at this spot of the canvas the user once dissolved widgets about: {{words}}.
+Weave these fragments in subtly (a nuance of tone, an example, a label) only where they enrich the request; never
+let them change what the widget is for.

@@ -527,6 +527,38 @@
       "absent": [
         "{{"
       ]
+    },
+    {
+      "name": "contexte fantôme (sédimentation)",
+      "prompt": "une liste de courses",
+      "ghost": [
+        "  radium ",
+        "laboratoire  nocturne",
+        "{{prompt}}"
+      ],
+      "contains": [
+        "GHOST CONTEXT",
+        "dissolved widgets about: radium, laboratoire nocturne, {{prompt}}.",
+        "<<<\nune liste de courses\n>>>"
+      ],
+      "absent": [
+        "{{ghost}}",
+        "{{words}}"
+      ]
+    },
+    {
+      "name": "contexte fantôme ignoré en refactorisation",
+      "prompt": "ajoute un titre",
+      "base_html": "<!DOCTYPE html><html><body>x</body></html>",
+      "ghost": [
+        "radium"
+      ],
+      "contains": [
+        "current source"
+      ],
+      "absent": [
+        "GHOST CONTEXT"
+      ]
     }
   ],
   "engram": [
@@ -1754,6 +1786,947 @@
         "un",
         "objet"
       ]
+    }
+  ],
+  "engram_fusion": [
+    {
+      "name": "Curie × Lovelace : évènements hérités, message, démo, finition d'une réponse",
+      "a": {
+        "patch": []
+      },
+      "b": {
+        "patch": [
+          [
+            "set",
+            [
+              "person"
+            ],
+            "Ada Lovelace"
+          ],
+          [
+            "set",
+            [
+              "domain"
+            ],
+            "Mathématiques, 1833-1852"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              20,
+              "date"
+            ],
+            "1831-11"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              20,
+              "intensity"
+            ],
+            0.6
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              21,
+              "date"
+            ],
+            "1835-07-26"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              21,
+              "intensity"
+            ],
+            0.9
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              22,
+              "date"
+            ],
+            "1838-07"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              22,
+              "intensity"
+            ],
+            0.55
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              23,
+              "date"
+            ],
+            "1838-12-26"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              23,
+              "intensity"
+            ],
+            0.2
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              24,
+              "date"
+            ],
+            "1842"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              24,
+              "intensity"
+            ],
+            0.4
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              25,
+              "date"
+            ],
+            "1843-12"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              25,
+              "intensity"
+            ],
+            0.6
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              26,
+              "date"
+            ],
+            "1846-04-19"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              26,
+              "intensity"
+            ],
+            0.9
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              27,
+              "date"
+            ],
+            "1851-01"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              27,
+              "intensity"
+            ],
+            0.55
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              28,
+              "date"
+            ],
+            "1851-12"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              28,
+              "intensity"
+            ],
+            0.2
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              29,
+              "date"
+            ],
+            "1854"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              29,
+              "intensity"
+            ],
+            0.4
+          ]
+        ]
+      },
+      "raw": {
+        "person": "ignoré",
+        "domain": "",
+        "summary": "Un esprit hybride.",
+        "temperament": "Tenace et visionnaire.",
+        "climate": [
+          {
+            "emotion": "passion",
+            "weight": 0.6
+          },
+          {
+            "emotion": "emerveillement",
+            "weight": 0.4
+          }
+        ],
+        "nodes": [
+          {
+            "id": "core",
+            "category": "core",
+            "type": "axiome",
+            "title": "Calculer la lumière",
+            "content": "c",
+            "directive": "d",
+            "basis": "documente",
+            "evidence": "A: x; B: y",
+            "intensity": 1,
+            "sources": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "id": "h1",
+            "category": "heart",
+            "type": "trait",
+            "title": "Cœur 1",
+            "content": "c",
+            "directive": "d",
+            "basis": "declare",
+            "evidence": "",
+            "intensity": 0.55,
+            "sources": [
+              "a"
+            ]
+          },
+          {
+            "id": "h2",
+            "category": "heart",
+            "type": "emotion",
+            "title": "Cœur 2",
+            "content": "c",
+            "directive": "d",
+            "basis": "declare",
+            "evidence": "",
+            "intensity": 0.6,
+            "sources": [
+              "b",
+              "z"
+            ],
+            "emotion": "passion"
+          },
+          {
+            "id": "h3",
+            "category": "heart",
+            "type": "attachement",
+            "title": "Cœur 3",
+            "content": "c",
+            "directive": "d",
+            "basis": "declare",
+            "evidence": "",
+            "intensity": 0.65,
+            "sources": "ab"
+          },
+          {
+            "id": "h4",
+            "category": "heart",
+            "type": "trait",
+            "title": "Cœur 4",
+            "content": "c",
+            "directive": "d",
+            "basis": "declare",
+            "evidence": "",
+            "intensity": 0.7,
+            "sources": []
+          },
+          {
+            "id": "h5",
+            "category": "heart",
+            "type": "trait",
+            "title": "Cœur 5",
+            "content": "c",
+            "directive": "d",
+            "basis": "declare",
+            "evidence": "",
+            "intensity": 0.7,
+            "sources": [
+              "b"
+            ]
+          },
+          {
+            "id": "h6",
+            "category": "heart",
+            "type": "trait",
+            "title": "Cœur 6",
+            "content": "c",
+            "directive": "d",
+            "basis": "declare",
+            "evidence": "",
+            "intensity": 0.7,
+            "sources": [
+              "b"
+            ]
+          },
+          {
+            "id": "e1",
+            "category": "engine",
+            "type": "algorithme_resolution",
+            "title": "Moteur 1",
+            "content": "c",
+            "directive": "d",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 0.6,
+            "sources": [
+              "b"
+            ]
+          },
+          {
+            "id": "e2",
+            "category": "engine",
+            "type": "empreinte_syntaxique",
+            "title": "Moteur 2",
+            "content": "c",
+            "directive": "d",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 0.6,
+            "sources": [
+              "b"
+            ],
+            "keywords": [
+              "x",
+              "y",
+              "z"
+            ]
+          },
+          {
+            "id": "e3",
+            "category": "engine",
+            "type": "matrice_esthetique",
+            "title": "Moteur 3",
+            "content": "c",
+            "directive": "d",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 0.6,
+            "sources": [
+              "b"
+            ],
+            "palette": [
+              "#112233",
+              "#445566"
+            ]
+          },
+          {
+            "id": "e4",
+            "category": "engine",
+            "type": "methode_travail",
+            "title": "Moteur 4",
+            "content": "c",
+            "directive": "d",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 0.6,
+            "sources": [
+              "b"
+            ]
+          },
+          {
+            "id": "e5",
+            "category": "engine",
+            "type": "algorithme_resolution",
+            "title": "Moteur 5",
+            "content": "c",
+            "directive": "d",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 0.6,
+            "sources": [
+              "b"
+            ]
+          },
+          {
+            "id": "e6",
+            "category": "engine",
+            "type": "empreinte_syntaxique",
+            "title": "Moteur 6",
+            "content": "c",
+            "directive": "d",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 0.6,
+            "sources": [
+              "b"
+            ],
+            "keywords": [
+              "x",
+              "y",
+              "z"
+            ]
+          },
+          {
+            "id": "e7",
+            "category": "engine",
+            "type": "matrice_esthetique",
+            "title": "Moteur 7",
+            "content": "c",
+            "directive": "d",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 0.6,
+            "sources": [
+              "b"
+            ],
+            "palette": [
+              "#112233",
+              "#445566"
+            ]
+          },
+          {
+            "id": "e8",
+            "category": "engine",
+            "type": "methode_travail",
+            "title": "Moteur 8",
+            "content": "c",
+            "directive": "d",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 0.6,
+            "sources": [
+              "b"
+            ]
+          },
+          {
+            "id": "s1",
+            "category": "shadow",
+            "type": "paradoxe",
+            "title": "Ombre 1",
+            "content": "c",
+            "directive": "d",
+            "basis": "documente",
+            "evidence": "",
+            "intensity": 0.4,
+            "sources": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "id": "s2",
+            "category": "shadow",
+            "type": "peur_primaire",
+            "title": "Ombre 2",
+            "content": "c",
+            "directive": "d",
+            "basis": "documente",
+            "evidence": "",
+            "intensity": 0.4,
+            "sources": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "id": "s3",
+            "category": "shadow",
+            "type": "biais_cognitif",
+            "title": "Ombre 3",
+            "content": "c",
+            "directive": "d",
+            "basis": "documente",
+            "evidence": "",
+            "intensity": 0.4,
+            "sources": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "id": "s4",
+            "category": "shadow",
+            "type": "paradoxe",
+            "title": "Ombre 4",
+            "content": "c",
+            "directive": "d",
+            "basis": "documente",
+            "evidence": "",
+            "intensity": 0.4,
+            "sources": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "id": "s5",
+            "category": "shadow",
+            "type": "peur_primaire",
+            "title": "Ombre 5",
+            "content": "c",
+            "directive": "d",
+            "basis": "documente",
+            "evidence": "",
+            "intensity": 0.4,
+            "sources": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "id": "s6",
+            "category": "shadow",
+            "type": "biais_cognitif",
+            "title": "Ombre 6",
+            "content": "c",
+            "directive": "d",
+            "basis": "documente",
+            "evidence": "",
+            "intensity": 0.4,
+            "sources": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "id": "s7",
+            "category": "shadow",
+            "type": "paradoxe",
+            "title": "Ombre 7",
+            "content": "c",
+            "directive": "d",
+            "basis": "documente",
+            "evidence": "",
+            "intensity": 0.4,
+            "sources": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "id": "s8",
+            "category": "shadow",
+            "type": "peur_primaire",
+            "title": "Ombre 8",
+            "content": "c",
+            "directive": "d",
+            "basis": "documente",
+            "evidence": "",
+            "intensity": 0.4,
+            "sources": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "id": "s9",
+            "category": "shadow",
+            "type": "biais_cognitif",
+            "title": "Ombre 9",
+            "content": "c",
+            "directive": "d",
+            "basis": "documente",
+            "evidence": "",
+            "intensity": 0.4,
+            "sources": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "id": "s10",
+            "category": "shadow",
+            "type": "paradoxe",
+            "title": "Ombre 10",
+            "content": "c",
+            "directive": "d",
+            "basis": "documente",
+            "evidence": "",
+            "intensity": 0.4,
+            "sources": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "id": "s11",
+            "category": "shadow",
+            "type": "peur_primaire",
+            "title": "Ombre 11",
+            "content": "c",
+            "directive": "d",
+            "basis": "documente",
+            "evidence": "",
+            "intensity": 0.4,
+            "sources": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "id": "s12",
+            "category": "shadow",
+            "type": "biais_cognitif",
+            "title": "Ombre 12",
+            "content": "c",
+            "directive": "d",
+            "basis": "documente",
+            "evidence": "",
+            "intensity": 0.4,
+            "sources": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "id": "e1",
+            "category": "engine",
+            "type": "methode_travail",
+            "title": "Doublon",
+            "content": "c",
+            "directive": "d",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 0.1,
+            "sources": [
+              "a"
+            ]
+          },
+          {
+            "id": "x",
+            "category": "artifact",
+            "type": "succes",
+            "title": "Évènement inventé",
+            "content": "c",
+            "directive": "d",
+            "basis": "documente",
+            "evidence": "",
+            "intensity": 1,
+            "date": "1900",
+            "impact": "i"
+          },
+          "pas un nœud"
+        ],
+        "links": [
+          {
+            "from": "ev3",
+            "to": "core",
+            "kind": "forge"
+          },
+          {
+            "from": "h1",
+            "to": "ev9",
+            "kind": "nourrit"
+          },
+          {
+            "from": "x",
+            "to": "core",
+            "kind": "forge"
+          }
+        ]
+      }
+    },
+    {
+      "name": "réponse inutilisable (trop peu de bulles)",
+      "a": {
+        "patch": []
+      },
+      "b": {
+        "patch": [
+          [
+            "set",
+            [
+              "person"
+            ],
+            "Ada Lovelace"
+          ],
+          [
+            "set",
+            [
+              "domain"
+            ],
+            "Mathématiques, 1833-1852"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              20,
+              "date"
+            ],
+            "1831-11"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              20,
+              "intensity"
+            ],
+            0.6
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              21,
+              "date"
+            ],
+            "1835-07-26"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              21,
+              "intensity"
+            ],
+            0.9
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              22,
+              "date"
+            ],
+            "1838-07"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              22,
+              "intensity"
+            ],
+            0.55
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              23,
+              "date"
+            ],
+            "1838-12-26"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              23,
+              "intensity"
+            ],
+            0.2
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              24,
+              "date"
+            ],
+            "1842"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              24,
+              "intensity"
+            ],
+            0.4
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              25,
+              "date"
+            ],
+            "1843-12"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              25,
+              "intensity"
+            ],
+            0.6
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              26,
+              "date"
+            ],
+            "1846-04-19"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              26,
+              "intensity"
+            ],
+            0.9
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              27,
+              "date"
+            ],
+            "1851-01"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              27,
+              "intensity"
+            ],
+            0.55
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              28,
+              "date"
+            ],
+            "1851-12"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              28,
+              "intensity"
+            ],
+            0.2
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              29,
+              "date"
+            ],
+            "1854"
+          ],
+          [
+            "set",
+            [
+              "nodes",
+              29,
+              "intensity"
+            ],
+            0.4
+          ]
+        ]
+      },
+      "raw": {
+        "nodes": [],
+        "links": []
+      }
+    },
+    {
+      "name": "même personne : refus",
+      "a": {
+        "patch": []
+      },
+      "b": {
+        "patch": [
+          [
+            "set",
+            [
+              "person"
+            ],
+            "MARIE CURIE"
+          ]
+        ]
+      },
+      "raw": null
+    },
+    {
+      "name": "ancien format : refus",
+      "a": {
+        "patch": []
+      },
+      "b": {
+        "patch": [
+          [
+            "set",
+            [
+              "person"
+            ],
+            "X"
+          ],
+          [
+            "remove",
+            [
+              "nodes",
+              36
+            ]
+          ],
+          [
+            "remove",
+            [
+              "nodes",
+              35
+            ]
+          ],
+          [
+            "remove",
+            [
+              "nodes",
+              34
+            ]
+          ]
+        ]
+      },
+      "raw": null
     }
   ]
 }

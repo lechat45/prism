@@ -31,9 +31,9 @@ function matches(item, query) {
   return query.split(/\s+/).every((word) => haystack.includes(word));
 }
 
-/** Nom de la personne d'un Engramme (« Engramme · Marie Curie », « Engramme : Marie Curie »), sinon null. */
+/** Nom de la personne d'un Engramme (« Engramme · Marie Curie », « Engramme : Marie Curie », V5 : « Hyper-Engramme · A × B »), sinon null. */
 export function personOf(item) {
-  const m = /^Engramme\s*·\s*(.+)$/.exec(item.title || "") || /^Engramme\s*:\s*(.+)$/i.exec(item.prompt || "");
+  const m = /^(?:Hyper-)?Engramme\s*·\s*(.+)$/.exec(item.title || "") || /^Engramme\s*:\s*(.+)$/i.exec(item.prompt || "");
   return m ? m[1].trim() : null;
 }
 

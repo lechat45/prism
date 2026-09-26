@@ -4,7 +4,9 @@ import { account, api, canAfford, onAccountChange, setSparks, signOut } from "./
 import { initAccountUi, openAuth, openPro, requireAccount } from "./account-ui.js";
 import { Bus } from "./bus.js";
 import { Canvas, CARD_MIN_H, CARD_MIN_W } from "./canvas.js";
-import { chatWithEngram, createEngram, engine, engineReady, generate, hasModel, initSettings, onEngineChange, openSettings } from "./engine.js";
+import { ConfusionWatcher } from "./confusion.js";
+import { AUTO_PER_DAY, eco } from "./ecosystem.js";
+import { chatWithEngram, createEngram, engine, engineReady, fuseEngrams, generate, hasModel, initSettings, onEngineChange, openSettings } from "./engine.js";
 import { CATEGORY_LABELS, dnaFrom, engramHtml, engramOf, engramRequest, isEngram } from "./engram.js";
 import { EngramChat } from "./chat.js";
 import { initPrefs, openPrefs } from "./prefs.js";
@@ -16,6 +18,7 @@ import { initHub, openHub } from "./hub.js";
 import { Reflections } from "./reflections.js";
 import { Spotlight } from "./spotlight.js";
 import { acceptStorage, acceptThumbnail, bootSrcdoc, buildSrcdoc, exportHtml, FRAME_SANDBOX, isAccent, needsBoot } from "./sandbox.js";
+import { drawSediments, keywordsOf, SedimentStore, sedimentDot, shatter } from "./sediment.js";
 import { cardStore, loadView, saveView } from "./store.js";
 import { fetchWidget, flushAll, importCard, isLinked, listWidgets, markSynced, pushThumbnail, queueSync, removeFromCanvas, unlink, uploadFile } from "./sync.js";
 import { Incantation } from "./voice.js";
@@ -156,7 +159,7 @@ const canvas = new Canvas({
     if (!card) return;
     if (action === "close") closeCard(card);
     else if (action === "cancel") card.controller?.abort();
-    else if (action === "retry") (card.engramPerson ? runEngram(card) : runGeneration(card));
+    else if (action === "retry") (card.fusionOf ? runFusion(card) : card.engramPerson ? runEngram(card) : runGeneration(card));
   },
   onBackground: () => {
     canvas.deselect();
@@ -164,6 +167,8 @@ const canvas = new Canvas({
     hideFractal();
   },
   onPlace: () => redrawLinks(),
+  onDrag: (card, sx, sy) => dragFusion(card, sx, sy),
+  onDrop: (card, sx, sy) => dropFusion(card, sx, sy),
   onAdd: (card, el) => reflections.observe(card, el),
   onRemove: (id) => reflections.unobserve(id),
 });
@@ -215,6 +220,7 @@ const inspector = new Inspector({
     toast("Données du widget effacées");
   },
   remove: (card) => closeCard(card),
+  dissolve: (card) => dissolveCard(card),
   openSettings,
   hasModel,
   engineKind: () => engine.kind,
@@ -427,13 +433,19 @@ async function runGeneration(card) {
   const controller = new AbortController();
   card.controller = controller;
   const text = card.file ? `Prism analyse ${card.file.name}…` : "Prism réfracte votre demande…";
-  setStatus(card, "loading", { text: card.dna ? `ADN « ${card.dna.title} » · ${text}` : text });
+  const ghostText = card.ghost?.length ? `Contexte sédimenté : ${card.ghost.slice(0, 4).join(", ")} · ` : "";
+  setStatus(card, "loading", { text: ghostText + (card.dna ? `ADN « ${card.dna.title} » · ${text}` : text) });
   startTimer(card);
   try {
-    const request = { prompt: card.prompt, file: forRequest(card.file), canvas: bus.context(card), dna: card.dna || null };
+    const request = { prompt: card.prompt, file: forRequest(card.file), canvas: bus.context(card), dna: card.dna || null, ghost: card.ghost || null };
     const payload = await generate(request, controller.signal);
     if (!cards.has(card.id)) return;
     applyPayload(card, payload);
+    if (card.ghostFrom) {
+      sediments.consume(card.ghostFrom); // la zone s'use : trois générations, puis ses sédiments s'effacent
+      delete card.ghostFrom;
+      drawSediments($("world"), sediments.all());
+    }
     setStatus(card, "ready");
     mountWidget(card);
     persist(card);
@@ -456,14 +468,14 @@ async function runGeneration(card) {
   }
 }
 
-async function refactorCard(card, instruction) {
+async function refactorCard(card, instruction, { done = "Carte refactorisée" } = {}) {
   if (card.status === "busy" || card.status === "loading") return;
   if (isEngram(card)) {
     toast("Un Engramme ne se refactorise pas : cliquez une bulle pour en faire un filtre ADN, puis décrivez votre widget.", { timeout: 6000 });
     return;
   }
   if (engine.kind === "server") {
-    if (!requireAccount(() => refactorCard(card, instruction), "Connectez-vous pour refactoriser vos widgets.")) return;
+    if (!requireAccount(() => refactorCard(card, instruction, { done }), "Connectez-vous pour refactoriser vos widgets.")) return;
     if (!canAfford("refactor")) return openPro({ sparks: account.user.sparks, required: account.pricing.refactor });
     if (!isLinked(card)) {
       // Carte créée hors compte (moteur navigateur, avant connexion) : ajoutée d'abord à « Mon Hub ».
@@ -493,11 +505,11 @@ async function refactorCard(card, instruction) {
     mountWidget(card);
     persist(card);
     if (inspector.card?.id === card.id) $("refactor-input").value = "";
-    toast("Carte refactorisée", { action: { label: "Annuler", onClick: () => undoRefactor(card) }, timeout: 6000 });
+    toast(done, { action: { label: "Annuler", onClick: () => undoRefactor(card) }, timeout: 8000 });
   } catch (err) {
     if (!cards.has(card.id)) return;
     setStatus(card, "ready");
-    if (err.name === "AbortError" || handleAccountError(err, () => refactorCard(card, instruction))) return;
+    if (err.name === "AbortError" || handleAccountError(err, () => refactorCard(card, instruction, { done }))) return;
     toast(`Refactorisation impossible : ${err.message}`, { tone: "error", timeout: 7000 });
   } finally {
     stopTimer(card);
@@ -556,9 +568,11 @@ function canLaunch(action, retry, reason) {
 function launchCard({ prompt, title, file = null, dna: trait = null, dnaSource = null, at = null, near = null, from = null }) {
   const { w, h } = newCardSize(file ? SIZES.file : SIZES.widget);
   const spot = at ? { x: Math.round(at.x - w / 2), y: Math.round(at.y - h / 2) } : near ? canvas.spotNear(near, w, h) : canvas.findSpot(w, h);
+  // V5 : une carte née là où d'autres ont été dissoutes reçoit leurs mots-clés (contexte fantôme, visible).
+  const ghost = eco.sediment ? sediments.ghostAt(spot.x + w / 2, spot.y + h / 2) : null;
   const card = {
     id: uid(), title, prompt, html: "", file, storage: {}, accent: null, ...spot, w, h,
-    createdAt: Date.now(), history: [], status: "loading", dna: trait, dnaSource,
+    createdAt: Date.now(), history: [], status: "loading", dna: trait, dnaSource, ghost: ghost?.words, ghostFrom: ghost?.ids,
   };
   cards.set(card.id, card);
   canvas.add(card, { from });
@@ -606,8 +620,10 @@ async function runEngram(card) {
     setStatus(card, "ready");
     mountWidget(card);
     persist(card);
-    if (payload.mode === "mock" && !/curie/i.test(card.engramPerson)) {
-      toast(`Mode démo : voici l'Engramme d'exemple (Marie Curie). ${engine.kind === "server" ? "Le serveur n'a pas de clé Gemini." : "Ajoutez votre clé Gemini pour cartographier « " + card.engramPerson + " »."}`, { timeout: 8000 });
+    const asked = card.engramPerson.toLowerCase();
+    const person = payload.engram.person.toLowerCase();
+    if (payload.mode === "mock" && !person.split(/\s+/).some((word) => word.length > 2 && asked.includes(word))) {
+      toast(`Mode démo : voici l'Engramme d'exemple (${payload.engram.person} ; démos : Marie Curie, Ada Lovelace). ${engine.kind === "server" ? "Le serveur n'a pas de clé Gemini." : "Ajoutez votre clé Gemini pour cartographier « " + card.engramPerson + " »."}`, { timeout: 8000 });
     }
     if (engine.kind === "server" && account.user) {
       // Rangé dans « Mon Hub » (gratuit : les Sparks ont payé l'Engramme) : synchronisé comme un widget.
@@ -688,6 +704,115 @@ async function injectDna(source, nodeId, { file = null, text = "" }) {
     file: att, dna: trait, dnaSource: { cardId: source.id, nodeId }, near: source,
   });
   toast(`ADN « ${trait.title} » injecté`);
+}
+
+// ============================================================================
+// V5 · Singularité symbiotique : un Engramme lâché sur un autre → Hyper-Engramme
+// ============================================================================
+let fusionPair = null; // { source, target } pendant le glisser
+
+/** Engramme prêt sous le point (sx, sy) de l'écran, autre que la carte tenue (null sinon). */
+function fusionTargetAt(card, sx, sy) {
+  const hit = card && isEngram(card) && !card.fusionOf ? canvas.cardAt(sx, sy, card.id) : null;
+  return hit && hit.status === "ready" && isEngram(hit) ? hit : null;
+}
+
+function dragFusion(card, sx, sy) {
+  const target = fusionTargetAt(card, sx, sy);
+  if (fusionPair?.target === target && fusionPair?.source === card) return;
+  if (fusionPair) {
+    canvas.element(fusionPair.target.id)?.classList.remove("is-fusion-target");
+    canvas.element(fusionPair.source.id)?.classList.remove("is-fusion-source");
+  }
+  fusionPair = target ? { source: card, target } : null;
+  if (!target) return;
+  canvas.element(target.id)?.classList.add("is-fusion-target");
+  canvas.element(card.id)?.classList.add("is-fusion-source");
+}
+
+/** Lâcher sur un autre Engramme : la carte revient à sa place et la fusion est proposée (payante : jamais d'office). */
+function dropFusion(card, sx, sy) {
+  // Cible vue pendant le glisser, sinon celle du point de lâcher (déplacements regroupés sur une page chargée).
+  const target = fusionPair?.source === card ? fusionPair.target : fusionTargetAt(card, sx, sy);
+  if (!target) return false;
+  const a = engramOf(card);
+  const b = engramOf(target);
+  if (!a || !b) return false;
+  if (a.person.toLowerCase() === b.person.toLowerCase()) {
+    toast("Une fusion demande deux personnes différentes.", { tone: "error" });
+    return true;
+  }
+  const price = engine.kind === "server" ? account.pricing.engram_fusion : undefined;
+  const cost = Number.isFinite(price) ? ` (${String(price).replace(".", ",")} Sparks)` : "";
+  toast(`Fusionner ${a.person} et ${b.person} en un Hyper-Engramme ?`, {
+    action: { label: `Fusionner${cost}`, onClick: () => startFusion(a, b, { near: target, from: centerOf(card, target) }) },
+    timeout: 10000,
+  });
+  return true;
+}
+
+const centerOf = (a, b) => ({ x: (a.x + a.w / 2 + b.x + b.w / 2) / 2, y: (a.y + a.h / 2 + b.y + b.h / 2) / 2 });
+
+function startFusion(a, b, { near = null, from = null } = {}) {
+  if (!canLaunch("engram_fusion", () => startFusion(a, b, { near, from }), "Connectez-vous pour fusionner deux Engrammes.")) return;
+  const { w, h } = newCardSize(SIZES.engram);
+  const spot = near && cards.has(near.id) ? canvas.spotNear(near, w, h) : canvas.findSpot(w, h);
+  const card = {
+    id: uid(), title: `Hyper-Engramme · ${a.person} × ${b.person}`, prompt: `Fusion : ${a.person} × ${b.person}`, html: "", file: null,
+    storage: {}, accent: null, ...spot, w, h, createdAt: Date.now(), history: [], status: "loading", fusionOf: [a, b],
+  };
+  cards.set(card.id, card);
+  canvas.add(card, { from });
+  canvas.select(card.id);
+  canvas.ensureVisible(card);
+  runFusion(card);
+}
+
+async function runFusion(card) {
+  const [a, b] = card.fusionOf;
+  const controller = new AbortController();
+  card.controller = controller;
+  setStatus(card, "loading", { text: `Singularité : ${a.person} et ${b.person} fusionnent…` });
+  startTimer(card);
+  const started = performance.now();
+  try {
+    const payload = await fuseEngrams(a, b, controller.signal);
+    const html = await engramHtml(payload.engram, engine.libs);
+    if (!cards.has(card.id)) return;
+    Object.assign(card, {
+      html, mode: payload.mode, model: payload.model, warnings: [], thumbStale: true,
+      title: `Hyper-Engramme · ${payload.engram.person}`, elapsed_ms: Math.round(performance.now() - started),
+    });
+    delete card.fusionOf;
+    bus.learn(card);
+    if (Number.isFinite(payload.sparks)) setSparks(payload.sparks);
+    setStatus(card, "ready");
+    mountWidget(card);
+    persist(card);
+    if (payload.mode === "mock") {
+      toast(`Mode démo : fusion calculée sans Gemini (${engine.kind === "server" ? "le serveur n'a pas de clé" : "ajoutez votre clé Gemini pour une vraie synthèse"}).`, { timeout: 7000 });
+    }
+    if (engine.kind === "server" && account.user) {
+      importCard(card).then(() => persist(card)).catch((err) => console.warn("Prism : Hyper-Engramme non ajouté à Mon Hub", err));
+    }
+  } catch (err) {
+    if (!cards.has(card.id)) return;
+    if (err.name === "AbortError") {
+      discard(card);
+      toast("Fusion annulée");
+    } else if (err.code === "insufficient_sparks" || err.code === "auth_required") {
+      discard(card);
+      handleAccountError(err, () => startFusion(a, b));
+    } else if (err.code === "fusion_invalid" || err.name === "FusionError") {
+      discard(card);
+      toast(`Fusion impossible : ${err.message}`, { tone: "error", timeout: 8000 });
+    } else {
+      setStatus(card, "error", { error: `Échec de la fusion : ${err.message}` });
+    }
+  } finally {
+    stopTimer(card);
+    card.controller = null;
+  }
 }
 
 // ============================================================================
@@ -803,6 +928,7 @@ function openChat(card) {
 
 /** Retire une carte sans possibilité de retour (génération annulée ou échouée). */
 function discard(card) {
+  confusion.forget(card.id);
   if (chat.card?.id === card.id) chat.close();
   if (dna?.cardId === card.id) clearDna();
   if (fractalOffer?.card === card) hideFractal();
@@ -815,7 +941,7 @@ function discard(card) {
   updateEmpty();
 }
 
-function closeCard(card) {
+function closeCard(card, { message = `« ${card.title} » fermée`, undo = () => restoreCard(card) } = {}) {
   card.controller?.abort();
   const hadWidget = Boolean(card.html);
   discard(card);
@@ -824,10 +950,113 @@ function closeCard(card) {
   if (!hadWidget) return;
   cardStore.remove(card.id).catch(storageFailure);
   removeFromCanvas(card); // le widget reste dans « Mon Hub »
-  toast(`« ${card.title} » fermée`, {
-    action: { label: "Rétablir", onClick: () => restoreCard(card) },
-    timeout: 6000,
+  toast(message, { action: { label: "Rétablir", onClick: undo }, timeout: 8000 });
+}
+
+// ============================================================================
+// V5 · Sédimentation : « Dissoudre » brise la carte, ses mots-clés restent dans le sol du canvas
+// ============================================================================
+const sediments = new SedimentStore();
+drawSediments($("world"), sediments.all());
+
+async function dissolveCard(card) {
+  const el = canvas.element(card.id);
+  if (!el || !cards.has(card.id) || card.status === "loading" || card.status === "busy" || card.dissolving) return;
+  card.dissolving = true;
+  inspector.close();
+  const engram = engramOf(card);
+  const words = keywordsOf(engram ? engram.person : card.title, card.prompt);
+  const center = { x: card.x + card.w / 2, y: card.y + card.h / 2 };
+  const ws = $("workspace").getBoundingClientRect();
+  const target = { x: ws.left + canvas.view.x + center.x * canvas.view.z, y: ws.top + canvas.view.y + center.y * canvas.view.z };
+  const rect = el.getBoundingClientRect();
+  el.classList.add("is-dissolving");
+  await shatter(rect, target, card.accent || "#7cc4ff");
+  delete card.dissolving;
+  el.classList.remove("is-dissolving");
+  if (!cards.has(card.id)) return;
+  const sediment = sediments.deposit({ id: card.id, ...center, words, title: card.title });
+  if (sediment) $("world").append(sedimentDot(sediment, true));
+  closeCard(card, {
+    message: sediment ? `« ${card.title} » dissoute : ${words.join(", ")} sédimentés ici` : `« ${card.title} » dissoute`,
+    undo: () => {
+      sediments.remove(card.id);
+      drawSediments($("world"), sediments.all());
+      restoreCard(card);
+    },
   });
+}
+
+// ============================================================================
+// V5 · Darwinisme d'interface : pointeur qui tourne en rond → simplification proposée (jamais d'office)
+// ============================================================================
+const SIMPLIFY = [
+  "Simplifie l'expérience de ce widget : son utilisateur a tourné autour plusieurs secondes sans trouver quoi faire.",
+  "Rends l'action principale évidente (un bouton ou un champ clairement libellé, en haut), réduis le nombre de contrôles",
+  "visibles (regroupe ou replie le secondaire), ajoute une phrase d'aide courte et agrandis les zones cliquables.",
+  "Garde toutes les fonctions, les données enregistrées et le style.",
+].join(" ");
+
+const confusion = new ConfusionWatcher({
+  analyze: (samples, clicks, now) => run("confusion", { samples, clicks, now }),
+  onConfused: (id, verdict) => onConfusion(cards.get(id), verdict),
+});
+confusion.enabled = eco.watch;
+
+function onConfusion(card, verdict) {
+  if (!card || !cards.has(card.id) || !["ready", "warn"].includes(card.status) || isEngram(card) || !eco.watch) return;
+  // Les autres widgets peuvent réagir (sujet du bus) ; la carte elle-même ne reçoit rien.
+  bus.emit(card, "prism.ux.confusion", {
+    card: card.title, reason: verdict.reason, seconds: Math.round(verdict.duration / 1000), turns: verdict.turns, box: verdict.box,
+  });
+  if (inspector.card?.id === card.id) inspector.refresh(card);
+  if (!hasModel()) return; // mode démo : aucune refactorisation possible, donc rien à proposer
+  const serverReady = engine.kind !== "server" || (account.user && canAfford("refactor"));
+  if (eco.canAuto() && hasModel() && serverReady) {
+    eco.recordAuto();
+    refactorCard(card, SIMPLIFY, { done: `Prism a simplifié « ${card.title} » (mode automatique, ${eco.autoToday()}/${AUTO_PER_DAY} aujourd'hui)` });
+    return;
+  }
+  offerSimplify(card, verdict);
+}
+
+function offerSimplify(card, verdict = {}) {
+  const el = canvas.element(card.id);
+  if (!el || el.querySelector(".card-evolve")) return;
+  const price = engine.kind === "server" && Number.isFinite(account.pricing.refactor)
+    ? ` (${String(account.pricing.refactor).replace(".", ",")} Spark${account.pricing.refactor > 1 ? "s" : ""})` : "";
+  const chip = document.createElement("div");
+  chip.className = "card-evolve";
+  for (const key of ["reason", "turns", "path", "box", "duration"]) if (verdict[key] !== undefined) chip.dataset[key] = String(verdict[key]);
+  chip.setAttribute("role", "group");
+  chip.setAttribute("aria-label", "Simplification proposée");
+  const text = document.createElement("span");
+  text.textContent = "Vous cherchez quelque chose ?";
+  const go = document.createElement("button");
+  go.type = "button";
+  go.className = "card-evolve-go";
+  go.textContent = `Simplifier${price}`;
+  const no = document.createElement("button");
+  no.type = "button";
+  no.className = "card-evolve-no";
+  no.setAttribute("aria-label", "Ignorer la proposition");
+  no.textContent = "×";
+  chip.append(text, go, no);
+  const remove = () => {
+    clearTimeout(timer);
+    chip.remove();
+  };
+  const timer = setTimeout(remove, 20000);
+  go.addEventListener("click", (e) => {
+    e.stopPropagation();
+    remove();
+    refactorCard(card, SIMPLIFY, { done: `« ${card.title} » simplifiée` });
+  });
+  no.addEventListener("click", (e) => {
+    e.stopPropagation();
+    remove();
+  });
+  el.querySelector(".card-body").append(chip);
 }
 
 function restoreCard(card) {
@@ -935,6 +1164,7 @@ window.addEventListener("message", (event) => {
     const frame = canvas.frame(card.id);
     const [x, y] = [Number(data.x), Number(data.y)];
     reflections.moveInFrame(frame, x, y);
+    if ((card.status === "ready" || card.status === "warn") && !isEngram(card)) confusion.pointer(card.id, x, y, Number(data.t));
     if (frame && Number.isFinite(x + y)) {
       const r = frame.getBoundingClientRect();
       const scale = frame.offsetWidth ? r.width / frame.offsetWidth : 1;
@@ -971,6 +1201,7 @@ window.addEventListener("message", (event) => {
     if (data.data) receiveThumbnail(card, data.data);
     else console.warn(`Prism : miniature de « ${card.title} » impossible`, data.error);
   } else if (data.prism === "focus") {
+    confusion.click(card.id); // un clic : la personne a trouvé quelque chose
     canvas.select(card.id);
   } else if (data.prism === "zoom") {
     // Ctrl + molette au-dessus d'un widget : coordonnées de l'iframe → écran.
@@ -1477,6 +1708,13 @@ async function start() {
     openAuth: () => openAuth({ mode: "login" }),
     openSettings,
     toast,
+    sediments: () => sediments.all(),
+    clearSediments: () => {
+      sediments.clear();
+      drawSediments($("world"), []);
+      toast("Sédiments effacés");
+    },
+    ecoChanged: () => { confusion.enabled = eco.watch; },
   });
   onAccountChange((state, change) => {
     if (change.signedIn) syncCanvasFromServer();

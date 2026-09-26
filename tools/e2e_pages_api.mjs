@@ -7,7 +7,7 @@
 //
 // Usage : python tools/e2e_server.py --demo &   puis   node tools/e2e_pages_api.mjs [--api http://127.0.0.1:8004]
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { extname, join, normalize, resolve } from "node:path";
@@ -51,7 +51,7 @@ const work = mkdtempSync(join(tmpdir(), "prism-pages-"));
 // déployée est publique — d'où ces contrôles désactivés ici.
 const LOCAL_NETWORK_CHECKS = "LocalNetworkAccessChecks,PrivateNetworkAccessSendPreflights,PrivateNetworkAccessRespectPreflightResults,BlockInsecurePrivateNetworkRequests";
 const browser = spawn(BROWSER, ["--headless=new", "--remote-debugging-port=0", `--user-data-dir=${join(work, "p")}`,
-  "--no-first-run", "--window-size=1440,900", `--disable-features=${LOCAL_NETWORK_CHECKS}`, "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
+  "--no-first-run", "--disable-gpu-shader-disk-cache", "--window-size=1440,900", `--disable-features=${LOCAL_NETWORK_CHECKS}`, "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
 
 try {
   const wsUrl = await new Promise((resolveUrl, reject) => {
@@ -146,9 +146,14 @@ try {
 } catch (err) {
   check("scénario complet", false, err.message);
 } finally {
-  browser.kill();
-  await sleep(500);
-  try { rmSync(work, { recursive: true, force: true }); } catch { /* verrou Windows */ }
+  // Profil Chrome jetable : attendre la fin du navigateur (ses processus verrouillent le dossier sous Windows),
+  // puis supprimer en plusieurs essais ; un reste est signalé, jamais ignoré (des centaines de Mo par passage).
+  const exited = browser.exitCode !== null ? Promise.resolve() : new Promise((resolve) => browser.once("exit", resolve));
+  // Windows : kill() n'arrête que le processus principal, ses enfants (rendu, GPU) gardent le profil ouvert.
+  if (process.platform === "win32") spawnSync("taskkill", ["/PID", String(browser.pid), "/T", "/F"], { stdio: "ignore" });
+  else browser.kill();
+  await Promise.race([exited, sleep(5000)]);
+  try { rmSync(work, { recursive: true, force: true, maxRetries: 20, retryDelay: 400 }); } catch (err) { console.warn(`Profil temporaire non supprimé : ${work} (${err.code || err.message})`); }
 }
 
 for (const { label, ok, detail } of results) console.log(`  ${ok ? "OK   " : "ÉCHEC"}  ${label}${detail ? `  (${detail})` : ""}`);

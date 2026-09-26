@@ -72,7 +72,7 @@ export class Inspector {
     $("refactor-settings").addEventListener("click", () => a.openSettings());
     $("bus-mute").addEventListener("change", (e) => this.card && a.setMuted(this.card, e.target.checked));
     const simple = { "undo-btn": a.undo, "copy-code": a.copy, "download-html": a.download, "toggle-code": a.toggleCode,
-      "reload-card": a.reload, "reset-data": a.resetData, "delete-card": a.remove };
+      "reload-card": a.reload, "reset-data": a.resetData, "delete-card": a.remove, "dissolve-card": a.dissolve };
     for (const [id, fn] of Object.entries(simple)) {
       $(id).addEventListener("click", () => this.card && fn(this.card));
     }
@@ -121,6 +121,9 @@ export class Inspector {
     ].filter(Boolean);
     $("insp-meta").textContent = bits.join(" · ");
     $("insp-prompt").textContent = card.prompt;
+    const ghost = Array.isArray(card.ghost) && card.ghost.length ? card.ghost : null;
+    $("insp-ghost").hidden = !ghost;
+    $("insp-ghost").textContent = ghost ? `Contexte sédimenté (cartes dissoutes à cet endroit) : ${ghost.join(", ")}` : "";
 
     const ready = card.status === "ready" || card.status === "warn";
     const busy = card.status === "busy" || card.status === "loading";
@@ -146,7 +149,7 @@ export class Inspector {
 
     this.renderBus(card);
 
-    for (const id of ["copy-code", "download-html", "toggle-code", "reload-card", "reset-data"]) $(id).disabled = !ready;
+    for (const id of ["copy-code", "download-html", "toggle-code", "reload-card", "reset-data", "dissolve-card"]) $(id).disabled = !ready;
     $("toggle-code").setAttribute("aria-pressed", String(Boolean(card.showCode)));
     $("toggle-code").textContent = card.showCode ? "Voir le widget" : "Voir le code";
     const keys = Object.keys(card.storage || {}).length;

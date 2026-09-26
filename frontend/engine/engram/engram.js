@@ -238,7 +238,7 @@
     if (/<\/script/i.test(physics)) throw new Error("physics.js ne peut pas contenir « </script »");
     const values = {
       lang: lang === "en" ? "en" : "fr",
-      title: escapeHtml(`Engramme · ${engram.person || "?"}`),
+      title: escapeHtml(`${Array.isArray(engram.parents) ? "Hyper-Engramme" : "Engramme"} · ${engram.person || "?"}`),
       tailwind: `<script src="${escapeHtml(libs.tailwind.url)}" integrity="${escapeHtml(libs.tailwind.integrity)}" crossorigin="anonymous"><\/script>`,
       physics,
       engram: scriptJson(engram),
@@ -439,6 +439,141 @@
     return { reply, trace };
   }
 
+  // ------------------------------------------------------------------------
+  // Fusion (V5, « Singularité symbiotique ») : même algorithme que backend/engram.py (parité testée)
+  // ------------------------------------------------------------------------
+  const FUSION_EVENTS_EACH = 5;
+  const PARENTS = ["a", "b"];
+  const byIntensity = (list) => list.slice().sort((x, y) => y.intensity - x.intensity); // stable, comme sorted()
+  const surname = (person) => { const w = person.trim().split(/\s+/).filter(Boolean); return w.length ? w[w.length - 1] : person; };
+
+  function FusionError(message) {
+    const err = new Error(message);
+    err.name = "FusionError";
+    err.code = "fusion_invalid";
+    return err;
+  }
+
+  /** Les deux Engrammes (non fiables) revalidés ; même personne ou ancien format : refus. */
+  function fusionParents(a, b) {
+    let pa;
+    let pb;
+    try {
+      pa = normalize(a);
+      pb = normalize(b);
+    } catch (err) {
+      throw FusionError(`Engramme illisible ou d'une version antérieure (${err.message}) : régénérez-le avant la fusion.`);
+    }
+    if (pa.person.toLowerCase() === pb.person.toLowerCase()) throw FusionError("Une fusion demande deux personnes différentes.");
+    return [pa, pb];
+  }
+
+  /** 5 évènements réels de chaque vie (chaque type représenté), dans l'ordre chronologique, signés. */
+  function fusionEvents(a, b) {
+    const parents = { a, b };
+    const lives = {};
+    const chosen = { a: [], b: [] };
+    for (const key of PARENTS) lives[key] = parents[key].nodes.filter((n) => n.category === "artifact");
+    for (const kind of TYPES.artifact) {
+      let best = null;
+      for (const key of PARENTS) {
+        for (const n of lives[key]) {
+          if (n.type !== kind || chosen[key].includes(n) || chosen[key].length >= FUSION_EVENTS_EACH) continue;
+          if (!best || n.intensity > best[0].intensity) best = [n, key];
+        }
+      }
+      if (best) chosen[best[1]].push(best[0]);
+    }
+    for (const key of PARENTS) {
+      const rest = byIntensity(lives[key].filter((n) => !chosen[key].includes(n)));
+      chosen[key] = chosen[key].concat(rest.slice(0, FUSION_EVENTS_EACH - chosen[key].length));
+    }
+    const events = [];
+    for (const key of PARENTS) {
+      const name = surname(parents[key].person);
+      for (const n of chosen[key]) events.push({ ...n, title: text(`${name} · ${n.title}`, LIMITS.title), sources: [key] });
+    }
+    events.sort((x, y) => compareKeys(dateKey(x.date), dateKey(y.date)));
+    events.forEach((n, i) => { n.id = `ev${i + 1}`; });
+    return events;
+  }
+
+  /** Même construction que build_fusion_message() en Python (JSON compact, une seule passe). */
+  function buildFusionMessage(template, a, b, events, language) {
+    const values = {
+      a_person: a.person, b_person: b.person, a_json: JSON.stringify(a), b_json: JSON.stringify(b),
+      events: JSON.stringify(events.map((n) => ({ id: n.id, type: n.type, title: n.title, date: n.date, impact: n.impact, sources: n.sources }))),
+      language: LANGUAGES[language] || "French",
+    };
+    return template.trim().replace(/\{\{(a_person|b_person|a_json|b_json|events|language)\}\}/g, (_, key) => values[key]);
+  }
+
+  /** Réponse du modèle + évènements hérités → Hyper-Engramme validé, chaque bulle signée de sa provenance. */
+  function finishFusion(raw, a, b, events) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw EngramError("réponse qui n'est pas un objet JSON");
+    const created = (Array.isArray(raw.nodes) ? raw.nodes : [])
+      .filter((n) => n && typeof n === "object" && !Array.isArray(n) && n.category !== "artifact");
+    const merged = {
+      ...raw, person: text(`${a.person} × ${b.person}`, 120), public_figure: true, refusal: null,
+      domain: raw.domain || `${a.domain} × ${b.domain}`, nodes: created.concat(events),
+    };
+    const hyper = normalize(merged);
+    const provenance = new Map(events.map((n) => [n.id, n.sources]));
+    created.forEach((node, index) => {
+      const id = slug(node.id, `n${index}`);
+      if (provenance.has(id)) return;
+      const sources = Array.isArray(node.sources) ? node.sources : [];
+      const kept = PARENTS.filter((s) => sources.includes(s));
+      provenance.set(id, kept.length ? kept : PARENTS.slice());
+    });
+    for (const node of hyper.nodes) {
+      node.sources = provenance.has(node.id) ? provenance.get(node.id) : PARENTS.slice();
+      if (node.category !== "artifact") node.basis = "interpretation";
+    }
+    hyper.parents = [a.person, b.person];
+    return hyper;
+  }
+
+  /** Sans modèle : fusion mécanique mais valide (même règle que demo_fusion() en Python). */
+  function demoFusion(a, b) {
+    const events = fusionEvents(a, b);
+    const parents = { a, b };
+    const pool = [];
+    for (const key of PARENTS) for (const n of parents[key].nodes) pool.push({ ...n, id: `${key}${n.id}`, sources: [key] });
+    let nodes = [];
+    for (const [category, [, high]] of Object.entries(COUNTS)) {
+      if (category === "core" || category === "artifact") continue;
+      const group = byIntensity(pool.filter((n) => n.category === category));
+      const chosen = TYPES[category].map((t) => group.find((n) => n.type === t));
+      nodes = nodes.concat(chosen, group.filter((n) => !chosen.includes(n)).slice(0, high - chosen.length));
+    }
+    const [ca, cb] = [a, b].map((p) => p.nodes.find((n) => n.category === "core"));
+    const core = {
+      id: "core", category: "core", type: "axiome", title: `${ca.title} × ${cb.title}`, content: `${ca.content} ${cb.content}`,
+      directive: `${ca.directive} ${cb.directive}`, basis: "interpretation", evidence: "", intensity: 1, sources: PARENTS.slice(),
+    };
+    const kept = new Set(nodes.map((n) => n.id).concat(["core"]));
+    const known = new Set();
+    for (const key of PARENTS) for (const n of parents[key].nodes) known.add(`${key}${n.id}`);
+    const links = [];
+    for (const key of PARENTS) {
+      for (const l of parents[key].links) {
+        const from = `${key}${l.from}`;
+        const to = `${key}${l.to}`;
+        if (known.has(from) && kept.has(from) && known.has(to) && kept.has(to)) links.push({ from, to, kind: l.kind });
+      }
+    }
+    const climateTotals = new Map();
+    for (const p of [a, b]) for (const item of p.climate) climateTotals.set(item.emotion, (climateTotals.get(item.emotion) || 0) + item.weight / 2);
+    const raw = {
+      summary: `Fusion mécanique (mode démo, sans modèle de langage) de ${a.person} et ${b.person}.`,
+      temperament: `${a.temperament} / ${b.temperament}`,
+      climate: [...climateTotals].map(([emotion, weight]) => ({ emotion, weight })),
+      nodes: [core].concat(nodes), links: links.slice(0, 40),
+    };
+    return finishFusion(raw, a, b, events);
+  }
+
   /** « Engramme : Marie Curie », « engramme de … », « engramme d'… » en tête de demande → le nom, sinon null. */
   function engramRequest(value) {
     const m = /^\s*engramm?e\s*(?:[:：]|de\s+|d['’]\s*)\s*(.{2,120}?)\s*$/i.exec(String(value || ""));
@@ -448,5 +583,6 @@
   return {
     TYPES, COUNTS, MIN_NODES, LIMITS, LANGUAGES, EMOTIONS, normalize, parse, buildUserMessage, buildViewer, readViewer, dnaOf,
     dateKey, engramRequest, chatNodes, chatDossier, buildChatMessage, normalizeChat, demoChat,
+    fusionParents, fusionEvents, buildFusionMessage, finishFusion, demoFusion,
   };
 });

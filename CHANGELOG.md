@@ -1,5 +1,37 @@
 # Changelog
 
+## 5.0.0-alpha.2 — 2026-09-27 (V5 « Écosystème vivant » : les trois missions)
+
+- **Singularité symbiotique** : glisser un Engramme (par sa barre de titre) sur un autre surligne la cible ; au lâcher,
+  la carte revient à sa place et Prism propose « Fusionner (3 Sparks) » — rien n'est débité sans ce clic. La fusion passe
+  par `POST /api/engram/fusion` (ou le moteur navigateur, même code, parité testée) et produit une carte
+  **Hyper-Engramme** rangée dans Mon Hub. À sa première ouverture, la carte joue la fusion : les deux noyaux fantômes
+  (A à gauche, B à droite) sont précipités l'un vers l'autre par une gravité qui croît comme le cube du temps, les bulles
+  de chaque vie partent de leur côté, les ombres se heurtent et glitchent sans répit (toile secouée, couleurs
+  décalées), puis un éclair et tout se range. La fiche d'une bulle indique sa **provenance** (A, B ou les deux esprits).
+  Démo Ada Lovelace ajoutée (deux personnes de démonstration pour fusionner sans clé).
+- **Darwinisme d'interface** : le prélude de chaque widget horodate déjà la position du pointeur ; la page en garde
+  quelques secondes par carte et le **Web Worker** (tâche `confusion`) juge : vitesse, hésitation, zone parcourue,
+  tours autour d'un point. Pointeur qui tourne en rond plus de 5 s sans clic (deux tours, ou 1 500 px dans une zone de
+  260 px) → sujet `prism.ux.confusion` émis sur le bus (les autres widgets peuvent réagir), puis pastille « Vous cherchez
+  quelque chose ? Simplifier (0,5 Spark) » sur la carte : un clic refactorise le widget avec la consigne « simplifier
+  l'UX », annulable. **Jamais de dépense sans accord** : le mode automatique (Paramètres → Écosystème) est à activer
+  soi-même, 3 fois par 24 h au plus, chaque fois annulable ; une alerte par carte toutes les 10 minutes au plus ; rien en
+  mode démo (aucune refactorisation possible) ; les Engrammes ne sont pas concernés. Aucune position ne quitte l'appareil.
+- **Sédimentation** : bouton « Dissoudre » dans l'inspecteur. La carte se brise en particules (toile superposée) qui
+  s'enfoncent dans le fond ; un sédiment reste incrusté à cet endroit, avec les mots-clés de la carte (titre et demande,
+  sans mots vides) dans une grille spatiale (cases de 480 px). Un widget créé plus tard dans la même case reçoit ces mots
+  comme **contexte fantôme** (`ghost` : 12 mots au plus, après la demande, jamais en refactorisation) — affiché dans le
+  texte de chargement et dans l'inspecteur de la carte produite, désactivable dans les Paramètres ; chaque case sert trois
+  fois puis s'efface. « Rétablir » annule la dissolution.
+- **Paramètres → Écosystème** : détection de la confusion, mode automatique (consentement explicite, prix affiché),
+  contexte fantôme, liste et effacement des sédiments. Tarif de la fusion dans l'onglet Compte.
+- Mon Hub : les Hyper-Engrammes figurent parmi les personnes.
+- Outils de test : les scripts E2E tuent l'arbre de processus de Chrome et suppriment vraiment leur profil temporaire
+  (les restes pouvaient remplir le disque, plusieurs centaines de Mo par passage) ; tout reste est signalé.
+- Tests : 135 Python, 81 Node ; E2E : Engramme 49/49 (serveur) et 37/37 (statique), canvas faux Gemini (avec
+  « Simplifier ») tout vert, démo et statique tout verts, Pages → API 5/5.
+
 ## 5.0.0-alpha.1 — 2026-09-26 (V5 « Écosystème vivant » : fusion d'Engrammes, côté serveur)
 
 - **Route `POST /api/engram/fusion`** (`{ a, b, language? }`, 3 Sparks, rendus en cas d'échec) : deux Engrammes →

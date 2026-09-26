@@ -76,16 +76,22 @@
     return template.replace(/\{\{(person|category|type|title|content|directive|extras)\}\}/g, (_, key) => values[key]) + "\n";
   }
 
+  /** Section CONTEXTE FANTÔME (sédimentation) : même texte que ghost_block() côté Python. */
+  function buildGhostBlock(words, template) {
+    const clean = (words || []).map((w) => String(w).split(/\s+/).filter(Boolean).join(" ")).filter(Boolean);
+    return clean.length && template ? replaceAll(template, "{{words}}", clean.join(", ")) + "\n" : "";
+  }
+
   /** Même construction que build_user_message() côté Python. */
-  function buildUserMessage(prompt, file, baseHtml, t, canvas = null, dna = null) {
+  function buildUserMessage(prompt, file, baseHtml, t, canvas = null, dna = null, ghost = null) {
     const fileBlock = file ? replaceAll(replaceAll(t.file, "{{kind}}", file.kind), "{{summary}}", file.summary) + "\n" : "";
     const template = baseHtml ? t.refactor : t.user;
     const values = {
       file: fileBlock, canvas: buildCanvasBlock(canvas, t.canvas || ""), dna: baseHtml ? "" : buildDnaBlock(dna, t.dna || ""),
-      prompt, html: baseHtml || "",
+      ghost: baseHtml ? "" : buildGhostBlock(ghost, t.ghost || ""), prompt, html: baseHtml || "",
     };
     // Une seule passe : rien de ce qui est inséré (code, demande, titres…) n'est réinterprété comme gabarit.
-    return template.replace(/\{\{(file|canvas|dna|prompt|html)\}\}/g, (_, key) => values[key]);
+    return template.replace(/\{\{(file|canvas|dna|ghost|prompt|html)\}\}/g, (_, key) => values[key]);
   }
 
   function createLocalEngine(options = {}) {
@@ -255,7 +261,7 @@
     }
 
     /** Même contrat que POST /api/generate : { prompt, file?: {name, kind, summary}, baseHtml?, canvas? }. */
-    async function generate(prompt, { key = "", models = [], signal, file = null, baseHtml = null, canvas = null, dna = null } = {}) {
+    async function generate(prompt, { key = "", models = [], signal, file = null, baseHtml = null, canvas = null, dna = null, ghost = null } = {}) {
       const started = now();
       const elapsed = () => Math.round(now() - started);
 
@@ -269,7 +275,7 @@
         return { html, mode: "mock", model: `mock:${template}`, elapsed_ms: elapsed(), warnings: S.validateDocument(html, allowedUrls(libs)) };
       }
 
-      const [cfg, libs, system, user, fileTpl, refactor, canvasTpl, dnaTpl] = await Promise.all([
+      const [cfg, libs, system, user, fileTpl, refactor, canvasTpl, dnaTpl, ghostTpl] = await Promise.all([
         load("gemini.json", "json"),
         load("libs.json", "json"),
         load("system-prompt.txt"),
@@ -278,11 +284,12 @@
         load("refactor-template.txt"),
         load("canvas-template.txt"),
         load("dna-template.txt"),
+        load("ghost-template.txt"),
       ]);
       const prompt0 = replaceAll(system.trim(), "{{chartjs_url}}", libs.chartjs.url);
       const ctx = { cfg, libs, system: replaceAll(prompt0, "{{tailwind_url}}", libs.tailwind.url) };
-      const templates = { user: user.trim(), file: fileTpl.trim(), refactor: refactor.trim(), canvas: canvasTpl.trim(), dna: dnaTpl.trim() };
-      const userMessage = buildUserMessage(prompt, file, baseHtml, templates, canvas, dna);
+      const templates = { user: user.trim(), file: fileTpl.trim(), refactor: refactor.trim(), canvas: canvasTpl.trim(), dna: dnaTpl.trim(), ghost: ghostTpl.trim() };
+      const userMessage = buildUserMessage(prompt, file, baseHtml, templates, canvas, dna, ghost);
       const errors = [];
       for (const model of models.length ? models : cfg.models) {
         try {
@@ -299,7 +306,10 @@
     /** Même contrat que POST /api/engram : { engram, mode, model }. Sans clé : l'Engramme de démonstration. */
     async function engram(person, { key = "", models = [], language = "fr", signal } = {}) {
       if (!key) {
-        return { engram: E.normalize(await load("engram/demo-marie-curie.json", "json")), mode: "mock", model: "mock:engram-marie-curie" };
+        // Démonstrations : Ada Lovelace si elle est demandée, Marie Curie sinon (même règle que demo_key()).
+        const plain = String(person).toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+        const demo = plain.includes("lovelace") || /\bada\b/.test(plain) ? "ada-lovelace" : "marie-curie";
+        return { engram: E.normalize(await load(`engram/demo-${demo}.json`, "json")), mode: "mock", model: `mock:engram-${demo}` };
       }
       const [cfg, schema, system, template] = await Promise.all([
         load("gemini.json", "json"),
@@ -353,8 +363,39 @@
       throw new Error(`Réponse impossible : ${errors.slice(-6).join(" | ")}`);
     }
 
-    return { generate, mock, engram, engramChat, defaults: () => load("gemini.json", "json"), libs: () => load("libs.json", "json") };
+    /** Même contrat que POST /api/engram/fusion : { engram, mode, model }. Sans clé : fusion de démonstration. */
+    async function engramFusion(a, b, { key = "", models = [], language = "fr", signal } = {}) {
+      const [pa, pb] = E.fusionParents(a, b);
+      if (!key) return { engram: E.demoFusion(pa, pb), mode: "mock", model: "mock:engram-fusion" };
+      const [cfg, schema, system, template] = await Promise.all([
+        load("gemini.json", "json"),
+        load("engram/fusion-schema.json", "json"),
+        load("engram/fusion-system.txt"),
+        load("engram/fusion-template.txt"),
+      ]);
+      const events = E.fusionEvents(pa, pb);
+      const userMessage = E.buildFusionMessage(template, pa, pb, events, language);
+      const errors = [];
+      for (const model of models.length ? models : cfg.models) {
+        for (const withSchema of [true, false]) {
+          try {
+            const text = await requestGemini(model, system.trim(), userMessage, key, cfg, signal, { json: true, schema: withSchema ? schema : null });
+            return { engram: E.finishFusion(E.parse(text), pa, pb, E.fusionEvents(pa, pb)), mode: "gemini", model };
+          } catch (err) {
+            if (err.fatal || (err.name === "AbortError" && signal && signal.aborted)) throw err;
+            errors.push(err.name === "EngramError" ? `${model}: ${err.message}` : err.message);
+            if (err.name !== "SchemaRejected") break;
+          }
+        }
+      }
+      throw new Error(`Fusion impossible : ${errors.slice(-6).join(" | ")}`);
+    }
+
+    return {
+      generate, mock, engram, engramChat, engramFusion,
+      defaults: () => load("gemini.json", "json"), libs: () => load("libs.json", "json"),
+    };
   }
 
-  return { createLocalEngine, extractSeries, route, escapeHtml, buildUserMessage, buildCanvasBlock, buildDnaBlock, allowedUrls };
+  return { createLocalEngine, extractSeries, route, escapeHtml, buildUserMessage, buildCanvasBlock, buildDnaBlock, buildGhostBlock, allowedUrls };
 });

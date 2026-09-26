@@ -203,6 +203,26 @@ test("E. cœur : anneau intérieur, entre le noyau et les moteurs ; battement au
   assert.ok(calm >= 4 && calm <= 8, `sérénité : ${calm} battements en 10 s`);
 });
 
+test("V5 fusion : chaque esprit part de son côté, la gravité les précipite, puis tout se range", () => {
+  const data = JSON.parse(JSON.stringify(demo));
+  data.nodes.forEach((n, i) => { n.sources = n.category === "core" ? ["a", "b"] : [i % 2 ? "a" : "b"]; });
+  const sim = P.createSimulation(data, { width: W, height: H, seed: 2, fusion: true });
+  const side = (key) => mean(sim.nodes.filter((n) => n.category !== "core" && n.data.sources[0] === key).map((n) => n.x));
+  assert.equal(sim.fusion, 0);
+  assert.ok(side("a") < W / 2 - 150 && side("b") > W / 2 + 150, `A à ${side("a").toFixed(0)}, B à ${side("b").toFixed(0)}`);
+  run(sim, 1);
+  const early = Math.abs(side("a") - side("b"));
+  run(sim, 2.5);
+  assert.equal(sim.fusion, 1);
+  assert.ok(Math.abs(side("a") - side("b")) < early * 0.4, "les deux esprits se sont rejoints");
+  run(sim, 6);
+  const heart = mean(of(sim, "heart").map((n) => ring(sim, n)));
+  const engine = mean(of(sim, "engine").map((n) => ring(sim, n)));
+  assert.ok(heart < engine && Math.abs(engine - 0.44) < 0.44 * 0.25, `cœur ${heart.toFixed(2)}, moteurs ${engine.toFixed(2)}`);
+  assert.ok(sim.nodes.every((n) => Number.isFinite(n.x + n.y)));
+  assert.equal(P.createSimulation(demo, { width: W, height: H }).fusion, null, "hors fusion : null");
+});
+
 test("survol : la bulle s'arrête et grossit, puis repart", () => {
   const sim = P.createSimulation(demo, { width: W, height: H, seed: 2 });
   run(sim, 3);

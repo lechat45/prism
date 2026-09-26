@@ -27,7 +27,7 @@
       <img class="logo" src="assets/prism-logo.svg" width="38" height="38" alt="">
       <span class="brand-name">Prism</span>
       <!-- Version de l'interface : doit suivre backend/app.py et CHANGELOG.md (test_version.py). -->
-      <span class="brand-version" id="app-version" title="Version de Prism">v5.0.0-alpha.1</span>
+      <span class="brand-version" id="app-version" title="Version de Prism">v5.0.0-alpha.2</span>
     </a>
     <span class="tagline">Canvas d'interfaces éphémères</span>
     <span class="card-count" id="card-count" aria-live="polite"></span>
@@ -181,12 +181,14 @@
         <button type="button" class="tool" id="reload-card">Relancer</button>
         <button type="button" class="tool" id="reset-data">Effacer ses données</button>
         <button type="button" class="tool danger" id="delete-card">Fermer la carte</button>
+        <button type="button" class="tool" id="dissolve-card" title="La carte se brise et ses mots-clés restent à cet endroit du canvas (contexte fantôme)">Dissoudre</button>
       </div>
     </section>
 
     <section class="insp-section" aria-labelledby="h-prompt">
       <h3 id="h-prompt">Demande d'origine</h3>
       <p class="insp-prompt" id="insp-prompt"></p>
+      <p class="fine insp-ghost" id="insp-ghost" hidden></p>
     </section>
   </aside>
 
@@ -309,6 +311,7 @@
       <button type="button" role="tab" data-tab="account" aria-selected="true">Compte</button>
       <button type="button" role="tab" data-tab="writings" aria-selected="false">Mes écrits</button>
       <button type="button" role="tab" data-tab="engine" aria-selected="false">Moteur</button>
+      <button type="button" role="tab" data-tab="ecosystem" aria-selected="false">Écosystème</button>
       <button type="button" role="tab" data-tab="about" aria-selected="false">À propos</button>
     </div>
     <div class="prefs-body" id="prefs-body" role="tabpanel"></div>

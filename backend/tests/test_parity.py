@@ -37,7 +37,7 @@ def _message(case: dict) -> str:
     file = app.AttachedFile(**case["file"]) if case.get("file") else None
     canvas = [app.CanvasWidget(**w) for w in case.get("canvas", [])]
     dna = app.DnaTrait(**case["dna"]) if case.get("dna") else None
-    return app.build_user_message(case["prompt"], file, case.get("base_html"), canvas, dna)
+    return app.build_user_message(case["prompt"], file, case.get("base_html"), canvas, dna, case.get("ghost"))
 
 
 def patched(case: dict):
@@ -77,6 +77,21 @@ def chat_results(case: dict) -> dict:
             "demo": engram.demo_chat(source, case["message"]), "normalized": normalized}
 
 
+def fusion_results(case: dict) -> dict:
+    try:
+        a, b = engram.fusion_parents(patched(case["a"]), patched(case["b"]))
+    except engram.FusionError:
+        return {"error": "FusionError"}
+    events = engram.fusion_events(a, b)
+    out = {"events": events, "message": engram.build_fusion_message(a, b, events, "fr"), "demo": engram.demo_fusion(a, b)}
+    if case.get("raw") is not None:
+        try:
+            out["finished"] = {"ok": engram.finish_fusion(copy.deepcopy(case["raw"]), a, b, engram.fusion_events(a, b))}
+        except engram.EngramError:
+            out["finished"] = {"error": "EngramError"}
+    return out
+
+
 def parse_result(text: str) -> dict:
     try:
         return {"ok": engram.parse(text)}
@@ -100,6 +115,7 @@ def python_results() -> dict:
         "engram_parse": [parse_result(t) for t in FIXTURES["engram_parse"]],
         "engram_messages": [engram.build_user_message(c["person"], c["language"]) for c in FIXTURES["engram_messages"]],
         "engram_chat": [chat_results(c) for c in FIXTURES["engram_chat"]],
+        "engram_fusion": [fusion_results(c) for c in FIXTURES["engram_fusion"]],
     }
 
 

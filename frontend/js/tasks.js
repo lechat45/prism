@@ -3,8 +3,10 @@
 //  - attach   : lecture + analyse d'un fichier joint (jusqu'à 5 Mo de CSV) ;
 //  - sample   : fichier CSV d'exemple ;
 //  - generate : moteur navigateur (appel Gemini, nettoyage et validation du code reçu, ou démo) ;
-//  - engram   : Engramme cognitif (appel Gemini en JSON imposé et validation, ou démo).
+//  - engram   : Engramme cognitif (appel Gemini en JSON imposé et validation, ou démo) ;
+//  - confusion : V5, verdict sur quelques secondes de pointeur au-dessus d'un widget (cf. confusion.js).
 
+import { analyzePointer } from "./confusion.js";
 import { readAttachment, sampleCsvAttachment } from "./files.js";
 
 /** Pièce jointe prête à l'emploi : les données (PRISM_FILE) deviennent un Blob JSON.
@@ -30,4 +32,6 @@ export const tasks = {
   generate: ({ prompt, options }, signal) => engine().generate(prompt, { ...options, signal }),
   engram: ({ person, options }, signal) => engine().engram(person, { ...options, signal }),
   engramChat: ({ engram, history, message, options }, signal) => engine().engramChat(engram, history, message, { ...options, signal }),
+  engramFusion: ({ a, b, options }, signal) => engine().engramFusion(a, b, { ...options, signal }),
+  confusion: ({ samples, clicks, now }) => analyzePointer(samples, clicks, now),
 };
