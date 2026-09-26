@@ -58,7 +58,7 @@ from sanitize import (
     validate_document,
 )
 
-__version__ = "4.0.0a6"
+__version__ = "4.0.0a7"
 
 BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
@@ -399,6 +399,7 @@ async def health() -> dict:
         "auth": True,
         "pricing": {action: billing.as_sparks(cents) for action, cents in billing.PRICES.items()},
         "signup_sparks": billing.as_sparks(billing.SIGNUP_BONUS),
+        "guest_sparks": billing.as_sparks(billing.GUEST_BONUS),
     }
 
 

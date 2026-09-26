@@ -48,7 +48,10 @@ function accountPanel() {
     return panel;
   }
   const prices = account.pricing || {};
-  panel.push(fact("Compte", account.user.email), fact("Solde", sparks(account.user.sparks)));
+  panel.push(fact("Compte", account.user.guest ? "Compte d'essai" : account.user.email), fact("Solde", sparks(account.user.sparks)));
+  if (account.user.guest) {
+    panel.push(el("p", "hint", "Compte d'essai : tout fonctionne comme avec un vrai compte, mais il disparaît à la déconnexion. Créez un compte pour garder vos widgets et vos Engrammes."));
+  }
   panel.push(el("p", "fine", [
     `Widget : ${sparks(prices.generate ?? 1)}`, `refactorisation : ${sparks(prices.refactor ?? 0.5)}`,
     prices.engram !== undefined ? `Engramme : ${sparks(prices.engram)}` : "",

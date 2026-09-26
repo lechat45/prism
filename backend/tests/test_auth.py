@@ -75,6 +75,29 @@ class AuthTests(DbTestCase):
         # Même le bon mot de passe attend la fin de la fenêtre.
         self.assertEqual(self.client.post("/api/auth/login", json={**wrong, "password": PASSWORD}).status_code, 429)
 
+    def test_guest_account_works_like_a_real_one(self):
+        res = self.client.post("/api/auth/guest")
+        self.assertEqual(res.status_code, 201, res.text)
+        session = res.json()
+        self.assertTrue(session["user"]["guest"])
+        self.assertTrue(session["user"]["email"].endswith("@essai.prism.invalid"))
+        self.assertEqual(session["user"]["sparks"], 10)
+        me = self.client.get("/api/auth/me", headers={"Authorization": f"Bearer {session['token']}"}).json()
+        self.assertEqual((me["guest"], me["sparks"]), (True, 10))
+        other = self.client.post("/api/auth/guest").json()
+        self.assertNotEqual(other["user"]["email"], session["user"]["email"], "un compte d'essai par clic")
+        # Adresse réservée : impossible de s'inscrire avec, impossible de s'y reconnecter (mot de passe inconnu).
+        taken = self.client.post("/api/auth/register", json={"email": "essai-1@essai.prism.invalid", "password": PASSWORD})
+        self.assertEqual(taken.status_code, 422)
+        login = self.client.post("/api/auth/login", json={"email": session["user"]["email"], "password": PASSWORD})
+        self.assertEqual(login.status_code, 401)
+        self.assertEqual(self.client.get("/api/health").json()["guest_sparks"], 10)
+
+    def test_guest_accounts_share_the_registration_limit(self):
+        codes = [self.client.post("/api/auth/guest").status_code for _ in range(11)]
+        self.assertEqual(codes[:10], [201] * 10)
+        self.assertEqual(codes[10], 429)
+
     def test_registration_is_throttled_per_ip(self):
         codes = [self.client.post("/api/auth/register", json={"email": f"u{i}@exemple.fr", "password": PASSWORD}).status_code
                  for i in range(11)]

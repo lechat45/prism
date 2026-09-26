@@ -518,6 +518,17 @@ async function main() {
     await waitFor(async () => (await cardCount()) === total && allReady(), "cartes restaurées", 30000);
     const EF2 = await findFrame(`Boolean(window.__engram) && window.__engram.sim.nodes.length === 37`, "Engramme restauré");
     check("rechargement : Engramme restauré et vivant", Boolean(EF2), `${total} cartes`);
+    if (serverMode) {
+      // Bouton « Tester » : compte d'essai immédiat, sans e-mail, utilisable comme un vrai compte.
+      await evaluate(`document.getElementById("btn-logout").click()`);
+      await waitFor(() => evaluate(`!document.getElementById("btn-try").hidden`), "bouton Tester", 5000);
+      await clickSel("#btn-try");
+      const trial = await waitFor(() => evaluate(`(() => { const s = document.getElementById("sparks"); return !s.hidden
+        ? { sparks: document.getElementById("sparks-count").textContent, email: document.getElementById("account-email").textContent,
+            tryHidden: document.getElementById("btn-try").hidden } : null; })()`), "compte d'essai", 10000);
+      check("bouton « Tester » : connecté aussitôt avec un compte d'essai (10 Sparks)", trial.sparks === "10" && trial.email.startsWith("Compte d'essai") && trial.tryHidden,
+        JSON.stringify(trial));
+    }
     if (SHOT) {
       const { data } = await cdp.send("Page.captureScreenshot", { format: "png" }, S);
       writeFileSync(SHOT, Buffer.from(data, "base64"));

@@ -14,7 +14,7 @@ export const API_BASE = location.protocol === "file:" ? "http://127.0.0.1:8000" 
 const SESSION_KEY = "prism:session";
 
 /** État observable : enabled (serveur à comptes), user ({ id, email, sparks, plan } | null). */
-export const account = { enabled: false, user: null, token: "", pricing: { generate: 1, refactor: 0.5 }, signupSparks: 50 };
+export const account = { enabled: false, user: null, token: "", pricing: { generate: 1, refactor: 0.5 }, signupSparks: 50, guestSparks: 10 };
 const listeners = [];
 
 export function onAccountChange(fn) {
@@ -138,6 +138,7 @@ export async function initAccount(info) {
   if (!account.enabled) return emit();
   if (info.pricing) account.pricing = info.pricing;
   if (Number.isFinite(info.signup_sparks)) account.signupSparks = info.signup_sparks;
+  if (Number.isFinite(info.guest_sparks)) account.guestSparks = info.guest_sparks;
   const saved = readSession();
   if (saved) {
     account.token = saved.token;
@@ -154,6 +155,13 @@ export async function initAccount(info) {
     // 401 : déjà oubliée par api(). Serveur injoignable : on garde la session pour plus tard.
     if (err.status !== 401) console.warn("Prism : session non vérifiée", err);
   }
+}
+
+/** Compte d'essai (bouton « Tester ») : connecté aussitôt, sans e-mail ; session oubliée à la fermeture. */
+export async function signInAsGuest() {
+  const session = await api("/api/auth/guest", { method: "POST" });
+  adopt(session, false);
+  return session.user;
 }
 
 export async function signIn(mode, email, password, remember) {

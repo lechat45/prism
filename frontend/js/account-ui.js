@@ -1,7 +1,7 @@
 // Interface du compte (mode serveur) : jauge de Sparks en anneau, menu du compte,
 // fenêtre de connexion/inscription et fenêtre « Prism Pro ».
 
-import { account, needsSignIn, onAccountChange, signIn, signOut } from "./account.js";
+import { account, needsSignIn, onAccountChange, signIn, signInAsGuest, signOut } from "./account.js";
 
 const $ = (id) => document.getElementById(id);
 const nf = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
@@ -20,6 +20,8 @@ function render(state, change = {}) {
   if (!state.enabled) return;
   const user = state.user;
   $("btn-login").hidden = Boolean(user);
+  $("btn-try").hidden = Boolean(user);
+  $("btn-try").title = `Essayer Prism avec un compte d'essai : ${plural(state.guestSparks, "Spark")}, sans e-mail`;
   $("sparks").hidden = !user;
   if (!user) {
     $("account-menu").hidePopover?.();
@@ -35,7 +37,7 @@ function render(state, change = {}) {
   const prices = `génération ${plural(state.pricing.generate, "Spark")} · refactorisation ${plural(state.pricing.refactor, "Spark")}`;
   $("sparks").title = `${plural(sparks, "Spark")} restant${sparks >= 2 ? "s" : ""} · ${prices}`;
   $("sparks").setAttribute("aria-label", `${plural(sparks, "Spark")}, menu du compte`);
-  $("account-email").textContent = user.email;
+  $("account-email").textContent = user.guest ? "Compte d'essai (disparaît à la déconnexion)" : user.email;
   $("account-sparks").textContent = `${plural(sparks, "Spark")}`;
   $("account-pricing").textContent = prices;
   if (change.delta) showDelta(change.delta);
@@ -124,6 +126,25 @@ async function submitAuth(e) {
   }
 }
 
+/** Bouton « Tester » : compte d'essai immédiat, puis reprise de l'action demandée s'il y en avait une. */
+async function tryAccount() {
+  const buttons = [$("btn-try"), $("auth-try")];
+  buttons.forEach((b) => { b.disabled = true; });
+  try {
+    const user = await signInAsGuest();
+    const then = pending;
+    pending = null;
+    if ($("auth").open) $("auth").close();
+    notify(`Compte d'essai : ${plural(user.sparks, "Spark")} pour tout essayer. Créez un compte pour garder votre travail.`);
+    then?.();
+  } catch (err) {
+    if ($("auth").open) showError(err.message);
+    else notify(`Compte d'essai impossible : ${err.message}`, { tone: "error", timeout: 6000 });
+  } finally {
+    buttons.forEach((b) => { b.disabled = false; });
+  }
+}
+
 // --------------------------------------------------------------------------
 // Prism Pro
 // --------------------------------------------------------------------------
@@ -146,6 +167,8 @@ export function initAccountUi({ toast }) {
   notify = toast;
   onAccountChange(render);
   $("btn-login").addEventListener("click", () => openAuth({ mode: "login" }));
+  $("btn-try").addEventListener("click", tryAccount);
+  $("auth-try").addEventListener("click", tryAccount);
   $("tab-login").addEventListener("click", () => setMode("login"));
   $("tab-register").addEventListener("click", () => setMode("register"));
   $("auth-form").addEventListener("submit", submitAuth);
