@@ -6,6 +6,7 @@ langages et exige des résultats identiques, rendus HTML complets compris.
 """
 from __future__ import annotations
 
+import copy
 import json
 import shutil
 import subprocess
@@ -16,6 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app  # noqa: E402
+import engram  # noqa: E402
 import mocks  # noqa: E402
 from sanitize import (  # noqa: E402
     clean_llm_output,
@@ -34,7 +36,42 @@ NODE = shutil.which("node")
 def _message(case: dict) -> str:
     file = app.AttachedFile(**case["file"]) if case.get("file") else None
     canvas = [app.CanvasWidget(**w) for w in case.get("canvas", [])]
-    return app.build_user_message(case["prompt"], file, case.get("base_html"), canvas)
+    dna = app.DnaTrait(**case["dna"]) if case.get("dna") else None
+    return app.build_user_message(case["prompt"], file, case.get("base_html"), canvas, dna)
+
+
+def patched(case: dict):
+    """Démo de l'Engramme modifiée par les opérations du cas (même algorithme dans run_fixtures.cjs)."""
+    if "raw" in case:
+        return copy.deepcopy(case["raw"])
+    data = copy.deepcopy(engram.DEMO)
+    for op, path, *value in case["patch"]:
+        parent = data
+        for key in path[:-1]:
+            parent = parent[key]
+        if op == "set":
+            parent[path[-1]] = copy.deepcopy(value[0])
+        elif op == "append":
+            parent[path[-1]].append(copy.deepcopy(value[0]))
+        else:
+            del parent[path[-1]]
+    return data
+
+
+def engram_result(case: dict) -> dict:
+    try:
+        return {"ok": engram.normalize(patched(case))}
+    except engram.EngramRefused:
+        return {"error": "EngramRefused"}
+    except engram.EngramError:
+        return {"error": "EngramError"}
+
+
+def parse_result(text: str) -> dict:
+    try:
+        return {"ok": engram.parse(text)}
+    except engram.EngramError:
+        return {"error": "EngramError"}
 
 
 def python_results() -> dict:
@@ -49,6 +86,9 @@ def python_results() -> dict:
         "renders": [mocks.mock_component(c["prompt"], c.get("file_kind"))[0] for c in FIXTURES["render"]],
         "mock_renders": [mocks.mock_component(c["prompt"], c.get("file_kind"))[0] for c in FIXTURES["routing"]],
         "messages": [_message(c) for c in FIXTURES["messages"]],
+        "engram": [engram_result(c) for c in FIXTURES["engram"]],
+        "engram_parse": [parse_result(t) for t in FIXTURES["engram_parse"]],
+        "engram_messages": [engram.build_user_message(c["person"], c["language"]) for c in FIXTURES["engram_messages"]],
     }
 
 
@@ -112,6 +152,21 @@ class FixtureTests(unittest.TestCase):
                     self.assertIn(needle, got)
                 for needle in case.get("absent", []):
                     self.assertNotIn(needle, got)
+
+    def test_engram_cases_cover_both_outcomes(self):
+        outcomes = [next(iter(r)) for r in self.r["engram"]]
+        self.assertGreaterEqual(outcomes.count("ok"), 8)
+        self.assertIn({"error": "EngramRefused"}, self.r["engram"])
+        self.assertIn({"error": "EngramError"}, self.r["engram"])
+        by_name = {c["name"]: r for c, r in zip(FIXTURES["engram"], self.r["engram"])}
+        surplus = by_name["surplus d'ombres : les plus intenses, ordre conservé"]["ok"]
+        shadows = [n["id"] for n in surplus["nodes"] if n["category"] == "shadow"]
+        self.assertEqual(len(shadows), 15)
+        self.assertIn("x3", shadows)
+        self.assertNotIn("x6", shadows)
+        title = by_name["textes : espaces, coupe au point de code, scalaires"]["ok"]["nodes"][0]["title"]
+        self.assertEqual(len(title), engram.LIMITS["title"])
+        self.assertTrue(title.startswith("Comprendre, jamais craindre \U0001f30d") and title.endswith("…"))
 
     def test_render(self):
         for case, got in zip(FIXTURES["render"], self.r["renders"]):

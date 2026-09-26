@@ -1,0 +1,6 @@
+# Fins de ligne LF partout (les tests de parité Python/JS lisent les gabarits octet pour octet).
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.webp binary
+*.jpg binary

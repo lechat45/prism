@@ -1,5 +1,37 @@
 # Changelog
 
+## 4.0.0-alpha.1 — 2026-09-26 (V4 « Singularité » : l'Engramme cognitif)
+
+- **Engramme cognitif** : « Engramme : Marie Curie » (dock, Spotlight, voix) cartographie l'esprit d'une
+  personnalité publique en 30 à 36 bulles : 1 noyau (axiome), 8 à 10 moteurs opérationnels (algorithme de
+  résolution, empreinte syntaxique, matrice esthétique, méthode de travail), 10 à 15 ombres et biais
+  (paradoxes, peurs primaires, biais cognitifs), 10 artefacts chronologiques datés. 2 Sparks en mode serveur.
+- **Définition JSON stricte** pour Gemini (`responseSchema`, `engine/engram/schema.json`) et validation du sens
+  (`backend/engram.py`, jumeau JS `engine/engram/engram.js` à parité exacte, 17 cas partagés) : comptes, types,
+  dates, liens ; modèle suivant si la réponse est incomplète, JSON simple si le schéma est refusé partout.
+  Route `POST /api/engram` ; refus motivé (422 `engram_refused`, Sparks rendus) pour une personne non publique.
+- **Éthique** dans le prompt : faits publics uniquement, rien d'inventé (évènement, date, citation), ombres
+  données comme interprétations et jamais comme diagnostics ; mention « portrait interprétatif » sur la carte.
+- **Moteur physique ressort-masse natif** (sans D3, déterministe, pas fixe de 1/120 s) et **rendu Canvas** :
+  noyau blanc immobile, moteurs cyan sages aux liens épais, ombres violettes/cramoisies erratiques qui fuient
+  le pointeur, pulsent et glitchent, artefacts dorés rapides à traînées ; anneaux elliptiques, libellés sans
+  chevauchement. Survol : la bulle s'arrête et grossit, fiche **Liquid Glass** (Tailwind épinglé).
+- **Injection d'ADN** : clic sur une bulle → filtre ADN dans le dock (la prochaine demande passe par ce trait) ;
+  fichier ou texte déposé sur une bulle → génération filtrée immédiate, à côté de l'Engramme. `dna` dans
+  `POST /api/generate` (validé : type cohérent avec la catégorie, palette hexadécimale…), section « COGNITIVE
+  DNA FILTER » du message, identique dans les deux moteurs.
+- **Zoom fractal** : double-clic sur une partie d'un widget → proposition ; le sous-composant devient un widget
+  complet (mêmes données) qui émerge du point cliqué.
+- **Incantation** : Espace maintenu → reconnaissance vocale (Web Speech API), transcription sous le pointeur,
+  carte créée à cet endroit ; aussi depuis Spotlight. **Verre organique** : pendant l'écoute, le volume du micro
+  (AudioContext) module flou et saturation du verre. `Permissions-Policy: microphone=(self)` (page seulement).
+- Moteur navigateur (GitHub Pages) : Engramme avec la clé Gemini de l'utilisateur (même schéma, même
+  validation, dans le Web Worker), sinon l'Engramme de démonstration.
+- Dépôt : `.gitattributes` (fins de ligne LF partout : un clone Windows avec `core.autocrlf` cassait la parité
+  des gabarits Python ↔ JS).
+- Tests : 114 Python, 64 Node ; E2E V4 30/30 (serveur) et 24/24 (statique) ; E2E existants inchangés
+  (38, 47, 55, 5) ; CI : deux étapes E2E V4.
+
 ## 3.5.0-rc.1 — 2026-09-26 (phase 6 : prêt pour la mise en ligne)
 
 Candidate à la version 3.5.0 : tout le nécessaire au déploiement gratuit est là ; la 3.5.0 finale suivra

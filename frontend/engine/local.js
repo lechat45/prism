@@ -5,11 +5,12 @@
  *  - avec une clé Gemini fournie par l'utilisateur : appel direct à l'API Gemini
  *    (CORS autorisé par Google), même prompt système et même validation que le backend.
  * La clé n'est jamais envoyée ailleurs qu'à l'URL définie dans engine/gemini.json.
+ * Engramme cognitif (V4) : même schéma, même prompt et même validation que backend/engram.py.
  */
 (function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory(require("./sanitize.js"));
-  else root.PrismLocal = factory(root.PrismSanitize);
-})(typeof self !== "undefined" ? self : this, function (S) {
+  if (typeof module === "object" && module.exports) module.exports = factory(require("./sanitize.js"), require("./engram/engram.js"));
+  else root.PrismLocal = factory(root.PrismSanitize, root.PrismEngram);
+})(typeof self !== "undefined" ? self : this, function (S, E) {
   "use strict";
 
   const TIMEOUT_MS = 90000;
@@ -59,13 +60,29 @@
     return lines.length ? replaceAll(template, "{{widgets}}", lines.join("\n")) + "\n" : "";
   }
 
+  /** Section FILTRE ADN (trait d'Engramme) : même texte que dna_block() côté Python. */
+  function buildDnaBlock(dna, template) {
+    if (!dna || !template) return "";
+    let extras = "";
+    if (dna.palette && dna.palette.length) extras += `Palette to use: ${dna.palette.join(", ")}.\n`;
+    if (dna.keywords && dna.keywords.length) extras += `Vocabulary to weave into the texts: ${dna.keywords.join(", ")}.\n`;
+    const values = {
+      person: dna.person, category: dna.category, type: dna.type, title: dna.title,
+      content: dna.content || "-", directive: dna.directive, extras,
+    };
+    return template.replace(/\{\{(person|category|type|title|content|directive|extras)\}\}/g, (_, key) => values[key]) + "\n";
+  }
+
   /** Même construction que build_user_message() côté Python. */
-  function buildUserMessage(prompt, file, baseHtml, t, canvas = null) {
+  function buildUserMessage(prompt, file, baseHtml, t, canvas = null, dna = null) {
     const fileBlock = file ? replaceAll(replaceAll(t.file, "{{kind}}", file.kind), "{{summary}}", file.summary) + "\n" : "";
     const template = baseHtml ? t.refactor : t.user;
-    const values = { file: fileBlock, canvas: buildCanvasBlock(canvas, t.canvas || ""), prompt, html: baseHtml || "" };
+    const values = {
+      file: fileBlock, canvas: buildCanvasBlock(canvas, t.canvas || ""), dna: baseHtml ? "" : buildDnaBlock(dna, t.dna || ""),
+      prompt, html: baseHtml || "",
+    };
     // Une seule passe : rien de ce qui est inséré (code, demande, titres…) n'est réinterprété comme gabarit.
-    return template.replace(/\{\{(file|canvas|prompt|html)\}\}/g, (_, key) => values[key]);
+    return template.replace(/\{\{(file|canvas|dna|prompt|html)\}\}/g, (_, key) => values[key]);
   }
 
   function createLocalEngine(options = {}) {
@@ -114,13 +131,16 @@
     // Raisons de fin Gemini qui signifient « pas de document exploitable » (mêmes règles que providers.py).
     const BLOCKED = new Set(["SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "LANGUAGE", "OTHER"]);
 
-    async function callGemini(model, userMessage, key, ctx, signal) {
-      const { cfg, system, libs } = ctx;
+    /** Appel generateContent : texte du modèle (sans les parties « thought »), mêmes règles que providers.py.
+     *  schema : réponse JSON imposée ; un HTTP 400 lève alors SchemaRejected (réessayer en JSON simple). */
+    async function requestGemini(model, system, userMessage, key, cfg, signal, { json = false, schema = null } = {}) {
       const body = {
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: "user", parts: [{ text: userMessage }] }],
         generationConfig: { temperature: cfg.temperature, maxOutputTokens: cfg.max_output_tokens },
       };
+      if (json || schema) body.generationConfig.responseMimeType = "application/json";
+      if (schema) body.generationConfig.responseSchema = schema;
       const timeout = typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(TIMEOUT_MS) : null;
       const combined = signal && timeout && AbortSignal.any ? AbortSignal.any([signal, timeout]) : signal || timeout || undefined;
 
@@ -145,6 +165,11 @@
       }
       if (res.status === 401 || res.status === 403) throw fatal(`Accès Gemini refusé (HTTP ${res.status}).`);
       if (res.status === 402) throw fatal("Crédits Gemini épuisés (HTTP 402).");
+      if (res.status === 400 && schema) {
+        const err = new Error(`${model}: schéma de réponse refusé — ${text.replace(/\s+/g, " ").slice(0, 200)}`);
+        err.name = "SchemaRejected";
+        throw err;
+      }
       if (!res.ok) throw new Error(`${model}: HTTP ${res.status} — ${text.replace(/\s+/g, " ").slice(0, 200)}`);
 
       let data;
@@ -162,8 +187,12 @@
       }
       if (BLOCKED.has(candidate.finishReason)) throw new Error(`${model}: réponse interrompue (${candidate.finishReason})`);
       // Les parties « thought » sont la réflexion du modèle, pas le document.
-      const raw = ((candidate.content && candidate.content.parts) || []).filter((p) => !p.thought).map((p) => p.text || "").join("");
+      return ((candidate.content && candidate.content.parts) || []).filter((p) => !p.thought).map((p) => p.text || "").join("");
+    }
 
+    async function callGemini(model, userMessage, key, ctx, signal) {
+      const { cfg, system, libs } = ctx;
+      const raw = await requestGemini(model, system, userMessage, key, cfg, signal);
       const cleaned = S.cleanLlmOutput(raw);
       if (!S.hasMarkup(cleaned)) throw new Error(`${model}: aucune balise HTML dans la réponse`);
       const html = S.normalizeLibraries(S.ensureDocument(cleaned), libs);
@@ -175,7 +204,7 @@
     }
 
     /** Même contrat que POST /api/generate : { prompt, file?: {name, kind, summary}, baseHtml?, canvas? }. */
-    async function generate(prompt, { key = "", models = [], signal, file = null, baseHtml = null, canvas = null } = {}) {
+    async function generate(prompt, { key = "", models = [], signal, file = null, baseHtml = null, canvas = null, dna = null } = {}) {
       const started = now();
       const elapsed = () => Math.round(now() - started);
 
@@ -189,7 +218,7 @@
         return { html, mode: "mock", model: `mock:${template}`, elapsed_ms: elapsed(), warnings: S.validateDocument(html, allowedUrls(libs)) };
       }
 
-      const [cfg, libs, system, user, fileTpl, refactor, canvasTpl] = await Promise.all([
+      const [cfg, libs, system, user, fileTpl, refactor, canvasTpl, dnaTpl] = await Promise.all([
         load("gemini.json", "json"),
         load("libs.json", "json"),
         load("system-prompt.txt"),
@@ -197,11 +226,12 @@
         load("file-template.txt"),
         load("refactor-template.txt"),
         load("canvas-template.txt"),
+        load("dna-template.txt"),
       ]);
       const prompt0 = replaceAll(system.trim(), "{{chartjs_url}}", libs.chartjs.url);
       const ctx = { cfg, libs, system: replaceAll(prompt0, "{{tailwind_url}}", libs.tailwind.url) };
-      const templates = { user: user.trim(), file: fileTpl.trim(), refactor: refactor.trim(), canvas: canvasTpl.trim() };
-      const userMessage = buildUserMessage(prompt, file, baseHtml, templates, canvas);
+      const templates = { user: user.trim(), file: fileTpl.trim(), refactor: refactor.trim(), canvas: canvasTpl.trim(), dna: dnaTpl.trim() };
+      const userMessage = buildUserMessage(prompt, file, baseHtml, templates, canvas, dna);
       const errors = [];
       for (const model of models.length ? models : cfg.models) {
         try {
@@ -215,8 +245,39 @@
       throw new Error(`Tous les modèles ont échoué : ${errors.join(" | ")}`);
     }
 
-    return { generate, mock, defaults: () => load("gemini.json", "json"), libs: () => load("libs.json", "json") };
+    /** Même contrat que POST /api/engram : { engram, mode, model }. Sans clé : l'Engramme de démonstration. */
+    async function engram(person, { key = "", models = [], language = "fr", signal } = {}) {
+      if (!key) {
+        return { engram: E.normalize(await load("engram/demo-marie-curie.json", "json")), mode: "mock", model: "mock:engram-marie-curie" };
+      }
+      const [cfg, schema, system, template] = await Promise.all([
+        load("gemini.json", "json"),
+        load("engram/schema.json", "json"),
+        load("engram/system-prompt.txt"),
+        load("engram/user-template.txt"),
+      ]);
+      const userMessage = E.buildUserMessage(template, person, language);
+      const errors = [];
+      // Schéma imposé d'abord ; si chaque modèle le refuse, JSON simple (le prompt décrit la structure).
+      for (const withSchema of [true, false]) {
+        let rejectedAll = true;
+        for (const model of models.length ? models : cfg.models) {
+          try {
+            const text = await requestGemini(model, system.trim(), userMessage, key, cfg, signal, { json: true, schema: withSchema ? schema : null });
+            return { engram: E.normalize(E.parse(text)), mode: "gemini", model };
+          } catch (err) {
+            if (err.fatal || err.name === "EngramRefused" || (err.name === "AbortError" && signal && signal.aborted)) throw err;
+            errors.push(err.name === "EngramError" ? `${model}: ${err.message}` : err.message);
+            if (err.name !== "SchemaRejected") rejectedAll = false;
+          }
+        }
+        if (!rejectedAll) break;
+      }
+      throw new Error(`Engramme impossible : ${errors.slice(-6).join(" | ")}`);
+    }
+
+    return { generate, mock, engram, defaults: () => load("gemini.json", "json"), libs: () => load("libs.json", "json") };
   }
 
-  return { createLocalEngine, extractSeries, route, escapeHtml, buildUserMessage, buildCanvasBlock, allowedUrls };
+  return { createLocalEngine, extractSeries, route, escapeHtml, buildUserMessage, buildCanvasBlock, buildDnaBlock, allowedUrls };
 });

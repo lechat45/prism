@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import re
 from pathlib import Path
 from typing import Literal
@@ -61,9 +62,29 @@ class EngramRefused(Exception):
 # --------------------------------------------------------------------------- #
 # Validation et normalisation (données du modèle : non fiables)
 # --------------------------------------------------------------------------- #
+def _scalar(value) -> str:
+    """Chaîne, ou entier écrit en chiffres ; tout le reste compte pour vide (comme en JS)."""
+    if isinstance(value, str):
+        return value
+    return str(value) if isinstance(value, int) and not isinstance(value, bool) else ""
+
+
 def _text(value, limit: int) -> str:
-    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    text = re.sub(r"\s+", " ", _scalar(value)).strip()
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def _intensity(value) -> float:
+    """0..1 arrondi au centième (arrondi « demi vers le haut », identique en JS) ; 0,5 si illisible."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)) or (isinstance(value, str) and not value.strip()):
+        return 0.5
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.5
+    if not math.isfinite(number):
+        return 0.5
+    return math.floor(min(1.0, max(0.0, number)) * 100 + 0.5) / 100
 
 
 def _date_key(date: str) -> tuple[int, int, int]:
@@ -74,7 +95,7 @@ def _date_key(date: str) -> tuple[int, int, int]:
 
 
 def _slug(value: str, fallback: str) -> str:
-    slug = re.sub(r"[^a-z0-9_-]+", "-", str(value or "").lower()).strip("-")[:24]
+    slug = re.sub(r"[^a-z0-9_-]+", "-", _scalar(value).lower()).strip("-")[:24]
     return slug or fallback
 
 
@@ -82,23 +103,21 @@ def normalize(raw: dict) -> dict:
     """JSON du modèle → Engramme conforme, ou EngramError / EngramRefused."""
     if not isinstance(raw, dict):
         raise EngramError("réponse qui n'est pas un objet JSON")
-    if raw.get("refusal") or raw.get("public_figure") is False:
-        raise EngramRefused(_text(raw.get("refusal") or "Personnalité publique non reconnue.", 300))
+    refusal = raw.get("refusal").strip() if isinstance(raw.get("refusal"), str) else ""
+    if refusal or raw.get("public_figure") is False:
+        raise EngramRefused(_text(refusal or "Personnalité publique non reconnue.", 300))
     nodes, seen = [], set()
-    for index, node in enumerate(raw.get("nodes") or []):
+    for index, node in enumerate(raw.get("nodes") if isinstance(raw.get("nodes"), list) else []):
         if not isinstance(node, dict):
             continue
         category = node.get("category")
-        if category not in TYPES or node.get("type") not in TYPES[category]:
+        if not isinstance(category, str) or category not in TYPES or node.get("type") not in TYPES[category]:
             continue  # type incohérent avec sa catégorie : nœud écarté (les comptes trancheront)
         node_id = _slug(node.get("id"), f"n{index}")
         while node_id in seen:
             node_id = f"{node_id[:20]}-{index}"
         seen.add(node_id)
-        try:
-            intensity = min(1.0, max(0.0, float(node.get("intensity", 0.5))))
-        except (TypeError, ValueError):
-            intensity = 0.5
+        intensity = _intensity(node.get("intensity"))
         clean = {
             "id": node_id,
             "category": category,
@@ -108,20 +127,23 @@ def normalize(raw: dict) -> dict:
             "directive": _text(node.get("directive"), LIMITS["directive"]),
             "basis": node.get("basis") if node.get("basis") in ("documente", "declare", "interpretation") else "interpretation",
             "evidence": _text(node.get("evidence"), LIMITS["evidence"]),
-            "intensity": round(intensity, 2),
+            "intensity": intensity,
         }
         if not (clean["title"] and clean["content"] and clean["directive"]):
             continue
         if category == "artifact":
-            date = str(node.get("date") or "").strip()
-            if not DATE_RE.match(date) or not node.get("impact"):
+            date = _scalar(node.get("date")).strip()
+            impact = _text(node.get("impact"), LIMITS["impact"])
+            if not DATE_RE.fullmatch(date) or not impact:
                 continue  # un artefact sans date vérifiable n'a pas sa place
             clean["date"] = date
-            clean["impact"] = _text(node.get("impact"), LIMITS["impact"])
+            clean["impact"] = impact
         if node["type"] == "matrice_esthetique":
-            clean["palette"] = [c.lower() for c in (node.get("palette") or []) if isinstance(c, str) and HEX_RE.match(c)][:5]
+            palette = node.get("palette") if isinstance(node.get("palette"), list) else []
+            clean["palette"] = [c.lower() for c in palette if isinstance(c, str) and HEX_RE.fullmatch(c)][:5]
         if node["type"] == "empreinte_syntaxique":
-            clean["keywords"] = [_text(k, 40) for k in (node.get("keywords") or []) if isinstance(k, str) and k.strip()][:8]
+            keywords = node.get("keywords") if isinstance(node.get("keywords"), list) else []
+            clean["keywords"] = [_text(k, 40) for k in keywords if isinstance(k, str) and k.strip()][:8]
         nodes.append({**clean, "_order": index})
 
     by_category: dict[str, list[dict]] = {c: [n for n in nodes if n["category"] == c] for c in TYPES}
@@ -144,7 +166,7 @@ def normalize(raw: dict) -> dict:
 
     ids = {n["id"] for n in ordered}
     links, pairs = [], set()
-    for link in raw.get("links") or []:
+    for link in raw.get("links") if isinstance(raw.get("links"), list) else []:
         if not isinstance(link, dict):
             continue
         a, b, kind = _slug(link.get("from"), ""), _slug(link.get("to"), ""), link.get("kind")

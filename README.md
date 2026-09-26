@@ -23,6 +23,9 @@ dans une carte que l'on déplace, redimensionne, refactorise, recolore et export
 | **Bus d'évènements** | les widgets se parlent : `prism.emit(sujet, données)` / `prism.on(sujet, fn)` ; liaisons tracées sur le canvas ; une nouvelle génération connaît les sujets des widgets présents et peut s'y brancher |
 | **Spotlight** | Ctrl/Cmd + K (même dans un widget) : générer, refactoriser la carte sélectionnée, sauter à une carte, commandes, widgets de « Mon Hub », au clavier |
 | **Liquid Glass** | aurore sous le verre dépoli, reflets des bords qui suivent le pointeur, squelette holographique pendant la génération, fondu enchaîné vers le widget une fois prêt |
+| **Engramme cognitif** (V4) | « Engramme : Marie Curie » : carte interprétative de l'esprit d'une personnalité publique en 30 à 36 bulles vivantes (noyau, moteurs, ombres, artefacts datés), moteur physique ressort-masse natif ; chaque bulle devient un **filtre ADN** pour vos générations |
+| **Zoom fractal** (V4) | double-clic sur une partie d'un widget : Prism propose d'en faire un widget complet, qui émerge du point cliqué |
+| **Incantation** (V4) | maintenir Espace et parler : la demande dictée devient une carte sous le pointeur ; pendant l'écoute, le **verre organique** respire avec la voix |
 
 ## Deux façons de l'utiliser
 
@@ -156,6 +159,45 @@ prism.on("*", (data, { topic, from }) => { … });                       // tout
   hors champ (canvas restauré, appareil neuf) garde son squelette et ne charge son iframe qu'à son approche ; un
   grand canvas se restaure donc sans lancer des dizaines de widgets invisibles.
 
+## Prism V4 « Singularité » : l'Engramme cognitif
+
+Tapez **« Engramme : Marie Curie »** (dock, Spotlight ou voix) : Prism cartographie l'esprit d'une
+personnalité publique, vivante ou historique, en une constellation de 30 à 36 bulles.
+
+| Catégorie | Bulles | Rendu et physique |
+| --- | --- | --- |
+| **A. Noyau** | 1 axiome | orbe blanc massif, rappelé au centre par un ressort très raide : immobile |
+| **B. Moteurs opérationnels** | 8 à 10 : algorithme de résolution, empreinte syntaxique (mots-clés), matrice esthétique (palette), méthode de travail | cyan, orbite proche, liens épais vers le noyau, dérive lente et amortie |
+| **C. Ombres et biais** | 10 à 15 : paradoxes, peurs primaires, biais cognitifs | violet / cramoisi, orbite médiane, bruit lissé et sursauts, se repoussent entre elles, **fuient le pointeur**, pulsation asynchrone, glitch (aberration chromatique, tranches décalées) |
+| **D. Artefacts chronologiques** | exactement 10 évènements datés, avec leur impact | or, minuscules, orbite lointaine, rapides, traînées |
+
+- **Moteur physique natif** (`frontend/engine/engram/physics.js`, sans D3) : ressort-masse, Euler semi-implicite
+  à pas fixe (1/120 s), déterministe (graine), anneaux elliptiques épousant la carte, répulsion à courte portée.
+  La bulle survolée s'arrête et grossit ; une fiche **Liquid Glass** (`bg-white/10 backdrop-blur-xl
+  border-white/20 shadow-2xl`) montre titre, contenu, directive ADN, source (documenté / déclaré /
+  interprétation), date et impact, palette, vocabulaire.
+- **Définition JSON stricte** : Gemini reçoit un schéma de réponse (`responseSchema`, `engine/engram/schema.json`)
+  et renvoie un JSON garanti ; `backend/engram.py` (et son jumeau `engine/engram/engram.js`, parité testée)
+  en vérifie le sens : comptes par catégorie, types présents, dates vérifiables, liens valides. Un modèle qui
+  échoue passe la main au suivant ; si le schéma est refusé partout, nouvel essai en JSON simple.
+- **Éthique** : personnalités publiques uniquement (refus motivé sinon, Sparks rendus), faits publics
+  seulement, aucune citation ni date inventée, ombres présentées comme des interprétations et jamais comme des
+  diagnostics ; chaque carte porte la mention « portrait interprétatif généré par IA d'après des sources
+  publiques ».
+- **Injection d'ADN** : un clic sur une bulle en fait le **filtre ADN** du dock (la prochaine demande passe par ce
+  trait : esthétique, logique, ton) ; un fichier CSV/JSON/TXT ou un texte **déposé sur une bulle** lance
+  aussitôt la génération filtrée, à côté de l'Engramme. Le trait part avec la demande (`dna`) et le prompt
+  l'applique sans jamais faire parler la personne.
+- **Zoom fractal** : double-clic sur une partie d'un widget (tableau, graphique, formulaire…) → proposition
+  « Zoom fractal » ; le sous-composant devient un widget complet, avec les mêmes données, qui émerge du point cliqué.
+- **Incantation** : Espace maintenu (hors d'un champ) ouvre l'écoute (Web Speech API) ; la transcription
+  s'affiche sous le pointeur ; au relâchement, la carte naît à cet endroit (« engramme de … » crée un Engramme).
+  Aussi depuis Spotlight (« Incantation vocale »).
+- **Verre organique** : pendant l'écoute, le volume du micro (AudioContext + AnalyserNode) module le flou et la
+  saturation du verre et la taille de l'orbe. Uniquement pendant l'incantation : aucun repeint continu au-dessus
+  des widgets. Le micro est réservé à la page (`Permissions-Policy: microphone=(self)`), jamais aux widgets.
+- Coût en mode serveur : **2 Sparks** par Engramme ; sans clé (démo), l'Engramme d'exemple de Marie Curie.
+
 ## Architecture
 
 ```
@@ -166,6 +208,7 @@ backend/
   auth.py, billing.py, widgets.py, models.py, db.py, security.py   comptes, Sparks, historique (v3)
   sanitize.py           nettoyage de la sortie LLM, épinglage de Tailwind et Chart.js, validation HTML/JS
   mocks.py              mode démo (lit les gabarits partagés)
+  engram.py             V4 : /api/engram, validation de l'Engramme, repli JSON simple
   tests/                unittest : nettoyage, API avec faux Gemini, comptes, Sparks, parité Python ↔ JS
 frontend/
   index.html            barre du haut, canvas, dock de saisie, inspecteur, réglages
@@ -186,6 +229,8 @@ frontend/
   js/links.js           liaisons du bus dessinées sur le canvas (SVG), lueur à chaque évènement
   js/spotlight.js       barre de commande Ctrl/Cmd + K : classement, liste, exécution
   js/reflections.js     IntersectionObserver (cartes visibles, démarrage différé) et reflets des bords
+  js/engram.js          V4 : document des cartes Engramme, données relues, trait ADN d'une bulle
+  js/voice.js           V4 : incantation (Espace maintenu, reconnaissance vocale) et verre organique (micro)
   js/store.js           persistance IndexedDB
   engine/               ── partagé par les deux moteurs ──
     system-prompt.txt     contrat de sortie : HTML seul, Tailwind uniquement, persistance, --accent, Chart.js, PRISM_FILE
@@ -193,12 +238,18 @@ frontend/
     gemini.json, groq.json, libs.json  modèles et bibliothèques autorisées (URL + SRI)
     mocks/                gabarits de démo (compteur, calculatrice, dashboard, CSV, JSON, TXT…)
     sanitize.js, local.js portage JS du nettoyage et moteur navigateur
+    dna-template.txt      section « filtre ADN » du message (trait d'Engramme)
+    engram/               V4 : schema.json (réponse imposée à Gemini), system-prompt.txt, user-template.txt,
+                          engram.js (validation, document de carte), physics.js (moteur ressort-masse),
+                          viewer.html (rendu Canvas, fiche Liquid Glass), demo-marie-curie.json
   tests/                fixtures partagées, tests Node (moteur, sandbox, fichiers, worker)
 tools/
   e2e_canvas.mjs        E2E : Chrome headless via CDP (deux widgets, vrais clics et glisser-déposer…)
   e2e_server.py         backend branché sur un faux Gemini local (génération « réelle », refactorisation)
   perf_probe.mjs        mesures de fluidité (images/s, blocages du fil principal), profils CPU facultatifs
   e2e_pages_api.mjs     E2E : frontend servi comme GitHub Pages, API distante endormie puis réveillée
+  e2e_engram.mjs        E2E V4 : Engramme, survol et fiche, filtre ADN, dépôt sur une bulle, zoom fractal,
+                        incantation (micro factice, reconnaissance simulée), verre organique, rechargement
   prod_local.py         Prism en configuration de production, en local (port 8005)
   check_deploy.py       contrôles d'un déploiement (santé, en-têtes, CORS, frontend, authentification)
   serve_static.py       sert le site en statique, comme GitHub Pages
@@ -225,7 +276,7 @@ des offres gratuites, sécurité et dépannage : **[DEPLOY.md](DEPLOY.md)**.
 
 ```bash
 .venv/Scripts/python -m unittest discover -s backend/tests      # backend + parité Python ↔ JS
-node --test frontend/tests/spotlight.test.mjs frontend/tests/bus.test.mjs frontend/tests/engine.test.cjs frontend/tests/files.test.mjs frontend/tests/sandbox.test.mjs frontend/tests/tasks.test.mjs
+node --test frontend/tests/*.test.*                              # (bash) moteur, sandbox, bus, Engramme, physique…
 .venv/Scripts/python tools/e2e_server.py --demo &                 # serveur démo, base jetable
 node tools/e2e_canvas.mjs --base http://127.0.0.1:8004
 .venv/Scripts/python tools/serve_static.py &                      # comme GitHub Pages
@@ -234,6 +285,8 @@ node tools/perf_probe.mjs --base http://127.0.0.1:8001/           # fluidité (-
 .venv/Scripts/python tools/e2e_server.py &                        # faux Gemini : génération et refactorisation
 node tools/e2e_canvas.mjs --base http://127.0.0.1:8003 --refactor
 node tools/e2e_pages_api.mjs --api http://127.0.0.1:8004          # GitHub Pages → API (serveur démo lancé)
+node tools/e2e_engram.mjs --base http://127.0.0.1:8004             # V4 : Engramme, ADN, zoom fractal, incantation
+node tools/e2e_engram.mjs --base http://127.0.0.1:8001/frontend/   # V4 : idem, moteur navigateur
 .venv/Scripts/python tools/prod_local.py &                       # configuration de production, port 8005
 .venv/Scripts/python tools/check_deploy.py http://127.0.0.1:8005 --allow-demo
 ```
@@ -267,6 +320,7 @@ curl -s -X POST http://127.0.0.1:8000/api/generate -H "Content-Type: application
 | 4. Bus d'évènements | `prism.emit` / `prism.on` entre widgets, relayés par le canvas ; le prompt connaît les sujets des widgets présents | **fait** (`3.5.0-alpha.4`) |
 | 5. Spotlight et reflets | invite flottante Ctrl/Cmd + K ; reflets des bords via IntersectionObserver et position du pointeur | **fait** (`3.5.0-alpha.5`) |
 | 6. Déploiement | image Docker, blueprint Render, PostgreSQL (Neon), garde-fous de production, en-têtes, CI, frontend Pages pointé vers l'API | **prêt** (`3.5.0-rc.1`) — mise en ligne : [DEPLOY.md](DEPLOY.md) |
+| V4 « Singularité » | Engramme cognitif, injection d'ADN, zoom fractal, incantation vocale, verre organique | **fait** (`4.0.0-alpha.1`, branche `v4`) |
 
 API ajoutée en phase 1 (jeton `Authorization: Bearer …` sauf `register`/`login`/`health`) :
 
@@ -274,7 +328,8 @@ API ajoutée en phase 1 (jeton `Authorization: Bearer …` sauf `register`/`logi
 | --- | --- |
 | `POST /api/auth/register`, `POST /api/auth/login` | `{ email, password }` → `{ token, user }` (50 Sparks offerts à l'inscription) |
 | `GET /api/auth/me` | profil et solde |
-| `POST /api/generate` | `{ prompt, file?, widget_id?, canvas? }` : génère (1 Spark) ou refactorise ce widget (0,5 Spark) ; `canvas` = autres widgets et sujets du bus (20 au plus) ; **403** `insufficient_sparks` si le solde manque |
+| `POST /api/generate` | `{ prompt, file?, widget_id?, canvas?, dna? }` : génère (1 Spark) ou refactorise ce widget (0,5 Spark) ; `canvas` = autres widgets et sujets du bus (20 au plus) ; `dna` = trait d'Engramme qui filtre la génération (V4) ; **403** `insufficient_sparks` si le solde manque |
+| `POST /api/engram` | `{ person, language? }` : Engramme cognitif (2 Sparks, V4) ; **422** `engram_refused` (personne non publique, Sparks rendus) |
 | `GET /api/sparks` | solde, tarifs, derniers mouvements |
 | `GET /api/widgets[?on_canvas=true]`, `GET/PATCH/DELETE /api/widgets/{id}`, `POST /api/widgets/{id}/undo` | « Mon Hub » : liste légère, détail, état de la carte (`layout`, `clear_layout`, `storage`, `accent`, `title`, `thumbnail`), annulation, suppression |
 | `POST /api/widgets` | importe une carte créée hors compte (gratuit, 1 000 widgets par compte au plus) |

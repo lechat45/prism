@@ -39,6 +39,7 @@
   const POINTER_REPULSION = 900000; // les ombres fuient le pointeur
   const LINK_K = { forge: 1.2, nourrit: 1.6, contredit: 0.8 };
   const HOVER_SCALE = 1.7;
+  const CORE_HOVER_SCALE = 1.15; // le noyau, déjà massif, grossit à peine
 
   /** Générateur pseudo-aléatoire déterministe (mulberry32). */
   function rng(seed) {
@@ -200,7 +201,7 @@
 
       for (let i = 0; i < nodes.length; i++) {
         const n = nodes[i];
-        const target = n.id === hoverId ? n.baseR * HOVER_SCALE : n.baseR;
+        const target = n.id === hoverId ? n.baseR * (n === core ? CORE_HOVER_SCALE : HOVER_SCALE) : n.baseR;
         n.r += (target - n.r) * Math.min(1, dt * 12);
         if (n.id === hoverId) {
           n.vx = 0; // la bulle survolée s'arrête

@@ -7,6 +7,7 @@ const fs = require("fs");
 const path = require("path");
 const S = require("../engine/sanitize.js");
 const L = require("../engine/local.js");
+const E = require("../engine/engram/engram.js");
 
 const FRONTEND = path.resolve(__dirname, "..");
 const read = (rel) => fs.readFileSync(path.join(FRONTEND, rel), "utf8");
@@ -26,7 +27,35 @@ const templates = {
   file: read("engine/file-template.txt").trim(),
   refactor: read("engine/refactor-template.txt").trim(),
   canvas: read("engine/canvas-template.txt").trim(),
+  dna: read("engine/dna-template.txt").trim(),
 };
+const demo = JSON.parse(read("engine/engram/demo-marie-curie.json"));
+const engramTemplate = read("engine/engram/user-template.txt");
+const clone = (value) => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)));
+
+// Démo de l'Engramme modifiée par les opérations du cas (même algorithme que test_parity.py).
+function patched(c) {
+  if ("raw" in c) return clone(c.raw);
+  const data = clone(demo);
+  for (const [op, path, value] of c.patch) {
+    let parent = data;
+    for (const key of path.slice(0, -1)) parent = parent[key];
+    const last = path[path.length - 1];
+    if (op === "set") parent[last] = clone(value);
+    else if (op === "append") parent[last].push(clone(value));
+    else parent.splice(last, 1);
+  }
+  return data;
+}
+
+function outcome(fn) {
+  try {
+    return { ok: fn() };
+  } catch (err) {
+    if (err.name === "EngramRefused" || err.name === "EngramError") return { error: err.name };
+    throw err;
+  }
+}
 
 async function runFixtures() {
   const engine = L.createLocalEngine({ baseUrl: "engine/", fetch: fileFetch });
@@ -42,7 +71,10 @@ async function runFixtures() {
     series: fixtures.series.map((c) => L.extractSeries(c.prompt, manifest)),
     renders: await Promise.all(fixtures.render.map(mockHtml)),
     mock_renders: await Promise.all(fixtures.routing.map(mockHtml)),
-    messages: fixtures.messages.map((c) => L.buildUserMessage(c.prompt, c.file || null, c.base_html || null, templates, c.canvas || null)),
+    messages: fixtures.messages.map((c) => L.buildUserMessage(c.prompt, c.file || null, c.base_html || null, templates, c.canvas || null, c.dna || null)),
+    engram: fixtures.engram.map((c) => outcome(() => E.normalize(patched(c)))),
+    engram_parse: fixtures.engram_parse.map((t) => outcome(() => E.parse(t))),
+    engram_messages: fixtures.engram_messages.map((c) => E.buildUserMessage(engramTemplate, c.person, c.language)),
   };
 }
 

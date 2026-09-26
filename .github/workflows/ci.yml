@@ -78,6 +78,10 @@ jobs:
         run: node tools/e2e_canvas.mjs --base http://127.0.0.1:8004
       - name: GitHub Pages → API distante (serveur endormi puis réveillé)
         run: node tools/e2e_pages_api.mjs --api http://127.0.0.1:8004
+      - name: V4 · Engramme, ADN, zoom fractal, incantation (serveur en mode démo)
+        run: node tools/e2e_engram.mjs --base http://127.0.0.1:8004
+      - name: V4 · Engramme, ADN, zoom fractal, incantation (statique, moteur navigateur)
+        run: node tools/e2e_engram.mjs --base http://127.0.0.1:8001/frontend/
       - name: Journaux des serveurs
         if: failure()
         run: tail -n 80 static.log fake-gemini.log demo.log

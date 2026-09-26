@@ -6,7 +6,7 @@ const $ = (id) => document.getElementById(id);
 const dateFmt = new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" });
 
 export class Inspector {
-  /** actions : { refactor, undo, setAccent, copy, download, toggleCode, reload, resetData, remove, openSettings, hasModel, engineKind, canUndo, setMuted } */
+  /** actions : { refactor, undo, setAccent, copy, download, toggleCode, reload, resetData, remove, openSettings, hasModel, engineKind, canUndo, canRefactor?, setMuted } */
   constructor(actions) {
     this.actions = actions;
     this.card = null;
@@ -124,16 +124,19 @@ export class Inspector {
 
     const ready = card.status === "ready" || card.status === "warn";
     const busy = card.status === "busy" || card.status === "loading";
-    const canRefactor = a.hasModel();
+    const refactorable = !a.canRefactor || a.canRefactor(card); // un Engramme ne se refactorise pas
+    const canRefactor = a.hasModel() && refactorable;
     $("refactor-input").disabled = !canRefactor || busy;
     $("refactor-btn").disabled = !canRefactor || busy || !ready;
     $("refactor-btn").querySelector(".cta-label").textContent = card.status === "busy" ? "Refactorisation…" : "Appliquer";
     const note = $("refactor-note");
     note.hidden = canRefactor;
-    $("refactor-settings").hidden = canRefactor || a.engineKind() === "server";
-    note.textContent = a.engineKind() === "server"
-      ? "La refactorisation utilise un modèle : ajoutez GEMINI_API_KEY dans backend/.env."
-      : "La refactorisation utilise un modèle : ajoutez votre clé Gemini gratuite.";
+    $("refactor-settings").hidden = canRefactor || !refactorable || a.engineKind() === "server";
+    note.textContent = !refactorable
+      ? "Un Engramme ne se refactorise pas : cliquez une bulle pour en faire un filtre ADN, ou déposez-y un fichier."
+      : a.engineKind() === "server"
+        ? "La refactorisation utilise un modèle : ajoutez GEMINI_API_KEY dans backend/.env."
+        : "La refactorisation utilise un modèle : ajoutez votre clé Gemini gratuite.";
     $("undo-btn").hidden = !a.canUndo(card) || busy;
 
     document.querySelectorAll("#swatches button.swatch").forEach((sw) => {

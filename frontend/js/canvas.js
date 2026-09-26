@@ -201,7 +201,8 @@ export class Canvas {
     this.onPlace(card); // ex. liaisons du bus d'évènements
   }
 
-  add(card, { animate = true } = {}) {
+  /** from : point du monde d'où la carte émerge (zoom fractal, incantation) ; sinon entrée simple. */
+  add(card, { animate = true, from = null } = {}) {
     const el = document.createElement("article");
     el.className = "card";
     el.dataset.id = card.id;
@@ -236,8 +237,12 @@ export class Canvas {
         <pre class="card-code" hidden></pre>
       </div>
       <div class="card-resize" aria-hidden="true"></div>`;
-    if (animate) el.classList.add("is-entering");
-    el.addEventListener("animationend", () => el.classList.remove("is-entering"), { once: true });
+    if (animate && from) {
+      el.style.setProperty("--from-dx", `${Math.round(from.x - (card.x + card.w / 2))}px`);
+      el.style.setProperty("--from-dy", `${Math.round(from.y - (card.y + card.h / 2))}px`);
+      el.classList.add("is-emerging");
+    } else if (animate) el.classList.add("is-entering");
+    el.addEventListener("animationend", () => el.classList.remove("is-entering", "is-emerging"), { once: true });
     this.world.append(el);
     this.cards.set(card.id, { card, el });
     card.z = card.z || ++this.topZ;
@@ -375,14 +380,31 @@ export class Canvas {
     });
   }
 
+  /** Vrai si un rectangle w × h en (x, y) ne touche aucune carte (marge comprise). */
+  isFree(x, y, w, h) {
+    return [...this.cards.values()].every(({ card: o }) =>
+      x + w + GAP / 2 <= o.x || o.x + o.w + GAP / 2 <= x || y + h + GAP / 2 <= o.y || o.y + o.h + GAP / 2 <= y);
+  }
+
+  /** Emplacement libre contre une carte (à droite, dessous, à gauche, dessus…), sinon près du centre. */
+  spotNear(source, w, h) {
+    const { x, y } = source;
+    const candidates = [
+      [x + source.w + GAP, y], [x, y + source.h + GAP], [x - w - GAP, y], [x, y - h - GAP],
+      [x + source.w + GAP, y + source.h + GAP], [x - w - GAP, y + source.h + GAP],
+      [x + source.w + GAP, y - h - GAP], [x - w - GAP, y - h - GAP],
+    ];
+    const spot = candidates.find(([cx, cy]) => this.isFree(cx, cy, w, h));
+    return spot ? { x: Math.round(spot[0]), y: Math.round(spot[1]) } : this.findSpot(w, h);
+  }
+
   /** Premier emplacement libre autour du centre de la zone visible. */
   findSpot(w, h) {
     const area = this.safeArea();
     const r = this.workspace.getBoundingClientRect();
     const center = this.screenToWorld(r.left + area.left + area.width / 2, r.top + area.top + area.height / 2);
     const others = [...this.cards.values()].map((c) => c.card);
-    const free = (x, y) =>
-      others.every((o) => x + w + GAP / 2 <= o.x || o.x + o.w + GAP / 2 <= x || y + h + GAP / 2 <= o.y || o.y + o.h + GAP / 2 <= y);
+    const free = (x, y) => this.isFree(x, y, w, h);
     const stepX = (w + GAP) / 2;
     const stepY = (h + GAP) / 2;
     for (let ring = 0; ring < 14; ring++) {

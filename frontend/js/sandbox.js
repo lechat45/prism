@@ -242,6 +242,40 @@ function prelude(snapshot) {
       send("spotlight");
     }
   }, true);
+  // Zoom fractal : double-clic sur une partie du widget → la page propose d'en faire un widget à part
+  // entière. Le composant visé (le plus petit bloc qui fait sens) est décrit ici : balise, intitulé,
+  // texte visible et extrait de code (sans scripts ni styles).
+  function fractalTarget(el) {
+    var screen = Math.max(1, window.innerWidth * window.innerHeight);
+    var best = null;
+    for (var node = el; node && node.nodeType === 1 && node !== document.body && node !== document.documentElement; node = node.parentElement) {
+      var r = node.getBoundingClientRect();
+      var area = r.width * r.height;
+      if (area > screen * 0.8) break;
+      best = node;
+      if (area >= 2500 && /^(section|article|aside|figure|form|table|ul|ol|nav|header|footer|canvas|svg|details|fieldset)$/i.test(node.tagName)) break;
+      if (area >= 12000 && node.children.length >= 2) break;
+    }
+    return best;
+  }
+  document.addEventListener("dblclick", function (e) {
+    if (document.documentElement.hasAttribute("data-prism-nofractal")) return;
+    var t = e.target && e.target.nodeType === 1 ? e.target : e.target && e.target.parentElement;
+    if (!t || t.closest("input, textarea, select, option, [contenteditable], [data-prism-nofractal]")) return;
+    var el = fractalTarget(t);
+    if (!el) return;
+    var copy = el.cloneNode(true);
+    var drop = copy.querySelectorAll("script, style");
+    for (var i = 0; i < drop.length; i++) drop[i].parentNode.removeChild(drop[i]);
+    var heading = el.querySelector("h1, h2, h3, h4, legend, caption, figcaption, th, strong");
+    var label = el.getAttribute("aria-label") || (heading && heading.textContent) || el.textContent || el.tagName;
+    send("fractal", {
+      x: e.clientX, y: e.clientY, tag: el.tagName.toLowerCase(),
+      label: String(label).replace(/\s+/g, " ").trim().slice(0, 80),
+      text: String(el.innerText || el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 600),
+      html: String(copy.outerHTML || "").slice(0, 3000)
+    });
+  }, true);
   // Position du pointeur au-dessus du widget (reflets des bords de sa carte), ~30 fois/s au plus,
   // jamais bouton enfoncé : pendant un clic ou un glisser, la page ne repeint rien sous l'iframe.
   var lastPointer = 0;

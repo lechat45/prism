@@ -203,5 +203,71 @@ class EngramApiTests(DbTestCase):
         self.assertEqual(res.json()["detail"]["code"], "insufficient_sparks")
 
 
+class DnaGenerateTests(DbTestCase):
+    """« Injection d'ADN » : le trait choisi part avec la demande et filtre la génération."""
+
+    DOC = "<!DOCTYPE html><html><head><title>Minuteur</title></head><body><p>ok</p></body></html>"
+
+    def setUp(self):
+        super().setUp()
+        self._saved = (prism.GEMINI_MODELS, prism._http_client)
+        prism.GEMINI_API_KEY = "cle-test"
+        prism.GEMINI_MODELS = [M1]
+        self.bodies: list[dict] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            self.bodies.append(json.loads(request.content))
+            return gemini_json(self.DOC)
+
+        prism._http_client = lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        self.client = TestClient(prism.app)
+        self.auth = self.register(self.client)
+        self.trait = engram.DEMO["nodes"][6]  # matrice esthétique, avec palette
+
+    def tearDown(self):
+        prism.GEMINI_MODELS, prism._http_client = self._saved
+        super().tearDown()
+
+    def dna(self, **changes):
+        n = self.trait
+        return {"person": "Marie Curie", "category": n["category"], "type": n["type"], "title": n["title"],
+                "content": n["content"], "directive": n["directive"], "palette": n.get("palette", []), **changes}
+
+    def test_trait_reaches_the_model(self):
+        res = self.client.post("/api/generate", json={"prompt": "Un minuteur", "dna": self.dna()}, headers=self.auth)
+        self.assertEqual(res.status_code, 200, res.text)
+        message = self.bodies[0]["contents"][0]["parts"][0]["text"]
+        self.assertIn("COGNITIVE DNA FILTER", message)
+        self.assertIn(self.trait["directive"], message)
+        self.assertIn("Palette to use: " + ", ".join(self.trait["palette"]), message)
+        self.assertLess(message.index("<<<\nUn minuteur\n>>>"), message.index("COGNITIVE DNA FILTER"), "la demande d'abord")
+
+    def test_invalid_trait_is_rejected_before_billing(self):
+        cases = {
+            "type d'une autre catégorie": self.dna(category="shadow"),
+            "couleur invalide": self.dna(palette=["rouge"]),
+            "directive vide": self.dna(directive=""),
+            "titre trop long": self.dna(title="T" * (engram.LIMITS["title"] + 1)),
+        }
+        for label, dna in cases.items():
+            with self.subTest(label):
+                res = self.client.post("/api/generate", json={"prompt": "Un minuteur", "dna": dna}, headers=self.auth)
+                self.assertEqual(res.status_code, 422)
+        self.assertEqual(self.bodies, [])
+        self.assertEqual(self.client.get("/api/auth/me", headers=self.auth).json()["sparks"], 50.0)
+
+    def test_refactor_ignores_the_trait(self):
+        created = self.client.post("/api/generate", json={"prompt": "Un minuteur"}, headers=self.auth).json()
+        res = self.client.post("/api/generate", json={"prompt": "ajoute un titre", "widget_id": created["widget"]["id"], "dna": self.dna()},
+                               headers=self.auth)
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertNotIn("COGNITIVE DNA FILTER", self.bodies[-1]["contents"][0]["parts"][0]["text"])
+
+    def test_page_may_use_the_microphone_widgets_never(self):
+        policy = self.client.get("/api/health").headers["Permissions-Policy"]
+        self.assertIn("microphone=(self)", policy, "incantation vocale et verre organique (page)")
+        self.assertIn("camera=()", policy)
+
+
 if __name__ == "__main__":
     unittest.main()

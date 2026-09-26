@@ -1,5 +1,5 @@
 {
-  "_doc": "Cas partagés : rejoués par backend/tests/test_parity.py (Python + comparaison exacte avec le JS via Node) et frontend/tests/engine.test.cjs.",
+  "_doc": "Cas partagés : rejoués par backend/tests/test_parity.py (Python + comparaison exacte avec le JS via Node) et frontend/tests/engine.test.cjs. Sections engram* : validation de l'Engramme cognitif (backend/engram.py ↔ engine/engram/engram.js), appliquée à la démo modifiée par « patch » : [op, chemin, valeur] avec op = set | append | remove.",
   "clean": [
     {
       "name": "document propre intact",
@@ -433,6 +433,818 @@
         "<<<\nbranche-toi au filtre\n>>>"
       ],
       "absent": []
+    },
+    {
+      "name": "filtre ADN (non réinterprété)",
+      "prompt": "un minuteur de concentration",
+      "dna": {
+        "person": "Marie Curie",
+        "category": "engine",
+        "type": "matrice_esthetique",
+        "title": "Sobriété {{directive}}",
+        "content": "Instruments de laboratoire",
+        "directive": "Fond blanc, filets fins",
+        "palette": [
+          "#112233",
+          "#AABBCC"
+        ],
+        "keywords": [
+          "mesure",
+          "rigueur"
+        ]
+      },
+      "contains": [
+        "COGNITIVE DNA FILTER",
+        "Cognitive Engram of Marie Curie",
+        "Trait: Sobriété {{directive}} (engine / matrice_esthetique)",
+        "Fond blanc, filets fins",
+        "Palette to use: #112233, #AABBCC.",
+        "Vocabulary to weave into the texts: mesure, rigueur.",
+        "Never impersonate Marie Curie",
+        "<<<\nun minuteur de concentration\n>>>"
+      ],
+      "absent": [
+        "{{extras}}",
+        "{{person}}",
+        "{{dna}}"
+      ]
+    },
+    {
+      "name": "filtre ADN ignoré en refactorisation",
+      "prompt": "ajoute un titre",
+      "base_html": "<!DOCTYPE html><html><body>x</body></html>",
+      "dna": {
+        "person": "Marie Curie",
+        "category": "shadow",
+        "type": "paradoxe",
+        "title": "T",
+        "content": "",
+        "directive": "D"
+      },
+      "contains": [
+        "current source of an existing widget"
+      ],
+      "absent": [
+        "COGNITIVE DNA FILTER",
+        "{{dna}}"
+      ]
+    },
+    {
+      "name": "sans filtre ADN, aucune trace",
+      "prompt": "une horloge",
+      "contains": [
+        "<<<\nune horloge\n>>>"
+      ],
+      "absent": [
+        "COGNITIVE DNA",
+        "{{dna}}"
+      ]
+    }
+  ],
+  "engram": [
+    {
+      "name": "démo intacte",
+      "patch": []
+    },
+    {
+      "name": "textes : espaces, coupe au point de code, scalaires",
+      "patch": [
+        [
+          "set",
+          [
+            "nodes",
+            0,
+            "title"
+          ],
+          "  Comprendre,\n\tjamais   craindre 🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍🌍xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            1,
+            "content"
+          ],
+          12345
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            2,
+            "evidence"
+          ],
+          [
+            "liste"
+          ]
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            3,
+            "evidence"
+          ],
+          true
+        ],
+        [
+          "set",
+          [
+            "person"
+          ],
+          "  Marie \n Curie  "
+        ],
+        [
+          "set",
+          [
+            "summary"
+          ],
+          3.5
+        ]
+      ]
+    },
+    {
+      "name": "contenu non textuel : nœud écarté (type manquant)",
+      "patch": [
+        [
+          "set",
+          [
+            "nodes",
+            6,
+            "content"
+          ],
+          [
+            "x"
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "intensités",
+      "patch": [
+        [
+          "set",
+          [
+            "nodes",
+            1,
+            "intensity"
+          ],
+          "0.735"
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            2,
+            "intensity"
+          ],
+          0.125
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            3,
+            "intensity"
+          ],
+          true
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            4,
+            "intensity"
+          ],
+          null
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            5,
+            "intensity"
+          ],
+          7
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            6,
+            "intensity"
+          ],
+          -3
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            7,
+            "intensity"
+          ],
+          "abc"
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            8,
+            "intensity"
+          ],
+          0.005
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            9,
+            "intensity"
+          ],
+          "  "
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            10,
+            "intensity"
+          ],
+          [
+            0.4
+          ]
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            11,
+            "intensity"
+          ],
+          0.999
+        ]
+      ]
+    },
+    {
+      "name": "palette et mots-clés",
+      "patch": [
+        [
+          "set",
+          [
+            "nodes",
+            6,
+            "palette"
+          ],
+          [
+            "#AABBCC",
+            "#aabbcc\n",
+            "rouge",
+            5,
+            "#123456",
+            "#abcdef",
+            "#000000",
+            "#ffffff",
+            "#fedcba"
+          ]
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            4,
+            "keywords"
+          ],
+          [
+            "  alpha  beta ",
+            "",
+            "  ",
+            3,
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "c",
+            "d",
+            "e",
+            "f",
+            "g",
+            "h",
+            "i"
+          ]
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            5,
+            "keywords"
+          ],
+          "pas une liste"
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            1,
+            "palette"
+          ],
+          [
+            "#aabbcc"
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "dates : tri chronologique, avant notre ère, entier",
+      "patch": [
+        [
+          "set",
+          [
+            "nodes",
+            20,
+            "date"
+          ],
+          "-44-03-15"
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            21,
+            "date"
+          ],
+          1905
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            22,
+            "date"
+          ],
+          " 1898-07 "
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            23,
+            "date"
+          ],
+          "1898-07-01"
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            29,
+            "date"
+          ],
+          "0800"
+        ]
+      ]
+    },
+    {
+      "name": "date invalide : artefact écarté, compte insuffisant",
+      "patch": [
+        [
+          "set",
+          [
+            "nodes",
+            25,
+            "date"
+          ],
+          "1903\n"
+        ]
+      ]
+    },
+    {
+      "name": "impact vide : artefact écarté",
+      "patch": [
+        [
+          "set",
+          [
+            "nodes",
+            26,
+            "impact"
+          ],
+          "   "
+        ]
+      ]
+    },
+    {
+      "name": "identifiants : doublons, accents, vides, entiers",
+      "patch": [
+        [
+          "set",
+          [
+            "nodes",
+            1,
+            "id"
+          ],
+          "Élan Vital!!"
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            2,
+            "id"
+          ],
+          "e1"
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            3,
+            "id"
+          ],
+          "e1"
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            4,
+            "id"
+          ],
+          "   "
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            5,
+            "id"
+          ],
+          42
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            6,
+            "id"
+          ],
+          "UN-identifiant-bien-trop-long-pour-tenir"
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            7,
+            "id"
+          ],
+          4.5
+        ]
+      ]
+    },
+    {
+      "name": "liens : normalisés, filtrés, dédoublonnés",
+      "patch": [
+        [
+          "append",
+          [
+            "links"
+          ],
+          {
+            "from": "E1 ",
+            "to": "core",
+            "kind": "nourrit"
+          }
+        ],
+        [
+          "append",
+          [
+            "links"
+          ],
+          {
+            "from": "e1",
+            "to": "core",
+            "kind": "nourrit"
+          }
+        ],
+        [
+          "append",
+          [
+            "links"
+          ],
+          {
+            "from": "e2",
+            "to": "e2",
+            "kind": "forge"
+          }
+        ],
+        [
+          "append",
+          [
+            "links"
+          ],
+          {
+            "from": "e3",
+            "to": "inconnu",
+            "kind": "forge"
+          }
+        ],
+        [
+          "append",
+          [
+            "links"
+          ],
+          {
+            "from": "e3",
+            "to": "s1",
+            "kind": "aime"
+          }
+        ],
+        [
+          "append",
+          [
+            "links"
+          ],
+          "pas un lien"
+        ],
+        [
+          "append",
+          [
+            "links"
+          ],
+          {
+            "from": "s1",
+            "to": "e3",
+            "kind": "contredit"
+          }
+        ]
+      ]
+    },
+    {
+      "name": "refus vide ignoré",
+      "patch": [
+        [
+          "set",
+          [
+            "refusal"
+          ],
+          "   "
+        ],
+        [
+          "set",
+          [
+            "public_figure"
+          ],
+          true
+        ]
+      ]
+    },
+    {
+      "name": "refus explicite",
+      "patch": [
+        [
+          "set",
+          [
+            "refusal"
+          ],
+          "Personne privée."
+        ]
+      ]
+    },
+    {
+      "name": "personnalité non publique",
+      "patch": [
+        [
+          "set",
+          [
+            "public_figure"
+          ],
+          false
+        ]
+      ]
+    },
+    {
+      "name": "surplus d'ombres : les plus intenses, ordre conservé",
+      "patch": [
+        [
+          "append",
+          [
+            "nodes"
+          ],
+          {
+            "id": "x1",
+            "category": "shadow",
+            "type": "paradoxe",
+            "title": "Ombre 1",
+            "content": "Contenu",
+            "directive": "Directive",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 0.95
+          }
+        ],
+        [
+          "append",
+          [
+            "nodes"
+          ],
+          {
+            "id": "x2",
+            "category": "shadow",
+            "type": "biais_cognitif",
+            "title": "Ombre 2",
+            "content": "Contenu",
+            "directive": "Directive",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 0.5
+          }
+        ],
+        [
+          "append",
+          [
+            "nodes"
+          ],
+          {
+            "id": "x3",
+            "category": "shadow",
+            "type": "peur_primaire",
+            "title": "Ombre 3",
+            "content": "Contenu",
+            "directive": "Directive",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 0.99
+          }
+        ],
+        [
+          "append",
+          [
+            "nodes"
+          ],
+          {
+            "id": "x4",
+            "category": "shadow",
+            "type": "paradoxe",
+            "title": "Ombre 4",
+            "content": "Contenu",
+            "directive": "Directive",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 0.5
+          }
+        ],
+        [
+          "append",
+          [
+            "nodes"
+          ],
+          {
+            "id": "x5",
+            "category": "shadow",
+            "type": "paradoxe",
+            "title": "Ombre 5",
+            "content": "Contenu",
+            "directive": "Directive",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 0.61
+          }
+        ],
+        [
+          "append",
+          [
+            "nodes"
+          ],
+          {
+            "id": "x6",
+            "category": "shadow",
+            "type": "paradoxe",
+            "title": "Ombre 6",
+            "content": "Contenu",
+            "directive": "Directive",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 0.1
+          }
+        ],
+        [
+          "append",
+          [
+            "nodes"
+          ],
+          {
+            "id": "x7",
+            "category": "shadow",
+            "type": "paradoxe",
+            "title": "Ombre 7",
+            "content": "Contenu",
+            "directive": "Directive",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 0.61
+          }
+        ]
+      ]
+    },
+    {
+      "name": "types incohérents et nœuds invalides écartés",
+      "patch": [
+        [
+          "append",
+          [
+            "nodes"
+          ],
+          {
+            "id": "x8",
+            "category": "shadow",
+            "type": "axiome",
+            "title": "Ombre 8",
+            "content": "Contenu",
+            "directive": "Directive",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 1
+          }
+        ],
+        [
+          "append",
+          [
+            "nodes"
+          ],
+          {
+            "id": "x9",
+            "category": "noyau",
+            "type": "paradoxe",
+            "title": "Ombre 9",
+            "content": "Contenu",
+            "directive": "Directive",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 1
+          }
+        ],
+        [
+          "append",
+          [
+            "nodes"
+          ],
+          [
+            "pas",
+            "un",
+            "nœud"
+          ]
+        ],
+        [
+          "append",
+          [
+            "nodes"
+          ],
+          {
+            "id": "x10",
+            "category": "shadow",
+            "type": "paradoxe",
+            "title": "  ",
+            "content": "Contenu",
+            "directive": "Directive",
+            "basis": "rumeur",
+            "evidence": "",
+            "intensity": 1
+          }
+        ]
+      ]
+    },
+    {
+      "name": "pas un objet",
+      "raw": [
+        "liste"
+      ]
+    },
+    {
+      "name": "nœuds absents",
+      "raw": {
+        "person": "X",
+        "public_figure": true,
+        "nodes": "rien",
+        "links": []
+      }
+    }
+  ],
+  "engram_parse": [
+    "{\"a\": 1}",
+    "```json\n{\"a\": [1, 2]}\n```",
+    "Voici :\n{\"a\": {\"b\": \"}\"}}\nFin.",
+    "```\n{\"a\": 2}\n```",
+    "pas de JSON",
+    "{\"a\": 1"
+  ],
+  "engram_messages": [
+    {
+      "person": "Ada {{language}} Lovelace",
+      "language": "en"
+    },
+    {
+      "person": "Marie Curie",
+      "language": "fr"
+    },
+    {
+      "person": "{{person}}",
+      "language": "de"
     }
   ]
 }
