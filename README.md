@@ -21,7 +21,8 @@ dans une carte que l'on déplace, redimensionne, refactorise, recolore et export
 | **Inspecteur** | clic sur une carte : refactorisation de cette carte seule (avec annulation), couleur d'accent à chaud, copie du code complet, téléchargement d'un `.html` autonome, code source, relance, effacement des données |
 | **Graphiques** | Chart.js 4.5.1 via jsDelivr, épinglé avec empreinte SRI ; toute autre ressource externe reste bloquée |
 | **Bus d'évènements** | les widgets se parlent : `prism.emit(sujet, données)` / `prism.on(sujet, fn)` ; liaisons tracées sur le canvas ; une nouvelle génération connaît les sujets des widgets présents et peut s'y brancher |
-| **Liquid Glass** | aurore sous le verre dépoli, squelette holographique pendant la génération, fondu enchaîné vers le widget une fois prêt, micro-interactions |
+| **Spotlight** | Ctrl/Cmd + K (même dans un widget) : générer, refactoriser la carte sélectionnée, sauter à une carte, commandes, widgets de « Mon Hub », au clavier |
+| **Liquid Glass** | aurore sous le verre dépoli, reflets des bords qui suivent le pointeur, squelette holographique pendant la génération, fondu enchaîné vers le widget une fois prêt |
 
 ## Deux façons de l'utiliser
 
@@ -139,6 +140,22 @@ prism.on("*", (data, { topic, from }) => { … });                       // tout
   système apprend au modèle à publier ses sorties et à se brancher sur l'existant quand la demande s'y prête.
 - Export `.html` : `window.prism` inerte, le widget fonctionne seul.
 
+## Spotlight et reflets (phase 5)
+
+- **Ctrl/Cmd + K**, partout, y compris le focus dans un widget (le prélude de la sandbox relaie le raccourci) :
+  une invite flottante. Taper une demande puis Entrée génère le widget ; si une carte est sélectionnée,
+  « Refactoriser » est proposé juste après. La même invite trouve les cartes du canvas (titre, demande, sujets du
+  bus), les commandes (Tout voir, Ranger, Zoom 100 %, joindre un fichier, Mon Hub, Prism Pro, réglages, exporter,
+  isoler du bus, fermer…) et les widgets de « Mon Hub » à rouvrir. Recherche sans accents ni casse, flèches et
+  Entrée ; une commande bien nommée passe devant « Générer ».
+- **Reflets** : le bord et la barre d'une carte captent la lumière du côté du pointeur, y compris quand il survole
+  une autre iframe (position relayée ~30 fois/s). Calcul depuis les coordonnées du monde, sans lecture de mise en
+  page, une fois par image, et seulement pour les cartes visibles. La lumière est peinte dans le fond de la carte :
+  aucune couche ne recouvre l'iframe (une superposition ralentit l'aiguillage des clics vers une iframe isolée).
+- **IntersectionObserver** : il sait quelles cartes sont à l'écran (marge de 300 px). Une carte jamais démarrée et
+  hors champ (canvas restauré, appareil neuf) garde son squelette et ne charge son iframe qu'à son approche ; un
+  grand canvas se restaure donc sans lancer des dizaines de widgets invisibles.
+
 ## Architecture
 
 ```
@@ -167,6 +184,8 @@ frontend/
   js/sync.js            copie des cartes vers le serveur, import des cartes locales, restauration
   js/bus.js             bus d'évènements entre widgets : relais filtré, dernière valeur, liaisons, contexte du modèle
   js/links.js           liaisons du bus dessinées sur le canvas (SVG), lueur à chaque évènement
+  js/spotlight.js       barre de commande Ctrl/Cmd + K : classement, liste, exécution
+  js/reflections.js     IntersectionObserver (cartes visibles, démarrage différé) et reflets des bords
   js/store.js           persistance IndexedDB
   engine/               ── partagé par les deux moteurs ──
     system-prompt.txt     contrat de sortie : HTML seul, Tailwind uniquement, persistance, --accent, Chart.js, PRISM_FILE
@@ -188,7 +207,7 @@ tools/
 
 ```bash
 .venv/Scripts/python -m unittest discover -s backend/tests      # backend + parité Python ↔ JS
-node --test frontend/tests/bus.test.mjs frontend/tests/engine.test.cjs frontend/tests/files.test.mjs frontend/tests/sandbox.test.mjs frontend/tests/tasks.test.mjs
+node --test frontend/tests/spotlight.test.mjs frontend/tests/bus.test.mjs frontend/tests/engine.test.cjs frontend/tests/files.test.mjs frontend/tests/sandbox.test.mjs frontend/tests/tasks.test.mjs
 .venv/Scripts/python tools/e2e_server.py --demo &                 # serveur démo, base jetable
 node tools/e2e_canvas.mjs --base http://127.0.0.1:8004
 .venv/Scripts/python tools/serve_static.py &                      # comme GitHub Pages
@@ -222,7 +241,7 @@ curl -s -X POST http://127.0.0.1:8000/api/generate -H "Content-Type: application
 | 2. Comptes côté interface | fenêtre de connexion/inscription Liquid Glass, jauge de Sparks en anneau, fenêtre « Prism Pro » sur 403 | **fait** (`3.5.0-alpha.2`) |
 | 3. Mon Hub | panneau d'historique, miniatures générées dans la sandbox, synchronisation du canvas avec le serveur | **fait** (`3.5.0-alpha.3`) |
 | 4. Bus d'évènements | `prism.emit` / `prism.on` entre widgets, relayés par le canvas ; le prompt connaît les sujets des widgets présents | **fait** (`3.5.0-alpha.4`) |
-| 5. Spotlight et reflets | invite flottante Ctrl/Cmd + K ; reflets des bords via IntersectionObserver et position du pointeur | à faire |
+| 5. Spotlight et reflets | invite flottante Ctrl/Cmd + K ; reflets des bords via IntersectionObserver et position du pointeur | **fait** (`3.5.0-alpha.5`) |
 | 6. Déploiement | hébergement gratuit de l'API, PostgreSQL, secrets, frontend Pages pointé vers l'API | à faire |
 
 API ajoutée en phase 1 (jeton `Authorization: Bearer …` sauf `register`/`login`/`health`) :

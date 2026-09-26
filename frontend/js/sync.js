@@ -54,16 +54,25 @@ export function queueSync(card) {
 }
 
 async function flush(card) {
+  clearTimeout(timers.get(card.id));
   timers.delete(card.id);
   const patch = pending.get(card.id);
   pending.delete(card.id);
   if (!patch || !isLinked(card)) return;
   try {
-    await api(widgetUrl(card), { method: "PATCH", body: patch });
+    await api(widgetUrl(card), { method: "PATCH", body: patch, keepalive: true });
   } catch (err) {
     if (err.code === "widget_not_found") return unlink(card); // supprimé depuis un autre appareil
     card.synced = null; // renvoi complet au prochain changement
     console.warn("Prism : synchronisation de la carte différée", err);
+  }
+}
+
+/** Départ de la page : les envois regroupés en attente partent tout de suite (keepalive). */
+export function flushAll(cardsById) {
+  for (const id of [...pending.keys()]) {
+    const card = cardsById.get(id);
+    if (card) flush(card);
   }
 }
 
@@ -75,7 +84,8 @@ export async function removeFromCanvas(card) {
   card.synced = null; // « Rétablir » renverra la disposition
   if (!isLinked(card)) return;
   try {
-    await api(widgetUrl(card), { method: "PATCH", body: { clear_layout: true } });
+    // keepalive : un rechargement juste après la fermeture n'annule pas l'envoi.
+    await api(widgetUrl(card), { method: "PATCH", body: { clear_layout: true }, keepalive: true });
   } catch (err) {
     if (err.code !== "widget_not_found") console.warn("Prism : retrait du canvas non synchronisé", err);
   }

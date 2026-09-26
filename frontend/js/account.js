@@ -83,15 +83,17 @@ function messageOf(detail, status) {
 }
 
 /** body : objet (envoyé en JSON) ou Blob déjà en JSON (envoyé tel quel, sans copie ni analyse).
- *  as: "json" (défaut) ou "blob" (réponse gardée brute : données d'un fichier joint). */
-export async function api(path, { method = "GET", body, signal, as = "json" } = {}) {
+ *  as: "json" (défaut) ou "blob" (réponse gardée brute : données d'un fichier joint).
+ *  keepalive : la requête survit au départ de la page (corps < 64 Ko, limite des navigateurs). */
+export async function api(path, { method = "GET", body, signal, as = "json", keepalive = false } = {}) {
   const headers = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (account.token) headers.Authorization = `Bearer ${account.token}`;
   const payloadOut = body === undefined || body instanceof Blob ? body : JSON.stringify(body);
+  const survive = keepalive && (payloadOut === undefined || (typeof payloadOut === "string" && payloadOut.length < 60_000));
   let res;
   try {
-    res = await fetch(API_BASE + path, { method, headers, body: payloadOut, signal });
+    res = await fetch(API_BASE + path, { method, headers, body: payloadOut, signal, keepalive: survive });
   } catch (err) {
     if (err.name === "AbortError") throw err;
     throw new ApiError(0, { code: "network", message: "serveur injoignable (lancez « python backend/app.py »)" });

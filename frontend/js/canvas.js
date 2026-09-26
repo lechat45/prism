@@ -20,8 +20,9 @@ const ICONS = {
 };
 
 export class Canvas {
-  constructor({ workspace, world, onViewChange, onCardChange, onSelect, onInspect, onAction, onBackground, onPlace = () => {} }) {
-    Object.assign(this, { workspace, world, onViewChange, onCardChange, onSelect, onInspect, onAction, onBackground, onPlace });
+  constructor({ workspace, world, onViewChange, onCardChange, onSelect, onInspect, onAction, onBackground,
+    onPlace = () => {}, onAdd = () => {}, onRemove = () => {} }) {
+    Object.assign(this, { workspace, world, onViewChange, onCardChange, onSelect, onInspect, onAction, onBackground, onPlace, onAdd, onRemove });
     this.view = { x: 0, y: 0, z: 1 };
     this.cards = new Map(); // id -> { card, el }
     this.selectedId = null;
@@ -244,6 +245,7 @@ export class Canvas {
     this.bindCard(card, el);
     this.place(card);
     this.updateChrome(card);
+    this.onAdd(card, el);
     return el;
   }
 
@@ -251,6 +253,7 @@ export class Canvas {
     const entry = this.cards.get(id);
     if (!entry) return;
     this.cards.delete(id);
+    this.onRemove(id);
     if (this.selectedId === id) this.selectedId = null;
     entry.el.classList.add("is-leaving");
     const done = () => entry.el.remove();

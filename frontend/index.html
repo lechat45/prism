@@ -27,6 +27,10 @@
     <span class="tagline">Canvas d'interfaces éphémères</span>
     <span class="card-count" id="card-count" aria-live="polite"></span>
     <span class="spacer"></span>
+    <button type="button" class="tool spot-open" id="btn-spotlight" aria-haspopup="dialog" title="Barre de commande">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12.3 12.3L16.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <span class="spot-open-label">Commandes</span> <kbd id="spot-kbd">Ctrl K</kbd>
+    </button>
     <div class="canvas-tools" role="toolbar" aria-label="Vue du canvas">
       <button type="button" class="tool icon" id="zoom-out" aria-label="Dézoomer" title="Dézoomer (Ctrl + molette)">−</button>
       <button type="button" class="tool zoom-level" id="zoom-reset" title="Revenir à 100 %">100 %</button>
@@ -106,7 +110,7 @@
         <span class="cta-icon" aria-hidden="true"></span><span class="cta-label">Générer</span>
       </button>
     </form>
-    <p class="dock-hint"><kbd>Entrée</kbd> générer · <kbd>Maj</kbd>+<kbd>Entrée</kbd> nouvelle ligne · les widgets se génèrent en parallèle</p>
+    <p class="dock-hint"><kbd>Entrée</kbd> générer · <kbd>Maj</kbd>+<kbd>Entrée</kbd> nouvelle ligne · <kbd class="kbd-mod">Ctrl</kbd>+<kbd>K</kbd> barre de commande</p>
     <div class="dropzone" aria-hidden="true"><span>Déposez votre fichier CSV, JSON ou TXT</span></div>
   </section>
 
@@ -234,6 +238,19 @@
         <button type="submit" class="cta cta-small" id="auth-submit"><span class="cta-icon" aria-hidden="true"></span><span class="cta-label">Se connecter</span></button>
       </div>
     </form>
+  </dialog>
+
+  <dialog class="spotlight glass" id="spotlight" aria-label="Barre de commande">
+    <div class="spot-field">
+      <img src="assets/prism-logo.svg" width="26" height="26" alt="">
+      <label class="sr-only" for="spotlight-input">Demande, carte ou commande</label>
+      <input id="spotlight-input" type="text" role="combobox" aria-expanded="true" aria-controls="spotlight-list" aria-autocomplete="list"
+        autocomplete="off" spellcheck="false" maxlength="12000" placeholder="Décrivez un widget, cherchez une carte ou une commande…">
+      <kbd>Échap</kbd>
+    </div>
+    <ul class="spot-list" id="spotlight-list" role="listbox" aria-label="Résultats"></ul>
+    <p class="spot-empty" id="spotlight-empty" hidden>Aucun résultat : tapez une demande pour générer un widget.</p>
+    <p class="spot-foot"><kbd>↑</kbd> <kbd>↓</kbd> naviguer · <kbd>Entrée</kbd> valider · <kbd>Échap</kbd> fermer</p>
   </dialog>
 
   <dialog class="dialog glass hub-dialog" id="hub" aria-labelledby="hub-title">

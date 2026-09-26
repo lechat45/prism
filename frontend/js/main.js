@@ -1,6 +1,6 @@
 // Prism v2 — orchestration : dock de saisie, cycle de vie des cartes, messages des widgets, persistance.
 
-import { account, api, canAfford, onAccountChange, setSparks } from "./account.js";
+import { account, api, canAfford, onAccountChange, setSparks, signOut } from "./account.js";
 import { initAccountUi, openAuth, openPro, requireAccount } from "./account-ui.js";
 import { Bus } from "./bus.js";
 import { Canvas, CARD_MIN_H, CARD_MIN_W } from "./canvas.js";
@@ -9,10 +9,12 @@ import { forRequest } from "./files.js";
 import { Inspector } from "./inspector.js";
 import { Links } from "./links.js";
 import { run } from "./offload.js";
-import { initHub } from "./hub.js";
+import { initHub, openHub } from "./hub.js";
+import { Reflections } from "./reflections.js";
+import { Spotlight } from "./spotlight.js";
 import { acceptStorage, acceptThumbnail, bootSrcdoc, buildSrcdoc, exportHtml, FRAME_SANDBOX, isAccent, needsBoot } from "./sandbox.js";
 import { cardStore, loadView, saveView } from "./store.js";
-import { fetchWidget, importCard, isLinked, listWidgets, markSynced, pushThumbnail, queueSync, removeFromCanvas, unlink, uploadFile } from "./sync.js";
+import { fetchWidget, flushAll, importCard, isLinked, listWidgets, markSynced, pushThumbnail, queueSync, removeFromCanvas, unlink, uploadFile } from "./sync.js";
 
 const $ = (id) => document.getElementById(id);
 const cards = new Map(); // id -> carte (champs persistés + état d'exécution : status, controller, timer…)
@@ -117,6 +119,7 @@ function flushSaves() {
     const card = cards.get(id);
     if (card) persist(card);
   }
+  flushAll(cards); // copies vers « Mon Hub » en attente : envoyées avant le départ de la page
 }
 addEventListener("pagehide", flushSaves);
 document.addEventListener("visibilitychange", () => {
@@ -152,6 +155,19 @@ const canvas = new Canvas({
     inspector.close();
   },
   onPlace: () => redrawLinks(),
+  onAdd: (card, el) => reflections.observe(card, el),
+  onRemove: (id) => reflections.unobserve(id),
+});
+
+// Reflets des bords et visibilité : une carte hors champ ne démarre qu'à son approche (cf. flushMount).
+const parked = new Set(); // cartes en attente d'être visibles pour charger leur iframe
+const reflections = new Reflections({
+  workspace: $("workspace"),
+  view: () => canvas.view,
+  card: (id) => cards.get(id),
+  onEnter: (card) => {
+    if (parked.delete(card.id)) mountWidget(card);
+  },
 });
 
 // Bus d'évènements entre widgets (cf. bus.js) et ses liaisons dessinées sur le canvas.
@@ -266,10 +282,16 @@ function mountWidget(card) {
 
 function flushMount() {
   mountScheduled = false;
-  const next = mountQueue.values().next();
-  if (next.done) return;
-  mountQueue.delete(next.value.id);
-  injectFrame(next.value);
+  for (const card of mountQueue.values()) {
+    mountQueue.delete(card.id);
+    // Jamais démarrée et hors champ (ou pas encore vue par l'IntersectionObserver) : en attente.
+    if (!card.mounted && reflections.isVisible(card.id) !== true) {
+      parked.add(card.id);
+      continue;
+    }
+    injectFrame(card);
+    break;
+  }
   if (mountQueue.size) {
     mountScheduled = true;
     requestAnimationFrame(flushMount);
@@ -288,6 +310,7 @@ function injectFrame(card) {
     el.querySelector(".card-body").prepend(frame);
   }
   frame.title = `Widget : ${card.title}`;
+  card.mounted = true;
   bus.reset(card); // le nouveau document se réabonnera
   if (needsBoot(card)) {
     // Fichier joint : chargeur minuscule, le document et le Blob partent sur sa demande (« boot »).
@@ -312,6 +335,7 @@ function revealFrame(card) {
 function unmount(card) {
   card.boot = null;
   mountQueue.delete(card.id);
+  parked.delete(card.id);
   clearTimeout(card.revealTimer);
   card.revealTimer = null;
   clearTimeout(card.thumbTimer);
@@ -621,6 +645,10 @@ window.addEventListener("message", (event) => {
     if (inspector.card?.id === card.id) inspector.refresh(card); // compteur et dernière valeur
   } else if (data.prism === "subscribe") {
     bus.subscribe(card, data.topic, data.replay !== false);
+  } else if (data.prism === "pointer") {
+    reflections.moveInFrame(canvas.frame(card.id), Number(data.x), Number(data.y));
+  } else if (data.prism === "spotlight") {
+    toggleSpotlight();
   } else if (data.prism === "thumbnail") {
     if (data.data) receiveThumbnail(card, data.data);
     else console.warn(`Prism : miniature de « ${card.title} » impossible`, data.error);
@@ -862,13 +890,131 @@ $("arrange").addEventListener("click", () => {
 
 addEventListener("keydown", (e) => {
   const typing = e.target.closest?.("input, textarea, select, [contenteditable]");
-  if (e.key === "/" && !typing) {
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "k") {
+    e.preventDefault();
+    toggleSpotlight();
+  } else if (e.key === "/" && !typing) {
     e.preventDefault();
     promptEl.focus();
   } else if (e.key === "Escape" && inspector.isOpen && !e.target.closest?.("dialog")) {
     inspector.close();
   }
 });
+
+// ============================================================================
+// Spotlight (Ctrl/Cmd + K) : générer, sauter à une carte, commandes, « Mon Hub »
+// ============================================================================
+const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+let hubCache = { at: 0, items: [], loading: false };
+
+function focusCard(card) {
+  canvas.select(card.id);
+  canvas.ensureVisible(card);
+  const el = canvas.element(card.id);
+  if (!el) return;
+  el.classList.remove("is-flash");
+  void el.offsetWidth; // relance l'animation
+  el.classList.add("is-flash");
+}
+
+function hubResults() {
+  if (engine.kind !== "server" || !account.user) return [];
+  if (Date.now() - hubCache.at > 60000 && !hubCache.loading) {
+    hubCache.loading = true;
+    listWidgets({ limit: 100 })
+      .then((page) => {
+        hubCache = { at: Date.now(), items: page.items, loading: false };
+        spotlight.refresh();
+      })
+      .catch(() => { hubCache.loading = false; });
+  }
+  return hubCache.items.filter((w) => !localCardFor(w.id)).map((w) => ({
+    group: "Mon Hub", icon: "▦", label: w.title, keywords: [w.prompt, w.file_name || ""], hint: "Ouvrir",
+    run: () => openWidget(w.id),
+  }));
+}
+
+function spotlightItems(query) {
+  const text = query.trim();
+  const short = (t) => (t.length > 70 ? `${t.slice(0, 69)}…` : t);
+  const items = [];
+  const selected = canvas.selectedId ? cards.get(canvas.selectedId) : null;
+  if (text) {
+    items.push({
+      kind: "generate", group: "Générer", icon: "✦", label: `Générer « ${short(text)} »`, hint: "Entrée", always: true, base: 50,
+      run: () => {
+        promptEl.value = text;
+        saveDraft();
+        updateComposer();
+        submitPrompt();
+      },
+    });
+    if (selected?.html && hasModel()) {
+      items.push({
+        kind: "generate", group: "Générer", icon: "✎", label: `Refactoriser « ${selected.title} » : ${short(text)}`, always: true, base: 45,
+        run: () => refactorCard(selected, text),
+      });
+    }
+  }
+  for (const card of cards.values()) {
+    items.push({
+      group: "Cartes du canvas", icon: "◧", label: card.title, keywords: [card.prompt, ...(card.topics?.emits || [])],
+      hint: "Afficher", base: 2, run: () => focusCard(card),
+    });
+  }
+  const command = (label, icon, run, keywords = [], hint = "") => items.push({ group: "Commandes", icon, label, run, keywords, hint, base: 3 });
+  command("Tout voir", "⤢", () => canvas.fit(), ["cadrer", "fit", "zoom", "vue"]);
+  if (cards.size) command("Ranger les cartes", "▤", () => canvas.arrange(), ["grille", "organiser", "aligner"]);
+  command("Zoom 100 %", "⊙", () => canvas.zoomBy(1 / canvas.view.z), ["taille réelle", "reset"]);
+  command("Nouveau widget", "＋", () => promptEl.focus(), ["écrire", "créer", "demande", "dock"], "/");
+  command("Joindre un fichier CSV, JSON ou TXT", "📎", () => $("file-input").click(), ["importer", "fichier", "données", "upload"]);
+  command("Essayer avec l'exemple CSV", "📈", () => {
+    attach(run("sample"), "ventes-2025.csv");
+    promptEl.focus();
+  }, ["démo", "ventes"]);
+  if (selected) {
+    command(`Inspecter « ${selected.title} »`, "☰", () => inspector.open(selected), ["réglages", "carte", "accent"]);
+    command(`Exporter « ${selected.title} » en .html`, "⭳", () => downloadHtml(selected), ["télécharger", "export"]);
+    command(`${selected.busMuted ? "Reconnecter" : "Isoler"} « ${selected.title} » ${selected.busMuted ? "au" : "du"} bus`, "⇄",
+      () => inspector.actions.setMuted(selected, !selected.busMuted), ["évènements", "bus"]);
+    command(`Fermer « ${selected.title} »`, "✕", () => closeCard(selected), ["supprimer", "retirer"]);
+  }
+  if (engine.kind === "server" && account.user) {
+    command("Mon Hub", "▦", () => openHub(), ["bibliothèque", "historique", "widgets"]);
+    command("Prism Pro", "✦", () => openPro(), ["sparks", "abonnement", "crédits"]);
+    command("Se déconnecter", "⎋", () => {
+      signOut();
+      toast("Déconnecté");
+    }, ["compte", "logout"]);
+  } else if (engine.kind === "server") {
+    command("Se connecter", "⎆", () => openAuth({ mode: "login" }), ["compte", "login", "inscription"]);
+  }
+  command("Moteur de génération", "⚙", () => openSettings(), ["réglages", "clé", "gemini", "modèle"]);
+  if (!text) {
+    document.querySelectorAll("#examples .chip[data-prompt]").forEach((chip) => {
+      items.push({ group: "Suggestions", icon: "✧", label: chip.dataset.prompt, base: 1, run: () => spotlight.open(chip.dataset.prompt) });
+    });
+  }
+  items.push(...hubResults());
+  return items;
+}
+
+const spotlight = new Spotlight({
+  provide: spotlightItems,
+  onError: (err) => toast(`Action impossible : ${err.message}`, { tone: "error", timeout: 6000 }),
+});
+
+function toggleSpotlight() {
+  // Une autre fenêtre (réglages, compte, Hub…) a la main : on ne l'empile pas.
+  if (!spotlight.isOpen && document.querySelector("dialog[open]:not(#spotlight)")) return;
+  spotlight.toggle();
+}
+
+$("btn-spotlight").addEventListener("click", () => spotlight.open());
+if (IS_MAC) {
+  $("spot-kbd").textContent = "⌘ K";
+  document.querySelectorAll(".kbd-mod").forEach((k) => { k.textContent = "⌘"; });
+}
 
 // ============================================================================
 // « Mon Hub » : réouverture, suppression, restauration du canvas depuis le serveur
@@ -947,7 +1093,10 @@ function syncCanvasFromServer() {
           console.warn("Prism : widget non restauré", item.id, err);
         }
       }
-      if (restored) toast(`${restored} widget${restored > 1 ? "s" : ""} de Mon Hub ${restored > 1 ? "restaurés" : "restauré"} sur le canvas`);
+      if (restored) {
+        toast(`${restored} widget${restored > 1 ? "s" : ""} de Mon Hub ${restored > 1 ? "restaurés" : "restauré"} sur le canvas`);
+        if (restored === cards.size) canvas.fit(); // appareil neuf : on cadre les cartes arrivées
+      }
     } catch (err) {
       if (err.status !== 401) console.warn("Prism : canvas non synchronisé avec Mon Hub", err);
     } finally {

@@ -1,5 +1,26 @@
 # Changelog
 
+## 3.5.0-alpha.5 — 2026-09-26 (phase 5 : Spotlight et reflets)
+
+- **Spotlight (Ctrl/Cmd + K)** : invite flottante pour générer, refactoriser la carte sélectionnée, sauter à une
+  carte, lancer une commande ou rouvrir un widget de « Mon Hub », au clavier (flèches, Entrée, Échap). Classement
+  sans accents ni casse (exact, début, début de mot, mots, sous-séquence) ; une commande bien nommée passe devant
+  « Générer ». Le raccourci fonctionne aussi le focus dans un widget (relais du prélude). Bouton « Commandes » dans
+  la barre du haut.
+- **Reflets des bords** qui suivent le pointeur (relayé depuis les iframes ~30 fois/s), calculés depuis les
+  coordonnées du monde, une fois par image, pour les seules cartes visibles ; peints dans le fond de la carte,
+  sans couche au-dessus de l'iframe, et plus repeints tant que le pointeur est sur la carte ou qu'un bouton est
+  enfoncé (une première version faisait perdre un clic sur trois dans les rafales vers une iframe isolée).
+- **IntersectionObserver** : cartes visibles suivies ; une carte hors champ jamais démarrée attend d'approcher de
+  l'écran pour charger son iframe (restauration d'un grand canvas, appareil neuf) ; restauration depuis le Hub
+  sur un appareil neuf : cadrage automatique.
+- Synchronisation : envois vers « Mon Hub » en `keepalive` et vidés au départ de la page — une carte fermée juste
+  avant un rechargement ne revient plus.
+- Tests : 85 Python, 50 Node (classement du Spotlight, reflets) ; E2E : Ctrl + K (page et widget), commande,
+  saut vers une carte, reflets, cartes hors écran non démarrées puis démarrées, génération depuis Spotlight
+  (statique 38, démo 47, faux Gemini 55 contrôles) ; attente de la fin réelle de l'animation du volet avant de
+  viser une pastille.
+
 ## 3.5.0-alpha.4 — 2026-09-26 (phase 4 : bus d'évènements)
 
 - **Widgets connectés** : `window.prism.emit(sujet, données)` et `prism.on(sujet | "*", fn)` dans chaque widget

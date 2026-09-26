@@ -235,6 +235,22 @@ function prelude(snapshot) {
   window.addEventListener("load", function () {
     whenStyled(function () { send("ready", { title: document.title }); });
   });
+  // Ctrl/Cmd + K, même le focus dans un widget : barre de commande de Prism (Spotlight).
+  window.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();
+      send("spotlight");
+    }
+  }, true);
+  // Position du pointeur au-dessus du widget (reflets des bords de sa carte), ~30 fois/s au plus,
+  // jamais bouton enfoncé : pendant un clic ou un glisser, la page ne repeint rien sous l'iframe.
+  var lastPointer = 0;
+  window.addEventListener("pointermove", function (e) {
+    var now = Date.now();
+    if (e.buttons || now - lastPointer < 33) return;
+    lastPointer = now;
+    send("pointer", { x: e.clientX, y: e.clientY });
+  }, { passive: true, capture: true });
 })();`;
 }
 

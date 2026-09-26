@@ -297,6 +297,15 @@ body.is-dragging { cursor: grabbing; user-select: none; }
 @keyframes bob { 50% { transform: translateY(-8px); } }
 @keyframes fade-up { from { opacity: 0; transform: translate(-50%, calc(-50% + 16px)); } }
 
+/* --- Reflet des bords : la lumière vient du pointeur (--mx, --my, --glow : reflections.js) ---
+   Dans le fond de la carte (sous sa bordure semi-transparente et autour du corps), jamais en
+   couche AU-DESSUS de l'iframe : une superposition, même sans pointer-events, ralentit l'aiguillage
+   des clics vers une iframe isolée et en faisait perdre dans des rafales. */
+.card {
+  --glint: color-mix(in srgb, color-mix(in srgb, var(--card-accent) 60%, #fff) calc(var(--glow, 0) * 60%), transparent);
+}
+.card-bar { background: radial-gradient(220px circle at var(--mx, 50%) var(--my, 0), rgba(255, 255, 255, calc(var(--glow, 0) * 0.07)), transparent 70%); }
+
 /* --- Liaisons du bus d'évènements (SVG sous les cartes, coordonnées du monde) ------------ */
 .links { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; z-index: 0; }
 /* Épaisseur et pointillés en pixels d'écran : la liaison reste lisible à 20 % de zoom. */
@@ -329,7 +338,9 @@ body.is-dragging { cursor: grabbing; user-select: none; }
   position: absolute;
   display: flex; flex-direction: column;
   border-radius: var(--r-lg);
-  background: linear-gradient(180deg, rgba(30, 35, 50, 0.92), rgba(13, 15, 22, 0.94));
+  background:
+    radial-gradient(300px circle at var(--mx, 50%) var(--my, 0), var(--glint), transparent 70%) border-box,
+    linear-gradient(180deg, rgba(30, 35, 50, 0.92), rgba(13, 15, 22, 0.94)) border-box;
   border: 1px solid var(--line);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 24px 60px -22px rgba(0, 0, 0, 0.8);
   transition: box-shadow 0.3s var(--ease), border-color 0.3s, translate 0.3s var(--ease);
@@ -343,6 +354,8 @@ body.is-dragging { cursor: grabbing; user-select: none; }
 }
 .card.is-moving { translate: 0 -3px; box-shadow: 0 40px 90px -20px rgba(0, 0, 0, 0.9), 0 0 0 1px color-mix(in srgb, var(--card-accent) 60%, transparent); }
 .card.is-entering { animation: card-in 0.55s var(--ease) both; }
+.card.is-flash { animation: card-flash 1s var(--ease); }
+@keyframes card-flash { 30% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--card-accent) 80%, transparent), 0 0 60px -6px var(--card-accent); } }
 .card.is-leaving { animation: card-out 0.25s ease-in both; pointer-events: none; }
 @keyframes card-in { from { opacity: 0; transform: scale(0.92) translateY(14px); } }
 @keyframes card-out { to { opacity: 0; transform: scale(0.94); } }
@@ -838,6 +851,42 @@ body.is-dropping .dock { scale: 1.02; }
 .auth-gift::before { content: "✦ "; }
 .auth-error { color: #ffd5d9; background: rgba(255, 94, 108, 0.1); border: 1px solid rgba(255, 94, 108, 0.35); }
 
+/* --- Spotlight (Ctrl/Cmd + K) -------------------------------------------------------------- */
+.spot-open { display: inline-flex; align-items: center; gap: 7px; }
+.spot-open svg { width: 15px; height: 15px; }
+.spotlight {
+  position: fixed; inset: 0;
+  margin: 14vh auto auto;
+  width: min(640px, calc(100vw - 32px));
+  max-height: min(560px, 76vh);
+  display: flex; flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  color: var(--text);
+  border-radius: var(--r-xl);
+  background: linear-gradient(180deg, rgba(34, 38, 54, 0.92), rgba(14, 16, 24, 0.95));
+}
+.spotlight:not([open]) { display: none; }
+.spotlight[open] { animation: spot-in 0.22s var(--spring); }
+.spotlight::before { inset: 0; }
+.spotlight::backdrop { background: rgba(3, 4, 8, 0.45); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+@keyframes spot-in { from { opacity: 0; transform: translateY(-10px) scale(0.98); } }
+.spot-field { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.spot-field img { flex: none; image-rendering: pixelated; }
+.spot-field input { flex: 1; min-width: 0; font: 500 17px var(--font); color: var(--text); background: transparent; border: 0; outline: none; }
+.spot-field input::placeholder { color: var(--faint); }
+.spot-list { flex: 1; min-height: 0; margin: 0; padding: 6px; list-style: none; overflow-y: auto; scrollbar-width: thin; }
+.spot-list:empty { display: none; }
+.spot-group { padding: 10px 10px 4px; font-size: 11px; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+.spot-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; cursor: pointer; }
+.spot-item[aria-selected="true"] { background: var(--glass-hover); box-shadow: inset 0 0 0 1px var(--line); }
+.spot-icon { flex: none; width: 28px; height: 28px; display: grid; place-items: center; font-size: 14px; border-radius: 9px; background: rgba(255, 255, 255, 0.07); }
+.spot-item[data-kind="generate"] .spot-icon { color: #0a0c12; background: var(--spectrum); }
+.spot-label { flex: 1; min-width: 0; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spot-hint { flex: none; font-size: 12px; color: var(--faint); }
+.spot-empty { margin: 18px; color: var(--muted); text-align: center; }
+.spot-foot { margin: 0; padding: 9px 16px; font-size: 12px; color: var(--faint); border-top: 1px solid rgba(255, 255, 255, 0.08); }
+
 /* --- Mon Hub ------------------------------------------------------------------------------- */
 .account { gap: 8px; }
 .hub-open { display: inline-flex; align-items: center; gap: 6px; }
@@ -964,7 +1013,7 @@ body.is-dropping .dock { scale: 1.02; }
 }
 @media (max-width: 720px) {
   :root { --gutter: 8px; --topbar-h: 52px; }
-  .card-count, #zoom-in, #zoom-out, .dock-hint, .sparks-unit { display: none; }
+  .card-count, #zoom-in, #zoom-out, .dock-hint, .sparks-unit, .spot-open-label, #spot-kbd { display: none; }
   .brand-name { font-size: 18px; }
   .engine { padding: 6px 10px; max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
   .canvas-tools .tool { padding: 6px 8px; }

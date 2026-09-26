@@ -352,7 +352,11 @@ async function main() {
     await clickSel(`.card[data-id="${c2.id}"] .card-title`);
     await waitFor(() => evaluate(`!document.getElementById("inspector").hidden`), "inspecteur");
     check("clic sur la carte : inspecteur ouvert", (await evaluate(`document.getElementById("insp-title").textContent`)) === resized.title);
-    await sleep(500); // fin du glissement d'entrée du volet, sinon on mesure une position intermédiaire
+    // Fin réelle du glissement d'entrée du volet (sous charge, l'animation peut démarrer tard et
+    // une position mesurée « stable » être celle de départ).
+    await waitFor(() => evaluate(`document.getElementById("inspector").getAnimations({ subtree: true }).every((a) => a.playState === "finished")`),
+      "volet de l'inspecteur immobile", 8000).catch(() => null);
+    await sleep(150);
     const sw = await stableBox(`#swatches .swatch[data-accent="${ACCENT}"]`);
     const hit = await evaluate(`(() => { const el = document.elementFromPoint(${sw.cx}, ${sw.cy}); return el ? (el.dataset.accent ?? el.tagName + "." + el.className) : "rien"; })()`);
     await click(sw.cx, sw.cy);
@@ -564,6 +568,97 @@ async function main() {
           await evaluate(`document.getElementById("pro-reason").textContent`));
         await clickSel("#pro-close");
       }
+    }
+
+    // ------------------------------------------------------------------ 16. Spotlight (Ctrl/Cmd + K)
+    const keyPress = async (key, code, vk, modifiers = 0) => {
+      await cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers }, S);
+      await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers }, S);
+    };
+    const ctrlK = () => keyPress("k", "KeyK", 75, 2); // 2 = Ctrl
+    const spotOpen = () => evaluate(`document.getElementById("spotlight").open`);
+    const firstResult = () => evaluate(`document.querySelector("#spotlight-list [aria-selected=true] .spot-label")?.textContent || ""`);
+    await clickSel("#zoom-out"); // la vue quitte les 100 % : la commande aura un effet visible
+    await evaluate(`document.activeElement && document.activeElement.blur(), true`);
+    await ctrlK();
+    await waitFor(spotOpen, "Spotlight ouvert au clavier", 5000);
+    check("Ctrl + K : Spotlight ouvert, saisie prête", await evaluate(`document.activeElement === document.getElementById("spotlight-input")`));
+    await typeText("zoom 100");
+    await waitFor(async () => (await firstResult()) === "Zoom 100 %", "commande trouvée", 5000).catch(() => null);
+    await pressEnter();
+    await waitFor(async () => !(await spotOpen()) && (await zoom()) === "100 %", "commande exécutée", 5000).catch(() => null);
+    check("Spotlight : commande trouvée et exécutée (Zoom 100 %)", (await zoom()) === "100 %" && !(await spotOpen()), await zoom());
+
+    const target = await evaluate(`(() => { const c = document.querySelector(".card:not(.is-selected)") || document.querySelector(".card");
+      return { id: c.dataset.id, title: c.querySelector(".card-title").textContent }; })()`);
+    await ctrlK();
+    await waitFor(spotOpen, "Spotlight rouvert", 5000);
+    await typeText(target.title.slice(0, 12));
+    await waitFor(async () => (await firstResult()) === target.title, "carte trouvée", 5000).catch(() => null);
+    const found = await firstResult();
+    await pressEnter();
+    const selectedId = await waitFor(() => evaluate(`document.querySelector(".card.is-selected")?.dataset.id === ${JSON.stringify(target.id)} && ${JSON.stringify(target.id)}`), "carte sélectionnée", 5000).catch(() => null);
+    check("Spotlight : saut vers une carte par son titre", selectedId === target.id, `« ${found} »`);
+
+    // Ctrl + K avec le focus DANS un widget : relayé par le prélude de la sandbox.
+    const cornerBox = await evaluate(`(() => { const f = [...document.querySelectorAll(".card iframe")].find((x) => x.getBoundingClientRect().width > 50);
+      const r = f.getBoundingClientRect(); return { x: r.x + 14, y: r.y + r.height - 14 }; })()`); // coin bas-gauche : ni bouton ni poignée
+    await click(cornerBox.x, cornerBox.y);
+    await ctrlK();
+    const relayed = await waitFor(spotOpen, "Spotlight depuis un widget", 5000).catch(() => false);
+    check("Ctrl + K depuis l'intérieur d'un widget : relayé, Spotlight ouvert", relayed === true);
+    await keyPress("Escape", "Escape", 27);
+    await waitFor(async () => !(await spotOpen()), "Spotlight fermé", 5000).catch(() => null);
+
+    // ------------------------------------------------------------------ 17. Reflets des bords (pointeur)
+    const lit = await evaluate(`(() => { const c = document.querySelector(".card"); const r = c.getBoundingClientRect(); return { id: c.dataset.id, x: r.right + 40, y: r.top + 30 }; })()`);
+    await mouse("mouseMoved", lit.x, lit.y);
+    const glow = await waitFor(async () => {
+      const g = Number(await evaluate(`document.querySelector('.card[data-id="${lit.id}"]').dataset.glow || 0`));
+      return g > 0 ? g : null;
+    }, "reflet", 5000).catch(() => 0);
+    const far = await evaluate(`(() => { const rects = [...document.querySelectorAll(".card")].map((c) => c.getBoundingClientRect());
+      const dist = (x, y) => Math.min(...rects.map((r) => Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom))));
+      return [[4, 4], [1436, 4], [4, 896], [1436, 896]].map(([x, y]) => ({ x, y, d: dist(x, y) })).sort((a, b) => b.d - a.d)[0]; })()`);
+    await mouse("mouseMoved", far.x, far.y);
+    const off = await waitFor(async () => {
+      const values = await evaluate(`[...document.querySelectorAll(".card")].map((c) => Number(c.dataset.glow || 0))`);
+      return values.every((v) => v === 0) ? values : null;
+    }, "reflets éteints", 5000).catch(() => null);
+    check("reflets : le bord s'éclaire à l'approche du pointeur, s'éteint au loin", glow > 0 && (off !== null || far.d < 300), `éclat ${glow}, loin : ${Math.round(far.d)} px`);
+
+    // ------------------------------------------------------------------ 18. Cartes hors écran : démarrage différé
+    const empty = await evaluate(`(() => { for (let y = 120; y < 640; y += 40) for (let x = 40; x < 1400; x += 40) {
+      const el = document.elementFromPoint(x, y); if (el && (el.id === "workspace" || el.id === "world")) return { x, y }; } return null; })()`);
+    for (let i = 0; i < 6; i++) await cdp.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: empty.x, y: empty.y, deltaX: 0, deltaY: 1500 }, S);
+    await sleep(900); // vue enregistrée (regroupement 250 ms)
+    await cdp.send("Page.reload", {}, S);
+    await loaded();
+    await sleep(1500);
+    const away = await evaluate(`({ cards: document.querySelectorAll(".card").length, frames: document.querySelectorAll("iframe.card-frame").length })`);
+    check("cartes hors écran au démarrage : aucune iframe chargée", away.cards > 0 && away.frames === 0, `${away.cards} cartes, ${away.frames} iframes`);
+    await clickSel("#zoom-fit");
+    const back = await waitFor(async () => {
+      const r = await evaluate(`({ cards: document.querySelectorAll(".card").length, live: document.querySelectorAll('.card-body[data-frame="live"]').length })`);
+      return r.live === r.cards ? r : null;
+    }, "cartes démarrées en revenant à l'écran", 60000).catch(() => null);
+    check("en revenant à l'écran (« Tout voir ») : cartes démarrées", back !== null, back ? `${back.live}/${back.cards}` : "");
+
+    // ------------------------------------------------------------------ 19. Générer depuis Spotlight
+    const countBefore = (await cards()).length;
+    const canGenerate = !serverMode || (await evaluate(`parseFloat(document.getElementById("sparks-count").textContent.replace(",", "."))`)) >= health.pricing.generate;
+    await ctrlK();
+    await waitFor(spotOpen, "Spotlight", 5000);
+    await typeText("Une calculatrice élégante");
+    await waitFor(async () => (await firstResult()).startsWith("Générer « Une calculatrice"), "proposition de génération", 5000).catch(() => null);
+    await pressEnter();
+    if (canGenerate) {
+      await waitFor(async () => (await readyCount()) === countBefore + 1, "widget généré depuis Spotlight", 60000).catch(() => null);
+      check("Spotlight : génération d'un widget", (await readyCount()) === countBefore + 1);
+    } else {
+      await waitFor(() => evaluate(`document.getElementById("pro").open`), "Prism Pro depuis Spotlight", 10000).catch(() => null);
+      check("Spotlight : génération refusée proprement (solde épuisé → Prism Pro)", await evaluate(`document.getElementById("pro").open`));
+      await clickSel("#pro-close");
     }
   } catch (err) {
     check("scénario complet", false, err.message);
