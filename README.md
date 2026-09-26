@@ -188,7 +188,7 @@ tools/
 
 ```bash
 .venv/Scripts/python -m unittest discover -s backend/tests      # backend + parité Python ↔ JS
-node --test frontend/tests/engine.test.cjs frontend/tests/files.test.mjs frontend/tests/sandbox.test.mjs frontend/tests/tasks.test.mjs
+node --test frontend/tests/bus.test.mjs frontend/tests/engine.test.cjs frontend/tests/files.test.mjs frontend/tests/sandbox.test.mjs frontend/tests/tasks.test.mjs
 .venv/Scripts/python tools/e2e_server.py --demo &                 # serveur démo, base jetable
 node tools/e2e_canvas.mjs --base http://127.0.0.1:8004
 .venv/Scripts/python tools/serve_static.py &                      # comme GitHub Pages
