@@ -5,6 +5,9 @@
  * déterministe (graine) ; les forces sont des accélérations (divisées par la masse quand il le faut).
  *
  *   A. core      masse énorme, rappelée au centre par un ressort très raide : ne bouge presque pas.
+ *   E. heart     caractère et émotions : anneau intérieur, au plus près du noyau, rotation lente et commune ;
+ *                chaque bulle bat comme un cœur (« lub-dub »), au rythme de son émotion (colère rapide,
+ *                sérénité lente : AROUSAL).
  *   B. engine    ressort vers le noyau (orbite proche), dérive tangentielle lente, amortissement fort :
  *                mouvement fluide et prévisible.
  *   C. shadow    ressort plus lâche (orbite moyenne), bruit lissé propre à chaque bulle, sursauts
@@ -27,6 +30,7 @@
   // que les anneaux épousent une carte non carrée au lieu d'être rognés par ses bords.
   const PHYSICS = {
     core: { mass: 60, radius: 38, orbit: 0, k: 0, damping: 3.5, tangential: 0, noise: 0 },
+    heart: { mass: 2.5, radius: 12, orbit: 0.27, k: 10, damping: 2.8, tangential: 16, noise: 0, spin: -1 },
     engine: { mass: 3, radius: 15, orbit: 0.44, k: 9, damping: 2.2, tangential: 26, noise: 0 },
     shadow: { mass: 2, radius: 13, orbit: 0.68, k: 4, damping: 1.1, tangential: 0, noise: 190 },
     artifact: { mass: 0.6, radius: 5.5, orbit: 0.92, k: 7, damping: 0.9, tangential: 210, noise: 0 },
@@ -39,6 +43,11 @@
   const POINTER_REPULSION = 900000; // les ombres fuient le pointeur
   const LINK_K = { forge: 1.2, nourrit: 1.6, contredit: 0.8 };
   const HOVER_SCALE = 1.7;
+  // Battements par seconde selon l'émotion portée (bulles du cœur) : l'éveil de l'émotion.
+  const AROUSAL = {
+    colere: 1.6, passion: 1.5, angoisse: 1.5, peur: 1.4, joie: 1.3, fierte: 1.1, emerveillement: 1.0,
+    tendresse: 0.9, tristesse: 0.75, solitude: 0.7, melancolie: 0.7, serenite: 0.6,
+  };
   const CORE_HOVER_SCALE = 1.15; // le noyau, déjà massif, grossit à peine
 
   /** Générateur pseudo-aléatoire déterministe (mulberry32). */
@@ -95,7 +104,8 @@
         w2: 0.5 + random() * 1.6,
         pulse: 0.7 + random() * 1.8,
         nextJolt: 1 + random() * 3,
-        spin: random() < 0.5 ? -1 : 1,
+        spin: p.spin || (random() < 0.5 ? -1 : 1),
+        bpm: (AROUSAL[data.emotion] || 1) * (0.94 + random() * 0.12),
       };
     });
     const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -273,6 +283,11 @@
       },
       /** Pulsation d'affichage (asynchrone pour les ombres, respiration lente sinon). */
       pulseOf(n) {
+        if (n.category === "heart") {
+          // « Lub-dub » : deux contractions rapprochées, puis un repos ; fréquence = éveil de l'émotion.
+          const beat = (time * n.bpm + n.phase / (Math.PI * 2)) % 1;
+          return 1 + 0.2 * Math.exp(-((beat - 0.1) ** 2) / 0.0016) + 0.12 * Math.exp(-((beat - 0.3) ** 2) / 0.0016);
+        }
         if (n.category === "shadow") return 1 + 0.14 * Math.sin(time * n.pulse * 2.4 + n.phase);
         if (n.category === "core") return 1 + 0.03 * Math.sin(time * 0.8);
         return 1 + 0.03 * Math.sin(time * 1.3 + n.phase);
@@ -280,5 +295,5 @@
     };
   }
 
-  return { createSimulation, PHYSICS, rng };
+  return { createSimulation, PHYSICS, AROUSAL, rng };
 });

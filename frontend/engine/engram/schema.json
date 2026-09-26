@@ -6,31 +6,49 @@
     "refusal": { "type": "STRING", "nullable": true, "description": "Set (and leave nodes empty) when the request is not a public figure, is a minor, or cannot be answered from the public record." },
     "domain": { "type": "STRING", "description": "Field and era, a few words." },
     "summary": { "type": "STRING", "description": "One or two sentences: the mind in a nutshell." },
+    "temperament": { "type": "STRING", "description": "The character in one or two sentences: temperament, emotional style, how the person comes across." },
+    "climate": {
+      "type": "ARRAY",
+      "description": "Emotional climate: the 2 to 4 emotions that colour this life the most, with weights.",
+      "items": {
+        "type": "OBJECT",
+        "properties": {
+          "emotion": { "type": "STRING", "enum": ["joie", "emerveillement", "passion", "tendresse", "serenite", "fierte", "melancolie", "tristesse", "colere", "peur", "angoisse", "solitude"] },
+          "weight": { "type": "NUMBER", "minimum": 0, "maximum": 1 }
+        },
+        "required": ["emotion", "weight"]
+      }
+    },
     "nodes": {
       "type": "ARRAY",
       "items": {
         "type": "OBJECT",
         "properties": {
-          "id": { "type": "STRING", "description": "Short unique slug, e.g. core, e1, s4, a10." },
-          "category": { "type": "STRING", "enum": ["core", "engine", "shadow", "artifact"] },
+          "id": { "type": "STRING", "description": "Short unique slug, e.g. core, h2, e1, s4, a10." },
+          "category": { "type": "STRING", "enum": ["core", "heart", "engine", "shadow", "artifact"] },
           "type": {
             "type": "STRING",
-            "enum": ["axiome", "algorithme_resolution", "empreinte_syntaxique", "matrice_esthetique", "methode_travail",
-                     "paradoxe", "peur_primaire", "biais_cognitif", "succes", "echec", "tournant"]
+            "enum": ["axiome", "trait", "emotion", "attachement", "algorithme_resolution", "empreinte_syntaxique", "matrice_esthetique",
+                     "methode_travail", "paradoxe", "peur_primaire", "biais_cognitif", "succes", "echec", "tournant"]
           },
           "title": { "type": "STRING", "description": "At most 60 characters." },
-          "content": { "type": "STRING", "description": "The insight itself, 2 to 4 sentences, specific to this person." },
-          "directive": { "type": "STRING", "description": "How an interface generated THROUGH this node must look and behave: palette, tone, layout, emphasis, interactions. 1 to 3 sentences." },
+          "content": { "type": "STRING", "description": "The insight itself, 2 to 3 sentences, specific to this person." },
+          "directive": { "type": "STRING", "description": "How an interface generated THROUGH this node must look, feel and behave: palette, tone, layout, emphasis, interactions. 1 to 3 sentences." },
           "basis": { "type": "STRING", "enum": ["documente", "declare", "interpretation"] },
           "evidence": { "type": "STRING", "description": "The public fact, statement or work this node rests on (no URL, no invented quote)." },
           "intensity": { "type": "NUMBER", "minimum": 0, "maximum": 1 },
+          "emotion": {
+            "type": "STRING", "nullable": true,
+            "enum": ["joie", "emerveillement", "passion", "tendresse", "serenite", "fierte", "melancolie", "tristesse", "colere", "peur", "angoisse", "solitude"],
+            "description": "The emotional charge of this node, when it has one. Mandatory for type emotion."
+          },
           "date": { "type": "STRING", "nullable": true, "description": "Artifacts only: YYYY, YYYY-MM or YYYY-MM-DD." },
           "impact": { "type": "STRING", "nullable": true, "description": "Artifacts only: how this event shaped the core." },
           "palette": { "type": "ARRAY", "items": { "type": "STRING" }, "description": "matrice_esthetique only: 2 to 5 #rrggbb colors." },
           "keywords": { "type": "ARRAY", "items": { "type": "STRING" }, "description": "empreinte_syntaxique only: signature words or phrasings." }
         },
         "required": ["id", "category", "type", "title", "content", "directive", "basis", "evidence", "intensity"],
-        "propertyOrdering": ["id", "category", "type", "title", "content", "directive", "basis", "evidence", "intensity", "date", "impact", "palette", "keywords"]
+        "propertyOrdering": ["id", "category", "type", "title", "content", "directive", "basis", "evidence", "intensity", "emotion", "date", "impact", "palette", "keywords"]
       }
     },
     "links": {
@@ -46,6 +64,6 @@
       }
     }
   },
-  "required": ["person", "public_figure", "summary", "nodes", "links"],
-  "propertyOrdering": ["person", "public_figure", "refusal", "domain", "summary", "nodes", "links"]
+  "required": ["person", "public_figure", "summary", "temperament", "climate", "nodes", "links"],
+  "propertyOrdering": ["person", "public_figure", "refusal", "domain", "summary", "temperament", "climate", "nodes", "links"]
 }

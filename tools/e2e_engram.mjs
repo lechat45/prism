@@ -225,7 +225,11 @@ async function main() {
     const EF = await findFrame(`Boolean(window.__engram)`, "document de l'Engramme");
     const shape = await evaluate(`(() => { const e = window.__engram; const c = {}; e.sim.nodes.forEach((n) => { c[n.category] = (c[n.category] || 0) + 1; });
       return { counts: c, person: e.data.person, title: document.title, links: e.sim.links.length }; })()`, EF);
-    check("Engramme : 30 bulles en 4 catégories (1 / 9 / 10 / 10)", JSON.stringify(shape.counts) === JSON.stringify({ core: 1, engine: 9, shadow: 10, artifact: 10 }), JSON.stringify(shape));
+    check("Engramme : 37 bulles en 5 catégories (1 / 7 / 9 / 10 / 10)", JSON.stringify(shape.counts) === JSON.stringify({ core: 1, heart: 7, engine: 9, shadow: 10, artifact: 10 }), JSON.stringify(shape));
+    const character = await evaluate(`({ temperament: document.getElementById("temperament").textContent,
+      climate: [...document.querySelectorAll("#climate li")].map((li) => li.textContent) })`, EF);
+    check("caractère et émotions : tempérament et climat émotionnel affichés", character.temperament.startsWith("Réservée") && character.climate.length === 4 && /Passion 35/.test(character.climate[0]),
+      JSON.stringify(character.climate));
     check("titre de la carte", engramCard.title === "Engramme · Marie Curie", engramCard.title);
     if (serverMode) {
       const req = requests.find((r) => r.url.endsWith("/api/engram"));
@@ -288,6 +292,13 @@ async function main() {
     // ------------------------------------------------------------------ 5. Injection d'ADN : fichier déposé sur une bulle
     const shadow = await evaluate(`(() => { const n = window.__engram.sim.nodes.find((m) => m.category === "shadow"); return { id: n.id, title: n.data.title }; })()`, EF);
     const csv = await evaluate(`"echantillon;activite\\nA;12\\nB;30\\nC;7\\n"`);
+    // Texte de chargement capté au vol : en démo, la carte est prête (texte effacé) en quelques millisecondes.
+    await evaluate(`(() => {
+      window.__overlayTexts = [];
+      new MutationObserver(() => document.querySelectorAll(".card-overlay-text").forEach((el) => {
+        if (el.textContent && !window.__overlayTexts.includes(el.textContent)) window.__overlayTexts.push(el.textContent);
+      })).observe(document.getElementById("world"), { subtree: true, childList: true, characterData: true });
+    })()`);
     await evaluate(`(() => {
       const n = window.__engram.sim.nodes.find((m) => m.id === ${JSON.stringify(shadow.id)});
       window.__engram.sim.setHover(n.id); // immobile le temps du geste
@@ -298,7 +309,12 @@ async function main() {
       stage.dispatchEvent(new DragEvent("dragover", at));
       stage.dispatchEvent(new DragEvent("drop", at));
     })()`, EF);
-    const loadingText = await waitFor(() => evaluate(`document.querySelectorAll(".card").length === 3 && document.querySelector(".card:last-of-type .card-overlay-text").textContent`), "carte de l'injection d'ADN", 30000);
+    const loadingText = await waitFor(() => evaluate(`document.querySelectorAll(".card").length === 3 && window.__overlayTexts.find((t) => t.startsWith("ADN «"))`), "carte de l'injection d'ADN", 30000)
+      .catch(async (err) => {
+        const page = await evaluate(`JSON.stringify({ toast: document.getElementById("toast").textContent, cards: document.querySelectorAll(".card").length })`);
+        const inFrame = await evaluate(`JSON.stringify(window.__engram.state())`, EF).catch((e) => e.message);
+        throw new Error(`${err.message} — page ${page} — Engramme ${inFrame} — erreurs ${pageErrors.join(" | ")} — console ${consoleLines.join(" | ")}`);
+      });
     await waitFor(async () => (await cardCount()) === 3 && allReady(), "widget de l'injection d'ADN prêt", 45000).catch(async (err) => {
       const state = await evaluate(`JSON.stringify({ toast: document.getElementById("toast").textContent, cards: document.querySelectorAll(".card").length })`);
       const inFrame = await evaluate(`JSON.stringify(window.__engram.state())`, EF).catch((e) => e.message);
@@ -315,14 +331,22 @@ async function main() {
 
     // ------------------------------------------------------------------ 6. Zoom fractal
     const WF = await findFrame(`!window.__engram && document.body && document.body.innerText.length > 0`, "document d'un widget", new Set([EF]));
-    const target = await evaluate(`(() => { const el = [...document.querySelectorAll("h1, h2, h3, p, li")].find((e) => e.getBoundingClientRect().width > 20);
-      const r = el.getBoundingClientRect(); return { x: r.left + Math.min(20, r.width / 2), y: r.top + r.height / 2, text: el.textContent.trim().slice(0, 40) }; })()`, WF);
+    // Éléments candidats du widget (coordonnées de l'iframe).
+    const candidates = await evaluate(`[...document.querySelectorAll("h1, h2, h3, p, li")].filter((e) => e.getBoundingClientRect().width > 20).slice(0, 20)
+      .map((el) => { const r = el.getBoundingClientRect(); return { x: r.left + Math.min(20, r.width / 2), y: r.top + r.height / 2, text: el.textContent.trim().slice(0, 40) }; })`, WF);
     // Carte de ce widget : repérée par son titre (celui de son document).
     const wTitle = await evaluate(`document.title`, WF);
     const wCard = (await cards()).find((c) => c.title === wTitle && c.id !== engramCard.id);
     await clickSel("#zoom-fit"); // toutes les cartes à l'écran
     await sleep(700);
-    const wAt = await toPage(wCard.id, target.x, target.y);
+    // Premier élément dont le point, dans la page, tombe bien sur l'iframe du widget (ni barre du haut, ni dock).
+    let target = candidates[0];
+    let wAt = await toPage(wCard.id, target.x, target.y);
+    for (const c of candidates) {
+      const at = await toPage(wCard.id, c.x, c.y);
+      const hit = await evaluate(`document.elementFromPoint(${at.x}, ${at.y}) === document.querySelector('.card[data-id="${wCard.id}"] iframe.card-frame')`);
+      if (hit) { target = c; wAt = at; break; }
+    }
     const before = await cardCount();
     // Carte d'abord sélectionnée (premier plan) : un changement de plan entre les deux clics d'un double-clic
     // peut perdre le second au-dessus d'une iframe isolée (limite du navigateur, cf. phase 5).
@@ -407,11 +431,14 @@ async function main() {
       document.documentElement.style.removeProperty("--organic"); return f; })()`);
     const [calm, loud] = [await glassAt(0), await glassAt(1)];
     check("verre organique : la voix épaissit le flou du verre", /blur\(28px\)/.test(calm) && /blur\(68px\)/.test(loud), `${calm} → ${loud}`);
-    // Appui bref sur Espace : rien.
-    await key("keyDown", { ...SPACE, text: " " });
-    await sleep(80);
-    await key("keyUp", SPACE);
-    await sleep(500);
+    // Appui bref sur Espace : rien. Appui et relâchement dans la même tâche : sous CDP, deux évènements
+    // séparés peuvent arriver à plus de 260 ms d'écart sur une machine chargée (incantation légitime).
+    await evaluate(`(() => {
+      const opts = { key: " ", code: "Space", bubbles: true, cancelable: true };
+      document.body.dispatchEvent(new KeyboardEvent("keydown", opts));
+      document.body.dispatchEvent(new KeyboardEvent("keyup", opts));
+    })()`);
+    await sleep(600);
     check("appui bref sur Espace : aucune incantation", (await evaluate(`document.getElementById("incantation").hidden`)) && (await cardCount()) === countBefore + 1);
 
     // ------------------------------------------------------------------ 8. Inspecteur : un Engramme ne se refactorise pas
@@ -438,7 +465,7 @@ async function main() {
     await cdp.send("Page.reload", {}, S);
     await loaded();
     await waitFor(async () => (await cardCount()) === total && allReady(), "cartes restaurées", 30000);
-    const EF2 = await findFrame(`Boolean(window.__engram) && window.__engram.sim.nodes.length === 30`, "Engramme restauré");
+    const EF2 = await findFrame(`Boolean(window.__engram) && window.__engram.sim.nodes.length === 37`, "Engramme restauré");
     check("rechargement : Engramme restauré et vivant", Boolean(EF2), `${total} cartes`);
     if (SHOT) {
       const { data } = await cdp.send("Page.captureScreenshot", { format: "png" }, S);

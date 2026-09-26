@@ -1,5 +1,25 @@
 # Changelog
 
+## 4.0.0-alpha.3 — 2026-09-26 (Engramme : caractère et émotions)
+
+- **Nouvelle catégorie E « Caractère et émotions »** (6 à 8 bulles) : traits de caractère, émotions marquantes (leur
+  source, leur manifestation), attachements (personnes, lieux, causes qui émeuvent la personne). 36 à 44 bulles au total.
+- **12 émotions** reconnues, chacune avec sa couleur ; toute bulle peut porter une **charge émotionnelle**. L'Engramme porte
+  le **tempérament** (le caractère en une phrase) et le **climat émotionnel** (2 à 4 émotions pondérées, normalisées ;
+  déduit des bulles si le modèle l'omet). Validation identique en Python et en JS (nouveaux cas de parité).
+- **Rendu** : anneau intérieur du cœur, orbes chauds teintés par leur émotion qui **battent** (« lub-dub ») au rythme de
+  l'émotion (colère rapide, sérénité lente) ; halo émotionnel sur les autres bulles ; **aura** du climat émotionnel autour
+  du noyau ; tempérament et puces du climat dans l'en-tête ; émotion dans la fiche Liquid Glass ; légende à 5 catégories.
+- **ADN émotionnel** : une génération filtrée reprend aussi le tempérament de la personne, l'émotion de la bulle
+  (« registre émotionnel à transmettre : couleurs, mouvement, textes, avec retenue ») et son climat émotionnel.
+- Prompt : émotions lues dans les sources publiques (écrits, journaux et lettres publiés, témoignages), décrites comme
+  vécues, jamais comme des troubles ni des diagnostics ; rien d'inventé, sentiment compris.
+- Démo Marie Curie enrichie (7 bulles du cœur : pudeur, indépendance, émerveillement, deuil de Pierre, joie du hangar,
+  la Pologne, ses filles) ; vérifié sur le vrai Gemini (Frida Kahlo : 6 bulles du cœur, climat passion / tristesse / solitude).
+- CI : tests E2E rendus robustes sous Linux (point du test des reflets, texte de chargement capté au vol, appui bref sur
+  Espace déterministe, point du zoom fractal vérifié dans l'iframe).
+- Tests : 121 Python, 68 Node ; E2E V4 31/31 (serveur) et 25/25 (statique).
+
 ## 4.0.0-alpha.2 — 2026-09-26 (Engramme sur le vrai Gemini, plusieurs clés)
 
 - **Correctif** : l'Engramme échouait sur le vrai Gemini (« schéma de réponse refusé », HTTP 400

@@ -23,7 +23,7 @@ dans une carte que l'on déplace, redimensionne, refactorise, recolore et export
 | **Bus d'évènements** | les widgets se parlent : `prism.emit(sujet, données)` / `prism.on(sujet, fn)` ; liaisons tracées sur le canvas ; une nouvelle génération connaît les sujets des widgets présents et peut s'y brancher |
 | **Spotlight** | Ctrl/Cmd + K (même dans un widget) : générer, refactoriser la carte sélectionnée, sauter à une carte, commandes, widgets de « Mon Hub », au clavier |
 | **Liquid Glass** | aurore sous le verre dépoli, reflets des bords qui suivent le pointeur, squelette holographique pendant la génération, fondu enchaîné vers le widget une fois prêt |
-| **Engramme cognitif** (V4) | « Engramme : Marie Curie » : carte interprétative de l'esprit d'une personnalité publique en 30 à 36 bulles vivantes (noyau, moteurs, ombres, artefacts datés), moteur physique ressort-masse natif ; chaque bulle devient un **filtre ADN** pour vos générations |
+| **Engramme cognitif** (V4) | « Engramme : Marie Curie » : carte interprétative de l'esprit d'une personnalité publique en 36 à 44 bulles vivantes (noyau, caractère et émotions, moteurs, ombres, artefacts datés), moteur physique ressort-masse natif ; chaque bulle devient un **filtre ADN** pour vos générations |
 | **Zoom fractal** (V4) | double-clic sur une partie d'un widget : Prism propose d'en faire un widget complet, qui émerge du point cliqué |
 | **Incantation** (V4) | maintenir Espace et parler : la demande dictée devient une carte sous le pointeur ; pendant l'écoute, le **verre organique** respire avec la voix |
 
@@ -162,15 +162,23 @@ prism.on("*", (data, { topic, from }) => { … });                       // tout
 ## Prism V4 « Singularité » : l'Engramme cognitif
 
 Tapez **« Engramme : Marie Curie »** (dock, Spotlight ou voix) : Prism cartographie l'esprit d'une
-personnalité publique, vivante ou historique, en une constellation de 30 à 36 bulles.
+personnalité publique, vivante ou historique, en une constellation de 36 à 44 bulles : sa façon de penser, mais aussi
+son caractère et ses émotions.
 
 | Catégorie | Bulles | Rendu et physique |
 | --- | --- | --- |
 | **A. Noyau** | 1 axiome | orbe blanc massif, rappelé au centre par un ressort très raide : immobile |
+| **E. Caractère et émotions** | 6 à 8 : traits de caractère, émotions (source, manifestation), attachements (ce qui l'émeut) | orbes chauds teintés par leur émotion, anneau intérieur au plus près du noyau, **battement de cœur** (« lub-dub ») au rythme de l'émotion : colère rapide, sérénité lente |
 | **B. Moteurs opérationnels** | 8 à 10 : algorithme de résolution, empreinte syntaxique (mots-clés), matrice esthétique (palette), méthode de travail | cyan, orbite proche, liens épais vers le noyau, dérive lente et amortie |
 | **C. Ombres et biais** | 10 à 15 : paradoxes, peurs primaires, biais cognitifs | violet / cramoisi, orbite médiane, bruit lissé et sursauts, se repoussent entre elles, **fuient le pointeur**, pulsation asynchrone, glitch (aberration chromatique, tranches décalées) |
 | **D. Artefacts chronologiques** | exactement 10 évènements datés, avec leur impact | or, minuscules, orbite lointaine, rapides, traînées |
 
+- **Caractère et émotions** : 12 émotions reconnues (joie, émerveillement, passion, tendresse, sérénité, fierté,
+  mélancolie, tristesse, colère, peur, angoisse, solitude), chacune avec sa couleur. Toute bulle peut porter une
+  **charge émotionnelle** (fin halo coloré, ligne dans sa fiche) ; l'Engramme porte le **tempérament** de la personne
+  (son caractère en une phrase) et son **climat émotionnel** (2 à 4 émotions pondérées) : puces dans l'en-tête et
+  **aura** qui teinte toute la carte. Émotions lues dans les sources publiques (écrits, journaux et lettres publiés,
+  témoignages), décrites comme des expériences vécues, jamais comme des troubles.
 - **Moteur physique natif** (`frontend/engine/engram/physics.js`, sans D3) : ressort-masse, Euler semi-implicite
   à pas fixe (1/120 s), déterministe (graine), anneaux elliptiques épousant la carte, répulsion à courte portée.
   La bulle survolée s'arrête et grossit ; une fiche **Liquid Glass** (`bg-white/10 backdrop-blur-xl
@@ -186,8 +194,9 @@ personnalité publique, vivante ou historique, en une constellation de 30 à 36 
   publiques ».
 - **Injection d'ADN** : un clic sur une bulle en fait le **filtre ADN** du dock (la prochaine demande passe par ce
   trait : esthétique, logique, ton) ; un fichier CSV/JSON/TXT ou un texte **déposé sur une bulle** lance
-  aussitôt la génération filtrée, à côté de l'Engramme. Le trait part avec la demande (`dna`) et le prompt
-  l'applique sans jamais faire parler la personne.
+  aussitôt la génération filtrée, à côté de l'Engramme. Le trait part avec la demande (`dna`), avec le tempérament,
+  l'émotion de la bulle et le climat émotionnel : le widget en reprend le caractère et le registre émotionnel
+  (couleurs, mouvement, textes), sans jamais faire parler la personne.
 - **Zoom fractal** : double-clic sur une partie d'un widget (tableau, graphique, formulaire…) → proposition
   « Zoom fractal » ; le sous-composant devient un widget complet, avec les mêmes données, qui émerge du point cliqué.
 - **Incantation** : Espace maintenu (hors d'un champ) ouvre l'écoute (Web Speech API) ; la transcription

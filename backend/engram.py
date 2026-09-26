@@ -1,14 +1,16 @@
-"""Engramme cognitif (V4) : carte interprétative de l'esprit d'une personnalité publique, en 30 à 36 nœuds.
+"""Engramme cognitif (V4) : carte interprétative de l'esprit d'une personnalité publique, en 36 à 44 nœuds.
 
 Gemini reçoit un schéma de réponse (frontend/engine/engram/schema.json, partagé avec le moteur navigateur)
 et renvoie un JSON syntaxiquement garanti ; ce module en vérifie le SENS avant de le livrer :
   A. core      exactement 1 nœud « axiome » ;
+  E. heart     6 à 8 nœuds : caractère et émotions (trait, émotion, attachement ; chaque type au moins une fois) ;
   B. engine    8 à 10 nœuds, chacun des 4 types au moins une fois ;
   C. shadow    10 à 15 nœuds, chacun des 3 types au moins une fois ;
   D. artifact  exactement 10 évènements datés (triés), avec leur impact ;
-  30 nœuds au moins. Les surplus sont écartés (les moins intenses d'abord), les manques font échouer le modèle
+  36 nœuds au moins. Les surplus sont écartés (les moins intenses d'abord), les manques font échouer le modèle
   (le suivant de la chaîne prend le relais). Chaque nœud porte sa « directive » : le filtre qui, déposé sur une
-  génération, en dicte l'esthétique et la logique.
+  génération, en dicte l'esthétique et la logique ; et, facultative, sa charge émotionnelle (EMOTIONS).
+  L'ensemble porte le tempérament (le caractère en une phrase) et le climat émotionnel (2 à 4 émotions pondérées).
 """
 from __future__ import annotations
 
@@ -39,16 +41,25 @@ DEMO = json.loads((ENGRAM_DIR / "demo-marie-curie.json").read_text(encoding="utf
 
 TYPES = {
     "core": ("axiome",),
+    "heart": ("trait", "emotion", "attachement"),
     "engine": ("algorithme_resolution", "empreinte_syntaxique", "matrice_esthetique", "methode_travail"),
     "shadow": ("paradoxe", "peur_primaire", "biais_cognitif"),
     "artifact": ("succes", "echec", "tournant"),
 }
-COUNTS = {"core": (1, 1), "engine": (8, 10), "shadow": (10, 15), "artifact": (10, 10)}
-MIN_NODES = 30
+COUNTS = {"core": (1, 1), "heart": (6, 8), "engine": (8, 10), "shadow": (10, 15), "artifact": (10, 10)}
+MIN_NODES = 36
+# Émotions reconnues (identifiant → nom anglais pour les prompts). L'ordre départage les égalités du climat.
+EMOTIONS = {
+    "joie": "joy", "emerveillement": "wonder", "passion": "passion", "tendresse": "tenderness",
+    "serenite": "serenity", "fierte": "pride", "melancolie": "melancholy", "tristesse": "sadness",
+    "colere": "anger", "peur": "fear", "angoisse": "anxiety", "solitude": "loneliness",
+}
+CLIMATE_MAX = 4
 LANGUAGES = {"fr": "French", "en": "English"}
 DATE_RE = re.compile(r"^-?\d{1,4}(-\d{2}(-\d{2})?)?$")
 HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
-LIMITS = {"title": 60, "content": 700, "directive": 400, "evidence": 300, "impact": 400, "summary": 400, "domain": 120}
+LIMITS = {"title": 60, "content": 700, "directive": 400, "evidence": 300, "impact": 400, "summary": 400, "domain": 120,
+          "temperament": 300}
 
 
 class EngramError(Exception):
@@ -74,8 +85,13 @@ def _text(value, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
+def _round2(number: float) -> float:
+    """Arrondi au centième, « demi vers le haut » : identique en JS (Math.floor)."""
+    return math.floor(number * 100 + 0.5) / 100
+
+
 def _intensity(value) -> float:
-    """0..1 arrondi au centième (arrondi « demi vers le haut », identique en JS) ; 0,5 si illisible."""
+    """0..1 arrondi au centième ; 0,5 si illisible."""
     if isinstance(value, bool) or not isinstance(value, (int, float, str)) or (isinstance(value, str) and not value.strip()):
         return 0.5
     try:
@@ -84,7 +100,35 @@ def _intensity(value) -> float:
         return 0.5
     if not math.isfinite(number):
         return 0.5
-    return math.floor(min(1.0, max(0.0, number)) * 100 + 0.5) / 100
+    return _round2(min(1.0, max(0.0, number)))
+
+
+def _climate(raw, nodes: list[dict]) -> list[dict]:
+    """Climat émotionnel : 1 à 4 émotions, poids normalisés (somme ≈ 1). Absent ou illisible : déduit des
+    charges émotionnelles des nœuds, pondérées par leur intensité."""
+    entries: list[tuple[str, float]] = []
+    seen: set[str] = set()
+    for item in raw if isinstance(raw, list) else []:
+        if not isinstance(item, dict):
+            continue
+        emotion = item.get("emotion")
+        if not isinstance(emotion, str) or emotion not in EMOTIONS or emotion in seen:
+            continue
+        weight = _intensity(item.get("weight"))
+        if weight > 0:
+            seen.add(emotion)
+            entries.append((emotion, weight))
+    if not entries:
+        totals: dict[str, float] = {}
+        for node in nodes:
+            if "emotion" in node:
+                totals[node["emotion"]] = totals.get(node["emotion"], 0) + node["intensity"]
+        entries = [(e, w) for e, w in totals.items() if w > 0]
+    order = list(EMOTIONS)
+    entries.sort(key=lambda e: (-e[1], order.index(e[0])))
+    entries = entries[:CLIMATE_MAX]
+    total = sum(w for _, w in entries)
+    return [{"emotion": e, "weight": _round2(w / total)} for e, w in entries] if total > 0 else []
 
 
 def _date_key(date: str) -> tuple[int, int, int]:
@@ -131,6 +175,11 @@ def normalize(raw: dict) -> dict:
         }
         if not (clean["title"] and clean["content"] and clean["directive"]):
             continue
+        emotion = node.get("emotion")
+        if isinstance(emotion, str) and emotion in EMOTIONS:
+            clean["emotion"] = emotion
+        elif node["type"] == "emotion":
+            continue  # une émotion sans nom reconnu n'a pas sa place
         if category == "artifact":
             date = _scalar(node.get("date")).strip()
             impact = _text(node.get("impact"), LIMITS["impact"])
@@ -177,6 +226,8 @@ def normalize(raw: dict) -> dict:
         "person": _text(raw.get("person"), 120),
         "domain": _text(raw.get("domain"), LIMITS["domain"]),
         "summary": _text(raw.get("summary"), LIMITS["summary"]),
+        "temperament": _text(raw.get("temperament"), LIMITS["temperament"]),
+        "climate": _climate(raw.get("climate"), ordered),
         "nodes": ordered,
         "links": links[:40],
     }

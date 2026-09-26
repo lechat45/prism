@@ -15,18 +15,27 @@
 
   const TYPES = {
     core: ["axiome"],
+    heart: ["trait", "emotion", "attachement"],
     engine: ["algorithme_resolution", "empreinte_syntaxique", "matrice_esthetique", "methode_travail"],
     shadow: ["paradoxe", "peur_primaire", "biais_cognitif"],
     artifact: ["succes", "echec", "tournant"],
   };
-  const COUNTS = { core: [1, 1], engine: [8, 10], shadow: [10, 15], artifact: [10, 10] };
-  const MIN_NODES = 30;
+  const COUNTS = { core: [1, 1], heart: [6, 8], engine: [8, 10], shadow: [10, 15], artifact: [10, 10] };
+  const MIN_NODES = 36;
+  // Émotions reconnues (identifiant → nom anglais pour les prompts). L'ordre départage les égalités du climat.
+  const EMOTIONS = {
+    joie: "joy", emerveillement: "wonder", passion: "passion", tendresse: "tenderness",
+    serenite: "serenity", fierte: "pride", melancolie: "melancholy", tristesse: "sadness",
+    colere: "anger", peur: "fear", angoisse: "anxiety", solitude: "loneliness",
+  };
+  const EMOTION_ORDER = Object.keys(EMOTIONS);
+  const CLIMATE_MAX = 4;
   const LANGUAGES = { fr: "French", en: "English" };
   const BASES = ["documente", "declare", "interpretation"];
   const KINDS = ["forge", "nourrit", "contredit"];
   const DATE_RE = /^-?\d{1,4}(-\d{2}(-\d{2})?)?$/;
   const HEX_RE = /^#[0-9a-fA-F]{6}$/;
-  const LIMITS = { title: 60, content: 700, directive: 400, evidence: 300, impact: 400, summary: 400, domain: 120 };
+  const LIMITS = { title: 60, content: 700, directive: 400, evidence: 300, impact: 400, summary: 400, domain: 120, temperament: 300 };
   const has = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
 
   function EngramError(message) {
@@ -51,11 +60,39 @@
     return chars.length <= limit ? clean : chars.slice(0, limit - 1).join("").trimEnd() + "…";
   }
 
+  const round2 = (number) => Math.floor(number * 100 + 0.5) / 100;
+
   function intensity(value) {
     if (typeof value === "string" ? !value.trim() : typeof value !== "number") return 0.5;
     const number = Number(value);
     if (!Number.isFinite(number)) return 0.5;
-    return Math.floor(Math.min(1, Math.max(0, number)) * 100 + 0.5) / 100;
+    return round2(Math.min(1, Math.max(0, number)));
+  }
+
+  /** Climat émotionnel (même règle que _climate() en Python) : 1 à 4 émotions, poids normalisés ; absent :
+   *  déduit des charges émotionnelles des nœuds, pondérées par leur intensité. */
+  function climate(raw, nodes) {
+    let entries = [];
+    const seen = new Set();
+    for (const item of Array.isArray(raw) ? raw : []) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      const emotion = item.emotion;
+      if (typeof emotion !== "string" || !has(EMOTIONS, emotion) || seen.has(emotion)) continue;
+      const weight = intensity(item.weight);
+      if (weight > 0) {
+        seen.add(emotion);
+        entries.push([emotion, weight]);
+      }
+    }
+    if (!entries.length) {
+      const totals = new Map();
+      for (const node of nodes) if (node.emotion) totals.set(node.emotion, (totals.get(node.emotion) || 0) + node.intensity);
+      entries = [...totals].filter(([, w]) => w > 0);
+    }
+    entries.sort((a, b) => b[1] - a[1] || EMOTION_ORDER.indexOf(a[0]) - EMOTION_ORDER.indexOf(b[0]));
+    entries = entries.slice(0, CLIMATE_MAX);
+    const total = entries.reduce((sum, [, w]) => sum + w, 0);
+    return total > 0 ? entries.map(([emotion, w]) => ({ emotion, weight: round2(w / total) })) : [];
   }
 
   function dateKey(date) {
@@ -98,6 +135,8 @@
         intensity: intensity(node.intensity),
       };
       if (!(clean.title && clean.content && clean.directive)) return;
+      if (typeof node.emotion === "string" && has(EMOTIONS, node.emotion)) clean.emotion = node.emotion;
+      else if (node.type === "emotion") return; // une émotion sans nom reconnu n'a pas sa place
       if (category === "artifact") {
         const date = scalar(node.date).trim();
         const impact = text(node.impact, LIMITS.impact);
@@ -151,6 +190,8 @@
       person: text(raw.person, 120),
       domain: text(raw.domain, LIMITS.domain),
       summary: text(raw.summary, LIMITS.summary),
+      temperament: text(raw.temperament, LIMITS.temperament),
+      climate: climate(raw.climate, ordered),
       nodes: ordered,
       links: links.slice(0, 40),
     };
@@ -232,6 +273,11 @@
     };
     if (node.palette && node.palette.length) dna.palette = node.palette.slice(0, 5);
     if (node.keywords && node.keywords.length) dna.keywords = node.keywords.slice(0, 8);
+    // Caractère et émotions : la génération reprend la charge du nœud et le climat de la personne.
+    if (node.emotion && has(EMOTIONS, node.emotion)) dna.emotion = node.emotion;
+    if (engram.temperament) dna.temperament = engram.temperament;
+    const moods = (engram.climate || []).map((c) => c.emotion).filter((e) => has(EMOTIONS, e)).slice(0, CLIMATE_MAX);
+    if (moods.length) dna.climate = moods;
     return dna;
   }
 
@@ -241,5 +287,5 @@
     return m ? m[1] : null;
   }
 
-  return { TYPES, COUNTS, MIN_NODES, LIMITS, LANGUAGES, normalize, parse, buildUserMessage, buildViewer, readViewer, dnaOf, dateKey, engramRequest };
+  return { TYPES, COUNTS, MIN_NODES, LIMITS, LANGUAGES, EMOTIONS, normalize, parse, buildUserMessage, buildViewer, readViewer, dnaOf, dateKey, engramRequest };
 });

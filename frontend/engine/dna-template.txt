@@ -7,4 +7,4 @@ Directive for the visual design, the interaction logic and the microcopy:
 <<<
 {{directive}}
 >>>
-{{extras}}The user's request stays the goal: the trait changes how the widget looks, reads and behaves, never what it is for. Never impersonate {{person}}, never invent quotations or facts about them.
+{{extras}}The user's request stays the goal: the trait changes how the widget looks, reads, feels and behaves, never what it is for. Never impersonate {{person}}, never invent quotations or facts about them.

@@ -95,34 +95,63 @@ test("aucun chevauchement ; les ombres se repoussent entre elles", () => {
 });
 
 test("le pointeur fait fuir les ombres, pas les moteurs", () => {
-  const sim = P.createSimulation(demo, { width: W, height: H, seed: 4 });
-  run(sim, 4);
-  // Pointeur immobile posé à 20 px d'une bulle : où en est-elle une seconde plus tard ?
-  const after = (node) => {
+  // Pointeur immobile posé à 20 px d'une bulle : où en est-elle une seconde plus tard ? Comparé au même tirage
+  // sans pointeur (jumeau), pour isoler l'effet de la répulsion ; moyenne sur toutes les ombres (une ombre
+  // coincée par ses voisines fuit moins loin).
+  const distance = (index, withPointer) => {
+    const sim = P.createSimulation(demo, { width: W, height: H, seed: 4 });
+    run(sim, 4);
+    const node = sim.nodes[index];
     const px = node.x + 20;
     const py = node.y;
-    sim.setPointer(px, py);
+    if (withPointer) sim.setPointer(px, py);
     run(sim, 1);
-    sim.setPointer(null);
     return Math.hypot(node.x - px, node.y - py);
   };
-  // Même tirage sans pointeur, pour isoler l'effet de la répulsion.
-  const twin = P.createSimulation(demo, { width: W, height: H, seed: 4 });
-  run(twin, 4);
-  const shadowIdx = sim.nodes.findIndex((n) => n.category === "shadow");
-  const engineIdx = sim.nodes.findIndex((n) => n.category === "engine");
-  const fled = after(sim.nodes[shadowIdx]);
-  const px = twin.nodes[shadowIdx].x + 20;
-  const py = twin.nodes[shadowIdx].y;
-  run(twin, 1);
-  const baseline = Math.hypot(twin.nodes[shadowIdx].x - px, twin.nodes[shadowIdx].y - py);
-  assert.ok(fled > 80 && fled > baseline + 30, `ombre à ${fled.toFixed(0)} px du pointeur (sans pointeur : ${baseline.toFixed(0)} px)`);
-  const engine = sim.nodes[engineIdx];
-  const ex = engine.x;
-  const ey = engine.y;
-  after(engine);
-  // Un moteur ne fuit pas : il suit seulement sa lente orbite (≈ 11 px/s).
-  assert.ok(Math.hypot(engine.x - ex, engine.y - ey) < 40, "le moteur n'est pas repoussé");
+  const shadows = demo.nodes.map((n, i) => (n.category === "shadow" ? i : -1)).filter((i) => i >= 0);
+  const fled = mean(shadows.map((i) => distance(i, true)));
+  const baseline = mean(shadows.map((i) => distance(i, false)));
+  assert.ok(fled > 80 && fled > baseline + 40, `ombres à ${fled.toFixed(0)} px du pointeur en moyenne (sans pointeur : ${baseline.toFixed(0)} px)`);
+  // Un moteur ne fuit pas : il suit seulement sa lente orbite.
+  const engines = demo.nodes.map((n, i) => (n.category === "engine" ? i : -1)).filter((i) => i >= 0);
+  const pushed = mean(engines.map((i) => distance(i, true) - distance(i, false)));
+  assert.ok(Math.abs(pushed) < 10, `moteurs déplacés de ${pushed.toFixed(1)} px par le pointeur`);
+});
+
+test("E. cœur : anneau intérieur, entre le noyau et les moteurs ; battement au rythme de l'émotion", () => {
+  const sim = P.createSimulation(demo, { width: W, height: H, seed: 3 });
+  run(sim, 6);
+  const heart = [];
+  const engine = [];
+  for (let i = 0; i < 20; i++) {
+    run(sim, 0.5);
+    heart.push(mean(of(sim, "heart").map((n) => ring(sim, n))));
+    engine.push(mean(of(sim, "engine").map((n) => ring(sim, n))));
+  }
+  assert.ok(mean(heart) < mean(engine), `cœur ${mean(heart).toFixed(2)}, moteurs ${mean(engine).toFixed(2)}`);
+  assert.ok(Math.abs(mean(heart) - 0.27) < 0.27 * 0.35, `cœur à ${mean(heart).toFixed(2)} pour 0.27`);
+  // Battements comptés sur 10 s : la colère bat plus vite que la sérénité.
+  const beats = (emotion) => {
+    const data = JSON.parse(JSON.stringify(demo));
+    data.nodes.filter((n) => n.category === "heart").forEach((n) => { n.emotion = emotion; });
+    const s = P.createSimulation(data, { width: W, height: H, seed: 3 });
+    const n = s.nodes.find((m) => m.category === "heart");
+    let count = 0;
+    let prev = s.pulseOf(n);
+    let rising = false;
+    for (let i = 0; i < 600; i++) {
+      s.advance(1 / 60);
+      const v = s.pulseOf(n);
+      if (rising && v < prev && prev > 1.15) count += 1; // sommet d'une contraction principale
+      rising = v > prev;
+      prev = v;
+    }
+    return count;
+  };
+  const angry = beats("colere");
+  const calm = beats("serenite");
+  assert.ok(angry > calm * 2, `colère : ${angry} battements, sérénité : ${calm}`);
+  assert.ok(calm >= 4 && calm <= 8, `sérénité : ${calm} battements en 10 s`);
 });
 
 test("survol : la bulle s'arrête et grossit, puis repart", () => {

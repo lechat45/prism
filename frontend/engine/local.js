@@ -66,6 +66,9 @@
     let extras = "";
     if (dna.palette && dna.palette.length) extras += `Palette to use: ${dna.palette.join(", ")}.\n`;
     if (dna.keywords && dna.keywords.length) extras += `Vocabulary to weave into the texts: ${dna.keywords.join(", ")}.\n`;
+    if (dna.temperament) extras += `Character of ${dna.person}: ${dna.temperament}\n`;
+    if (dna.emotion) extras += `Emotional register to convey (colours, motion, microcopy, with restraint): ${E.EMOTIONS[dna.emotion]}.\n`;
+    if (dna.climate && dna.climate.length) extras += `Emotional climate of ${dna.person}: ${dna.climate.map((e) => E.EMOTIONS[e]).join(", ")}.\n`;
     const values = {
       person: dna.person, category: dna.category, type: dna.type, title: dna.title,
       content: dna.content || "-", directive: dna.directive, extras,

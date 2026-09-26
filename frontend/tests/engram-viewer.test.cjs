@@ -52,7 +52,10 @@ test("les scripts du document sont du JavaScript valide", () => {
 test("trait ADN d'une bulle : champs du filtre, palette et vocabulaire", () => {
   const aesthetic = demo.nodes.find((n) => n.type === "matrice_esthetique");
   const dna = E.dnaOf(demo, aesthetic.id);
-  assert.deepEqual(Object.keys(dna).sort(), ["category", "content", "directive", "palette", "person", "title", "type"]);
+  assert.deepEqual(Object.keys(dna).sort(), ["category", "climate", "content", "directive", "emotion", "palette", "person", "temperament", "title", "type"]);
+  assert.equal(dna.emotion, aesthetic.emotion);
+  assert.deepEqual(dna.climate, demo.climate.map((c) => c.emotion));
+  assert.equal(dna.temperament, demo.temperament);
   assert.equal(dna.person, "Marie Curie");
   assert.deepEqual(dna.palette, aesthetic.palette);
   const syntax = demo.nodes.find((n) => n.type === "empreinte_syntaxique");
