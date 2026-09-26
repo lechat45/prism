@@ -19,6 +19,7 @@ const opt = (name) => { const i = argv.indexOf(`--${name}`); return i === -1 ? n
 const BASE = opt("base") || "http://127.0.0.1:8004";
 const SHOT = opt("screenshot");
 const SHOT_CHAT = opt("screenshot-chat"); // capture pendant la conversation (ronds de la logique écrits)
+const SHOT_FUSION = opt("screenshot-fusion"); // V5 : captures pendant puis après la fusion (…-intro.png, …-fin.png)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const BROWSER = [
   process.env.PRISM_BROWSER,
@@ -551,6 +552,12 @@ async function main() {
     await waitFor(async () => (await cardCount()) === beforeFusion + 1 && allReady(), "Hyper-Engramme prêt", 30000);
     const hyperCard = (await cards()).find((c) => c.title.startsWith("Hyper-Engramme"));
     const HF = await findFrame(`Boolean(window.__engram) && Array.isArray(window.__engram.data.parents)`, "document de l'Hyper-Engramme");
+    const shotFusion = async (suffix) => {
+      if (!SHOT_FUSION) return;
+      const { data } = await cdp.send("Page.captureScreenshot", { format: "png" }, S);
+      writeFileSync(SHOT_FUSION.replace(/\.png$/i, "") + `-${suffix}.png`, Buffer.from(data, "base64"));
+    };
+    await shotFusion("intro");
     const early = await evaluate(`({ fusion: window.__engram.state().fusion, fusing: document.getElementById("stage").classList.contains("is-fusing"),
       kicker: document.querySelector('[data-t="kicker"]').textContent, parents: window.__engram.data.parents })`, HF);
     check("Hyper-Engramme : titre, parents, libellé", hyperCard?.title === "Hyper-Engramme · Ada Lovelace × Marie Curie" && early.kicker.startsWith("Hyper-Engramme")
@@ -558,6 +565,10 @@ async function main() {
     check("fusion jouée : attraction des noyaux, ombres en glitch pendant l'introduction", early.fusion !== null && (early.fusion >= 1 || early.fusing),
       `avancement ${early.fusion} · glitch ${early.fusing}`);
     const settled = await waitFor(() => evaluate(`window.__engram.state().fusion === 1 && !document.getElementById("stage").classList.contains("is-fusing")`, HF), "fin de la fusion", 8000).catch(() => false);
+    if (SHOT_FUSION) {
+      await sleep(2500);
+      await shotFusion("fin");
+    }
     const lineage = await evaluate(`(() => { const n = window.__engram.data.nodes; const only = (k) => n.filter((x) => x.sources && x.sources.length === 1 && x.sources[0] === k).length;
       return { total: n.length, a: only("a"), b: only("b"), both: n.filter((x) => x.sources && x.sources.length === 2).length,
         artifacts: n.filter((x) => x.category === "artifact").length, seen: localStorage.getItem("prism:fusion-seen") }; })()`, HF);
