@@ -243,6 +243,16 @@ body.is-empty .b5 { animation: float-a 53s var(--ease) infinite alternate-revers
 }
 .brand:hover .logo { transform: rotate(-8deg) scale(1.06); }
 .brand-name { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+.brand-version {
+  align-self: center;
+  padding: 2px 7px;
+  font: 600 11px/1.2 var(--mono);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--glass-fill);
+  white-space: nowrap;
+}
 .tagline { color: var(--muted); font-size: 13px; white-space: nowrap; }
 .card-count { color: var(--faint); font-size: 12.5px; white-space: nowrap; }
 .spacer { flex: 1; }
@@ -1029,6 +1039,7 @@ body.is-dropping .dock { scale: 1.02; }
 }
 @media (max-width: 480px) {
   .brand-name { display: none; }
+  .brand-version { display: none; }
   #arrange { display: none; }
 }
 @keyframes sheet-in { from { opacity: 0; transform: translateY(30px); } }

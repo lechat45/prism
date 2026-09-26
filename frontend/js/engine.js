@@ -153,6 +153,11 @@ function render() {
       ? `Génération depuis ce navigateur avec votre clé · modèles : ${models.join(" → ")}`
       : "Aucun serveur ici : mode démo. Cliquez pour utiliser votre clé Gemini gratuite (Google AI Studio).";
   }
+  const version = $("app-version");
+  if (version) {
+    const server = engine.kind === "server" && engine.info?.version ? ` · serveur ${engine.info.version}` : "";
+    version.title = `Version de Prism : interface ${version.textContent.trim()}${server}`;
+  }
   listeners.forEach((fn) => fn(engine));
 }
 

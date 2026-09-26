@@ -1,5 +1,12 @@
 # Changelog
 
+## 4.0.0-alpha.5 — 2026-09-26 (version affichée)
+
+- La version de Prism s'affiche à côté du nom, dans la barre du haut ; en mode serveur, l'info-bulle donne aussi la
+  version du serveur (utile quand le site GitHub Pages parle à une API déployée à part).
+- Test `test_version.py` : la version affichée, celle du serveur et la première entrée du CHANGELOG sont identiques.
+- E2E : test des reflets robuste (zone utile du canevas, pointeur redéplacé).
+
 ## 4.0.0-alpha.4 — 2026-09-26 (Discuter avec la personne, mouvement logique, personnes dans Mon Hub)
 
 - **« Discuter avec … »** : bouton sur la carte Engramme, dans Spotlight et dans « Mon Hub ». Conversation à la première
