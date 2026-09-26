@@ -54,7 +54,7 @@ from sanitize import (
     validate_document,
 )
 
-__version__ = "3.5.0a1"
+__version__ = "3.5.0a2"
 
 BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
@@ -156,7 +156,7 @@ def build_user_message(prompt: str, file: AttachedFile | None = None, base_html:
 
 class GenerateResponse(BaseModel):
     html: str
-    mode: str  # "groq" | "mock"
+    mode: str  # "gemini" | "groq" | "mock"
     model: str
     elapsed_ms: int
     warnings: list[str] = []

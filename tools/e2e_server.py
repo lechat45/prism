@@ -2,9 +2,10 @@
 
 Sans clé ni quota, on exerce toute la chaîne : prompt système, résumé du fichier joint,
 nettoyage de la réponse (le faux modèle répond volontairement en Markdown), épinglage de
-Chart.js, refactorisation d'une carte.
+Chart.js, refactorisation d'une carte. Comptes dans une base SQLite jetable (jamais data/prism.db).
 
-Usage :  python tools/e2e_server.py      → Prism sur http://127.0.0.1:8003 (faux Gemini sur :8002)
+Usage :  python tools/e2e_server.py         → Prism sur http://127.0.0.1:8003 (faux Gemini sur :8002, 3 Sparks)
+         python tools/e2e_server.py --demo  → Prism en mode démo (sans modèle) sur http://127.0.0.1:8004
 Réservé aux tests : n'écoute que sur 127.0.0.1.
 """
 from __future__ import annotations
@@ -13,23 +14,31 @@ import json
 import os
 import re
 import sys
+import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MOCKS = ROOT / "frontend" / "engine" / "mocks"
+DEMO = "--demo" in sys.argv
 FAKE_PORT = int(os.getenv("PRISM_FAKE_GEMINI_PORT", "8002"))
-PORT = int(os.getenv("PRISM_E2E_PORT", "8003"))
+PORT = int(os.getenv("PRISM_E2E_PORT", "8004" if DEMO else "8003"))
+DB_PATH = Path(tempfile.mkdtemp(prefix="prism-e2e-")) / "prism.db"
 
-# Doit précéder l'import de app (configuration lue au chargement du module).
+# Doit précéder l'import de app (configuration lue au chargement du module ; backend/.env ne
+# remplace pas ces valeurs).
 os.environ.update(
-    GEMINI_API_KEY="fake-e2e-key",
+    GEMINI_API_KEY="" if DEMO else "fake-e2e-key",
     GEMINI_URL=f"http://127.0.0.1:{FAKE_PORT}/v1beta/models/{{model}}:generateContent",
     GEMINI_MODELS="fake-gemini-e2e",
     GROQ_API_KEY="",
     PRISM_HOST="127.0.0.1",
     PRISM_PORT=str(PORT),
+    PRISM_DATABASE_URL=f"sqlite:///{DB_PATH.as_posix()}",
+    # Avec modèle, 3 Sparks : deux générations + une refactorisation (2,5) laissent 0,5 → l'E2E
+    # atteint « Prism Pro ». En démo : le cadeau habituel.
+    PRISM_SIGNUP_SPARKS=os.getenv("PRISM_SIGNUP_SPARKS", "50" if DEMO else "3"),
 )
 
 
@@ -64,14 +73,16 @@ class FakeGemini(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    server = ThreadingHTTPServer(("127.0.0.1", FAKE_PORT), FakeGemini)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    if not DEMO:
+        server = ThreadingHTTPServer(("127.0.0.1", FAKE_PORT), FakeGemini)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
     sys.path.insert(0, str(ROOT / "backend"))
     import uvicorn
 
     import app  # noqa: E402
 
-    print(f"Prism (faux Gemini :{FAKE_PORT}) sur http://127.0.0.1:{PORT}", flush=True)
+    engine = "mode démo" if DEMO else f"faux Gemini :{FAKE_PORT}"
+    print(f"Prism ({engine}, base {DB_PATH}) sur http://127.0.0.1:{PORT}", flush=True)
     uvicorn.run(app.app, host="127.0.0.1", port=PORT, loop=app.UVICORN_LOOP)
 
 

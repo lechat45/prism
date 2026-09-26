@@ -36,7 +36,8 @@ async function run(mode, action) {
 
 // Champs persistés d'une carte (l'état d'exécution — contrôleur, minuteurs — reste en mémoire).
 const FIELDS = ["id", "title", "prompt", "html", "file", "storage", "accent", "x", "y", "w", "h", "z",
-  "mode", "model", "elapsed_ms", "warnings", "history", "createdAt", "updatedAt"];
+  "mode", "model", "elapsed_ms", "warnings", "history", "createdAt", "updatedAt",
+  "serverId"]; // widget enregistré côté serveur (mode serveur) : cible des refactorisations
 
 export function serialize(card) {
   const out = {};

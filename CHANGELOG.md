@@ -1,5 +1,25 @@
 # Changelog
 
+## 3.5.0-alpha.2 — 2026-09-26 (phase 2 : comptes côté interface)
+
+Le frontend en mode serveur retrouve la génération, désormais liée à un compte.
+
+- **Connexion / inscription** : fenêtre Liquid Glass (onglets Connexion / Créer un compte, rappel des
+  Sparks offerts, « Rester connecté »). Une génération lancée sans compte ouvre la fenêtre, garde la demande
+  dans le dock et la relance après l'inscription. Jeton Bearer en `sessionStorage` (ou `localStorage` si
+  « Rester connecté »), vérifié au démarrage (`/api/auth/me`) ; session expirée : retour à la connexion.
+- **Anneau de Sparks** dans la barre du haut : solde, jauge irisée (orange quand il baisse, rouge à sec),
+  « −1 » animé à chaque débit ; menu du compte (e-mail, tarifs, Prism Pro, déconnexion).
+- **Prism Pro** : fenêtre ouverte sur solde insuffisant (vérifié avant de créer la carte, et sur réponse
+  403 `insufficient_sparks`, la demande revenant dans le dock) ou depuis le menu. Le paiement n'est pas
+  encore ouvert : le bouton l'indique.
+- **Refactorisation par `widget_id`** : la carte retient l'identifiant du widget enregistré côté serveur ;
+  l'annulation passe par `POST /api/widgets/{id}/undo` pour que la prochaine refactorisation parte de la
+  version restaurée.
+- Tests : E2E serveur démo (34 contrôles) et faux Gemini (37 contrôles : inscription par la fenêtre,
+  reprise de la demande, débit, session conservée, Prism Pro sur solde épuisé), sur une base SQLite
+  jetable (`tools/e2e_server.py [--demo]`) ; E2E statique inchangé (29/29).
+
 ## 3.5.0-alpha.1 — 2026-09-25 (Velocity & Elegance)
 
 - **Gemini** remplace Groq comme fournisseur principal, côté serveur (`GEMINI_API_KEY`) comme dans le

@@ -1,11 +1,11 @@
 // Choix du moteur de génération et réglages.
-//  - "server"  : backend Python (POST /api/generate), servi sur la même origine ;
+//  - "server"  : backend Python (POST /api/generate, compte requis : account.js), même origine ;
 //  - "browser" : sans backend (GitHub Pages…) — démo, ou Gemini en direct avec la clé de l'utilisateur.
 //    L'appel, le nettoyage et la validation du code reçu tournent dans le Web Worker (offload.js).
 
+import { api, API_BASE, initAccount } from "./account.js";
 import { run } from "./offload.js";
 
-const API_BASE = location.protocol === "file:" ? "http://127.0.0.1:8000" : "";
 // Hébergement purement statique connu : inutile de chercher un backend (évite un 404 en console).
 const STATIC_HOST = /\.github\.io$/i.test(location.hostname);
 const KEY_STORAGE = "prism:gemini-key";
@@ -78,6 +78,7 @@ async function detect() {
       if (info && info.status === "ok") {
         engine.kind = "server";
         engine.info = info;
+        initAccount(info); // session relue tout de suite ; vérification (/api/auth/me) en arrière-plan
         return;
       }
     } catch { /* pas de backend : moteur navigateur */ }
@@ -124,35 +125,20 @@ function render() {
 
 // --------------------------------------------------------------------------
 // Génération : même contrat pour les deux moteurs.
-// request = { prompt, file?: {name, kind, summary}, baseHtml? }
+// request = { prompt, file?: {name, kind, summary}, baseHtml?, widgetId? }
+//  - serveur : la refactorisation désigne le widget enregistré (widgetId), jamais du code client ;
+//    la réponse porte aussi { widget, sparks, cost }. Erreurs : ApiError (code auth_required,
+//    insufficient_sparks…).
+//  - navigateur : la refactorisation part de baseHtml.
 // --------------------------------------------------------------------------
-function errorMessage(payload, status) {
-  if (payload && typeof payload.detail === "string") return payload.detail;
-  if (payload && Array.isArray(payload.detail)) return payload.detail.map((d) => d.msg).join(" ; ");
-  return `erreur serveur (HTTP ${status})`;
-}
-
 export async function generate(request, signal) {
   await engineReady;
   let payload;
   if (engine.kind === "server") {
     const body = { prompt: request.prompt };
     if (request.file) body.file = request.file;
-    if (request.baseHtml) body.base_html = request.baseHtml;
-    let res;
-    try {
-      res = await fetch(`${API_BASE}/api/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal,
-      });
-    } catch (err) {
-      if (err.name === "AbortError") throw err;
-      throw new Error("serveur injoignable (lancez « python backend/app.py »)");
-    }
-    payload = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(errorMessage(payload, res.status));
+    if (request.widgetId) body.widget_id = request.widgetId;
+    payload = await api("/api/generate", { method: "POST", body, signal });
   } else {
     const options = { key: readKey(), models: readModels(), file: request.file || null, baseHtml: request.baseHtml || null };
     payload = await run("generate", { prompt: request.prompt, options }, { signal });

@@ -3,7 +3,9 @@
 // Scénario : deux widgets sur le canvas — un compteur (saisie clavier réelle) et un graphique
 // issu d'un CSV déposé par un vrai glisser-déposer navigateur — puis clics réels dans la sandbox,
 // pan/zoom, déplacement et redimensionnement, inspecteur (accent, téléchargement, refactorisation),
-// isolation, persistance après rechargement et fermeture d'une carte.
+// isolation, persistance après rechargement et fermeture d'une carte. Face à un serveur Prism (v3) :
+// inscription par la fenêtre de compte, reprise de la demande, anneau de Sparks, session conservée,
+// fenêtre « Prism Pro » (depuis le menu, et sur solde épuisé si le serveur en offre peu).
 //
 // Usage : node tools/e2e_canvas.mjs [--base URL] [--screenshot capture.png] [--refactor]
 //   --refactor : exige un modèle (ex. tools/e2e_server.py, faux Gemini) et teste la refactorisation.
@@ -177,18 +179,45 @@ async function main() {
     const engineLabel = await loaded();
     check("Prism chargé, canvas vide", (await evaluate(`!document.getElementById("canvas-empty").hidden`)), `moteur : ${engineLabel}`);
     const hasModel = !/démo/i.test(engineLabel);
+    // Serveur Prism (v3) : comptes et Sparks. GitHub Pages / statique : pas de compte.
+    const serverMode = await evaluate(`!document.getElementById("account").hidden`);
+    const sparksShown = () => evaluate(`document.getElementById("sparks").hidden ? null : document.getElementById("sparks-count").textContent`);
+    const health = serverMode ? await evaluate(`fetch("/api/health").then((r) => r.json())`) : null;
 
     // ------------------------------------------------------------------ 2. Widget 1 : saisie clavier réelle
     await clickSel("#prompt");
     await evaluate(`document.getElementById("prompt").value = ""`);
     await typeText("Crée un bouton interactif qui change de couleur au clic et compte le nombre de clics");
     await clickSel("#generate");
+    if (serverMode) {
+      // Première génération sans compte : fenêtre d'inscription, demande conservée, reprise automatique.
+      await waitFor(() => evaluate(`document.getElementById("auth").open`), "fenêtre de compte", 10000);
+      check("sans compte : fenêtre d'inscription, demande conservée",
+        (await evaluate(`document.getElementById("prompt").value.includes("bouton interactif") && document.querySelectorAll(".card").length === 0`)),
+        await evaluate(`document.getElementById("auth-gift").textContent`));
+      await clickSel("#tab-register");
+      await clickSel("#auth-email");
+      await typeText(`e2e-${Date.now()}@prism.test`);
+      await clickSel("#auth-password");
+      await typeText("mot-de-passe-e2e");
+      await clickSel("#auth-submit");
+      await waitFor(() => evaluate(`!document.getElementById("auth").open`), "inscription", 20000).catch(async (err) => {
+        throw new Error(`${err.message} — ${await evaluate(`document.getElementById("auth-error").textContent`)}`);
+      });
+      check("compte créé depuis la fenêtre, anneau de Sparks affiché", (await sparksShown()) !== null, `${await sparksShown()} Sparks`);
+    }
     await waitFor(async () => (await readyCount()) === 1, "widget 1 prêt", 60000).catch(async (err) => {
       const state = await evaluate(`JSON.stringify([...document.querySelectorAll(".card")].map((c) => [c.dataset.state, c.querySelector(".card-error-text").textContent, c.querySelector(".card-elapsed").textContent]))`);
       throw new Error(`${err.message} — cartes : ${state} — requêtes en attente : ${[...inflight.values()].join(", ") || "aucune"}`);
     });
     const [counterCard] = await cards();
     check("widget 1 généré (saisie clavier + bouton Générer)", counterCard.state === "ready", counterCard.title);
+    if (serverMode) {
+      const expected = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(health.signup_sparks - health.pricing.generate);
+      const shown = await waitFor(async () => ((await sparksShown()) === expected ? expected : null), "solde après génération", 10000)
+        .catch(async () => sparksShown());
+      check("génération débitée : anneau mis à jour", shown === expected, `${shown} (attendu ${expected})`);
+    }
 
     // ------------------------------------------------------------------ 3. Widget 2 : CSV glissé-déposé
     const dock = await stableBox("#dock");
@@ -392,6 +421,10 @@ async function main() {
     check("état du widget conservé (localStorage persistant)", (await evaluate(`document.getElementById("count").textContent`, cf2)) === "3");
     const csv2 = await findFrame(`window.PRISM_FILE && window.PRISM_FILE.kind === "csv"`, "CSV restauré");
     check("accent et données du fichier conservés", (await evaluate(`getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()`, csv2)) === ACCENT);
+    if (serverMode) {
+      const kept = await waitFor(() => sparksShown(), "session restaurée", 10000).catch(() => null);
+      check("session conservée après rechargement (« Rester connecté »)", kept !== null, `${kept} Sparks`);
+    }
 
     // ------------------------------------------------------------------ 11. Fermeture
     await clickSel(`.card[data-id="${counterCard.id}"] [data-action="close"]`);
@@ -403,6 +436,30 @@ async function main() {
     await loaded();
     await sleep(800);
     check("fermeture persistée après rechargement", (await cards()).length === 1);
+
+    // ------------------------------------------------------------------ 12. Sparks et Prism Pro (serveur)
+    if (serverMode) {
+      await waitFor(() => sparksShown(), "anneau de Sparks");
+      await clickSel("#sparks");
+      await waitFor(() => evaluate(`document.getElementById("account-menu").matches(":popover-open")`), "menu du compte");
+      const menu = await evaluate(`document.getElementById("account-email").textContent + " · " + document.getElementById("account-pricing").textContent`);
+      await clickSel("#btn-pro");
+      await waitFor(() => evaluate(`document.getElementById("pro").open`), "fenêtre Prism Pro");
+      check("menu du compte → fenêtre « Prism Pro »", (await evaluate(`document.getElementById("pro-title").textContent`)) === "Prism Pro", menu);
+      await clickSel("#pro-close");
+      const balance = await evaluate(`parseFloat(document.getElementById("sparks-count").textContent.replace(",", "."))`);
+      if (balance < health.pricing.generate) {
+        // Solde insuffisant : la fenêtre s'ouvre sans créer de carte, la demande reste dans le dock.
+        await clickSel("#prompt");
+        await typeText("Un minuteur Pomodoro");
+        await pressEnter();
+        await waitFor(() => evaluate(`document.getElementById("pro").open`), "fenêtre Prism Pro (solde épuisé)");
+        check("Sparks épuisés : fenêtre « Prism Pro », aucune carte créée",
+          (await evaluate(`document.getElementById("pro-title").textContent === "Vos Sparks sont épuisés" && document.querySelectorAll(".card").length === 1 && document.getElementById("prompt").value.includes("Pomodoro")`)),
+          await evaluate(`document.getElementById("pro-reason").textContent`));
+        await clickSel("#pro-close");
+      }
+    }
   } catch (err) {
     check("scénario complet", false, err.message);
   } finally {

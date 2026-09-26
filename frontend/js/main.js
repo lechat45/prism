@@ -1,5 +1,7 @@
 // Prism v2 — orchestration : dock de saisie, cycle de vie des cartes, messages des widgets, persistance.
 
+import { account, api, canAfford, setSparks } from "./account.js";
+import { initAccountUi, openAuth, openPro, requireAccount } from "./account-ui.js";
 import { Canvas, CARD_MIN_H, CARD_MIN_W } from "./canvas.js";
 import { engine, engineReady, generate, hasModel, initSettings, onEngineChange, openSettings } from "./engine.js";
 import { forRequest } from "./files.js";
@@ -290,6 +292,33 @@ function applyPayload(card, payload) {
   card.elapsed_ms = payload.elapsed_ms;
   card.warnings = payload.warnings || [];
   card.title = titleFrom(payload.html, card.title);
+  // Mode serveur : widget enregistré dans « Mon Hub » (sa refactorisation le désignera) et nouveau solde.
+  if (payload.widget?.id) card.serverId = payload.widget.id;
+  if (Number.isFinite(payload.sparks)) setSparks(payload.sparks);
+}
+
+/** Refus du serveur qui appellent une fenêtre plutôt qu'un message d'erreur. */
+function handleAccountError(err, retry) {
+  if (err.code === "insufficient_sparks") {
+    if (Number.isFinite(err.detail?.sparks)) setSparks(err.detail.sparks);
+    openPro(err.detail);
+    return true;
+  }
+  if (err.code === "auth_required") {
+    openAuth({ mode: "login", reason: `${err.message} Votre demande repartira ensuite.`, then: retry });
+    return true;
+  }
+  return false;
+}
+
+/** Remet une demande refusée dans le dock, pour la relancer telle quelle. */
+function restorePrompt(card) {
+  if (!promptEl.value.trim()) {
+    promptEl.value = card.prompt;
+    saveDraft();
+  }
+  if (card.file && !attachment && !reading) setAttachment(card.file);
+  updateComposer();
 }
 
 async function runGeneration(card) {
@@ -309,6 +338,10 @@ async function runGeneration(card) {
     if (err.name === "AbortError") {
       discard(card);
       toast("Génération annulée");
+    } else if (err.code === "insufficient_sparks" || err.code === "auth_required") {
+      discard(card); // rien n'a été généré : la demande retourne dans le dock
+      restorePrompt(card);
+      handleAccountError(err, () => submitPrompt());
     } else {
       setStatus(card, "error", { error: `Échec : ${err.message}` });
     }
@@ -320,13 +353,21 @@ async function runGeneration(card) {
 
 async function refactorCard(card, instruction) {
   if (card.status === "busy" || card.status === "loading") return;
+  if (engine.kind === "server") {
+    if (!requireAccount(() => refactorCard(card, instruction), "Connectez-vous pour refactoriser vos widgets.")) return;
+    if (!card.serverId) {
+      toast("Cette carte n'est pas liée à votre compte : régénérez-la pour pouvoir la refactoriser.", { tone: "error", timeout: 7000 });
+      return;
+    }
+    if (!canAfford("refactor")) return openPro({ sparks: account.user.sparks, required: account.pricing.refactor });
+  }
   const controller = new AbortController();
   card.controller = controller;
   setStatus(card, "busy", { text: "Refactorisation en cours…" });
   startTimer(card);
   try {
     const payload = await generate(
-      { prompt: instruction, file: forRequest(card.file), baseHtml: card.html },
+      { prompt: instruction, file: forRequest(card.file), baseHtml: card.html, widgetId: card.serverId },
       controller.signal,
     );
     if (!cards.has(card.id)) return;
@@ -340,16 +381,29 @@ async function refactorCard(card, instruction) {
   } catch (err) {
     if (!cards.has(card.id)) return;
     setStatus(card, "ready");
-    if (err.name !== "AbortError") toast(`Refactorisation impossible : ${err.message}`, { tone: "error", timeout: 7000 });
+    if (err.name === "AbortError" || handleAccountError(err, () => refactorCard(card, instruction))) return;
+    toast(`Refactorisation impossible : ${err.message}`, { tone: "error", timeout: 7000 });
   } finally {
     stopTimer(card);
     card.controller = null;
   }
 }
 
-function undoRefactor(card) {
+async function undoRefactor(card) {
   if (!card.history?.length || !cards.has(card.id)) return;
-  const [previous, ...rest] = card.history;
+  let [previous, ...rest] = card.history;
+  if (engine.kind === "server" && card.serverId && account.user) {
+    // Le serveur garde ses versions : la prochaine refactorisation doit partir de la version restaurée.
+    try {
+      previous = (await api(`/api/widgets/${encodeURIComponent(card.serverId)}/undo`, { method: "POST" })).html;
+    } catch (err) {
+      if (err.code !== "no_history") {
+        toast(`Annulation impossible : ${err.message}`, { tone: "error", timeout: 6000 });
+        return;
+      }
+    }
+    if (!cards.has(card.id)) return;
+  }
   card.html = previous;
   card.history = rest;
   card.title = titleFrom(previous, card.title);
@@ -600,6 +654,12 @@ function submitPrompt() {
     promptEl.focus();
     return;
   }
+  if (engine.kind === "server") {
+    // Compte et solde vérifiés avant de créer la carte : la demande reste dans le dock.
+    const gift = `${String(account.signupSparks).replace(".", ",")} Sparks offerts à l'inscription`;
+    if (!requireAccount(() => submitPrompt(), `Créez votre compte pour générer : ${gift}. Votre demande partira ensuite.`)) return;
+    if (!canAfford("generate")) return openPro({ sparks: account.user.sparks, required: account.pricing.generate });
+  }
   const prompt = text || `Crée le widget le plus utile pour explorer le fichier ${attachment.name}.`;
   const { w, h } = newCardSize(attachment ? SIZES.file : SIZES.widget);
   const card = {
@@ -721,6 +781,7 @@ addEventListener("keydown", (e) => {
 // ============================================================================
 async function start() {
   initSettings((message) => toast(message));
+  initAccountUi({ toast: (message) => toast(message) });
   onEngineChange(() => inspector.refresh(inspector.card));
   try {
     promptEl.value = localStorage.getItem(DRAFT_KEY) || "";
