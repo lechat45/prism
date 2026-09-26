@@ -304,6 +304,106 @@ class ChatApiTests(DbTestCase):
         self.assertEqual(self.client.post("/api/engram/chat", json={"engram": self.engram, "message": "x"}).status_code, 401)
 
 
+def second_parent() -> dict:
+    """Un autre Engramme valide pour les fusions : autre personne, évènements décalés de 60 ans."""
+    raw = demo()
+    raw["person"] = "Ada Lovelace"
+    for node in raw["nodes"]:
+        if node["category"] == "artifact":
+            node["date"] = str(int(node["date"][:4]) - 60) + node["date"][4:]
+    return engram.normalize(raw)
+
+
+class FusionTests(DbTestCase):
+    """V5, « Singularité symbiotique » : deux Engrammes → un Hyper-Engramme (3 Sparks)."""
+
+    def setUp(self):
+        super().setUp()
+        self._saved = (prism.GEMINI_MODELS, prism._http_client)
+        prism.GEMINI_MODELS = [M1, M2]
+        self.a, self.b = engram.demo_engram(), second_parent()
+        self.calls: list[dict] = []
+        self.answer = None
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            self.calls.append(json.loads(request.content))
+            return gemini_json(self.answer)
+
+        prism._http_client = lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        self.client = TestClient(prism.app)
+        self.auth = self.register(self.client)
+
+    def tearDown(self):
+        prism.GEMINI_MODELS, prism._http_client = self._saved
+        super().tearDown()
+
+    def fuse(self, a=None, b=None):
+        return self.client.post("/api/engram/fusion", json={"a": a or self.a, "b": b or self.b}, headers=self.auth)
+
+    def sparks(self):
+        return self.client.get("/api/auth/me", headers=self.auth).json()["sparks"]
+
+    def test_demo_fusion_is_a_valid_hyper_engram(self):
+        res = self.fuse()
+        self.assertEqual(res.status_code, 200, res.text)
+        data = res.json()
+        hyper = data["engram"]
+        self.assertEqual((data["mode"], data["cost"], data["sparks"]), ("mock", 3.0, 47.0))
+        self.assertEqual(hyper["person"], "Marie Curie × Ada Lovelace")
+        self.assertEqual(hyper["parents"], ["Marie Curie", "Ada Lovelace"])
+        self.assertEqual(engram.normalize(hyper)["person"], hyper["person"], "un Engramme valide, affichable tel quel")
+        events = [n for n in hyper["nodes"] if n["category"] == "artifact"]
+        self.assertEqual(sorted(n["sources"][0] for n in events), ["a"] * 5 + ["b"] * 5, "5 évènements réels de chaque vie")
+        self.assertEqual({n["type"] for n in events}, set(engram.TYPES["artifact"]))
+        parents_dates = {n["date"] for p in (self.a, self.b) for n in p["nodes"] if n["category"] == "artifact"}
+        self.assertTrue({n["date"] for n in events} <= parents_dates, "aucune date inventée")
+
+    def test_model_fusion_keeps_real_events_and_marks_every_synthesis(self):
+        created = [dict(n, basis="documente") for n in engram.demo_fusion(self.a, self.b)["nodes"] if n["category"] != "artifact"]
+        invented = {"id": "x1", "category": "artifact", "type": "succes", "title": "Rencontre imaginaire", "content": "c",
+                    "directive": "d", "basis": "documente", "evidence": "", "intensity": 1, "date": "1900", "impact": "i"}
+        self.answer = {"person": "?", "domain": "Science × poésie des machines", "summary": "Un esprit hybride.",
+                       "temperament": "Tenace et visionnaire.", "climate": [{"emotion": "passion", "weight": 1}],
+                       "nodes": created + [invented], "links": [{"from": "ev8", "to": "core", "kind": "forge"}]}
+        prism.GEMINI_API_KEY = "cle-test"
+        res = self.fuse()
+        self.assertEqual(res.status_code, 200, res.text)
+        hyper = res.json()["engram"]
+        titles = [n["title"] for n in hyper["nodes"]]
+        self.assertNotIn("Rencontre imaginaire", titles, "un évènement inventé par le modèle n'entre jamais")
+        self.assertEqual(sum(n["category"] == "artifact" for n in hyper["nodes"]), 10)
+        self.assertTrue(all(n["basis"] == "interpretation" for n in hyper["nodes"] if n["category"] != "artifact"))
+        self.assertTrue(all(set(n["sources"]) <= {"a", "b"} and n["sources"] for n in hyper["nodes"]))
+        self.assertIn({"from": "ev8", "to": "core", "kind": "forge"}, hyper["links"])
+        body = self.calls[0]
+        self.assertEqual(body["generationConfig"]["responseSchema"], engram.FUSION_SCHEMA)
+        self.assertIn("TWO public figures", body["systemInstruction"]["parts"][0]["text"])
+        message = body["contents"][0]["parts"][0]["text"]
+        self.assertIn('ENGRAM A — Marie Curie (complete JSON):\n<<<\n{"person":"Marie Curie"', message)
+        self.assertIn("ENGRAM B — Ada Lovelace", message)
+        self.assertIn('"id":"ev1"', message)
+
+    def test_invalid_parents_are_refused_before_billing(self):
+        old = demo()
+        old["nodes"] = [n for n in old["nodes"] if n["category"] != "heart"]  # Engramme d'avant « caractère et émotions »
+        for label, (a, b) in {"même personne": (self.a, self.a), "ancien format": (self.a, old),
+                              "pas un Engramme": (self.a, {"nodes": []})}.items():
+            with self.subTest(label):
+                res = self.fuse(a, b)
+                self.assertEqual(res.status_code, 422, res.text)
+                self.assertEqual(res.json()["detail"]["code"], "fusion_invalid")
+        self.assertEqual(self.sparks(), 50.0, "rien n'est facturé")
+        self.assertEqual(self.client.post("/api/engram/fusion", json={"a": self.a, "b": self.b}).status_code, 401)
+
+    def test_failed_fusion_is_refunded(self):
+        prism.GEMINI_API_KEY = "cle-test"
+        self.answer = {"nodes": [], "links": []}  # Hyper-Engramme vide : chaque modèle échoue
+        res = self.fuse()
+        self.assertEqual(res.status_code, 502)
+        self.assertIn("Fusion impossible", res.json()["detail"])
+        self.assertEqual(self.sparks(), 50.0)
+
+
 class DnaGenerateTests(DbTestCase):
     """« Injection d'ADN » : le trait choisi part avec la demande et filtre la génération."""
 

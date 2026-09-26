@@ -1,5 +1,18 @@
 # Changelog
 
+## 5.0.0-alpha.1 — 2026-09-26 (V5 « Écosystème vivant » : fusion d'Engrammes, côté serveur)
+
+- **Route `POST /api/engram/fusion`** (`{ a, b, language? }`, 3 Sparks, rendus en cas d'échec) : deux Engrammes →
+  un **Hyper-Engramme** hybride. Gemini reçoit le JSON complet des deux Engrammes (revalidés, refusés avant toute
+  facturation s'ils sont identiques ou d'une version antérieure) et un schéma de réponse imposé
+  (`engine/engram/fusion-schema.json`) ; il synthétise noyau, caractère et émotions, moteurs et ombres (qui s'amplifient,
+  s'annulent ou créent de nouveaux paradoxes).
+- **Rien d'inventé** : l'Hyper-Engramme hérite des 5 évènements réels les plus marquants de chaque vie (les trois
+  types couverts, signés du nom de leur personne) ; un évènement proposé par le modèle est écarté ; toute bulle créée est
+  une interprétation et porte sa provenance (`sources` : A, B ou les deux) ; `parents` nomme les deux personnes.
+- Mode démo (sans clé) : fusion mécanique mais valide. Même validation que tout Engramme (`normalize`).
+- Tests : 132 Python (4 de fusion) ; schéma accepté par Gemini.
+
 ## 4.0.0-alpha.7 — 2026-09-26 (mise en ligne réelle, compte d'essai)
 
 - **Mise en ligne réelle** : API sur Render (<https://prism-api-0x4z.onrender.com>, base PostgreSQL sur Neon, clés Gemini

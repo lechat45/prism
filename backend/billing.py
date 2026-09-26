@@ -21,7 +21,8 @@ SIGNUP_BONUS = round(float(os.getenv("PRISM_SIGNUP_SPARKS", "50")) * CENTS)
 # Compte d'essai (bouton « Tester ») : quelques Sparks pour découvrir Prism sans e-mail.
 GUEST_BONUS = round(float(os.getenv("PRISM_GUEST_SPARKS", "10")) * CENTS)
 PRICES = {"generate": 1 * CENTS, "refactor": CENTS // 2, "engram": 2 * CENTS,  # engramme : 36 à 44 nœuds
-          "engram_chat": CENTS // 4}  # un message de conversation avec un Engramme
+          "engram_chat": CENTS // 4,  # un message de conversation avec un Engramme
+          "engram_fusion": 3 * CENTS}  # V5 : Hyper-Engramme né de deux Engrammes
 
 
 def as_sparks(cents: int) -> float:

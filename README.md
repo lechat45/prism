@@ -353,6 +353,7 @@ API ajoutée en phase 1 (jeton `Authorization: Bearer …` sauf `register`/`logi
 | `GET /api/auth/me` | profil et solde |
 | `POST /api/generate` | `{ prompt, file?, widget_id?, canvas?, dna? }` : génère (1 Spark) ou refactorise ce widget (0,5 Spark) ; `canvas` = autres widgets et sujets du bus (20 au plus) ; `dna` = trait d'Engramme qui filtre la génération (V4) ; **403** `insufficient_sparks` si le solde manque |
 | `POST /api/engram` | `{ person, language? }` : Engramme cognitif (2 Sparks, V4) ; **422** `engram_refused` (personne non publique, Sparks rendus) |
+| `POST /api/engram/fusion` | `{ a, b, language? }` : Hyper-Engramme hybride de deux Engrammes (3 Sparks, V5) ; **422** `fusion_invalid` (identiques, ancienne version) |
 | `POST /api/engram/chat` | `{ engram, history?, message, language? }` : « Discuter avec … » → `{ reply, trace: [{ id, why }] }` (¼ de Spark, V4) |
 | `GET /api/sparks` | solde, tarifs, derniers mouvements |
 | `GET /api/widgets[?on_canvas=true]`, `GET/PATCH/DELETE /api/widgets/{id}`, `POST /api/widgets/{id}/undo` | « Mon Hub » : liste légère, détail, état de la carte (`layout`, `clear_layout`, `storage`, `accent`, `title`, `thumbnail`), annulation, suppression |
