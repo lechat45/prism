@@ -613,12 +613,16 @@ async function main() {
     // ------------------------------------------------------------------ 17. Reflets des bords (pointeur)
     // Point à 40 px du bord d'une carte, dans la fenêtre et sur le fond du canvas (ni autre carte, ni barre,
     // ni dock) : la mise en page varie d'un système à l'autre (polices), un point fixe pouvait sortir de l'écran.
+    // Zone utile seulement : à 24 px au moins sous la barre du haut et au-dessus du dock (ombres portées comprises).
     const lit = await evaluate(`(() => {
+      const top = document.querySelector(".topbar").getBoundingClientRect().bottom + 24;
+      const bottom = document.getElementById("dock").getBoundingClientRect().top - 24;
       for (const c of document.querySelectorAll(".card")) {
         const r = c.getBoundingClientRect();
-        const spots = [[r.right + 40, r.top + 30], [r.left - 40, r.top + 30], [r.left + 30, r.bottom + 40], [r.left + 30, r.top - 40]];
+        const spots = [[r.right + 40, r.top + 30], [r.left - 40, r.top + 30], [r.left + 30, r.bottom + 40], [r.left + 30, r.top - 40],
+          [r.right + 40, r.bottom - 30], [r.left - 40, r.bottom - 30]];
         for (const [x, y] of spots) {
-          if (x < 8 || y < 8 || x > innerWidth - 8 || y > innerHeight - 8) continue;
+          if (x < 8 || y < top || x > innerWidth - 8 || y > bottom) continue;
           const at = document.elementFromPoint(x, y);
           if (at && (at.id === "workspace" || at.id === "world")) return { id: c.dataset.id, x, y, on: at.id };
         }
@@ -626,8 +630,12 @@ async function main() {
       const c = document.querySelector(".card"); const r = c.getBoundingClientRect();
       return { id: c.dataset.id, x: r.right + 40, y: r.top + 30, on: "aucun point libre" };
     })()`);
-    await mouse("mouseMoved", lit.x, lit.y);
+    // Le pointeur est redéplacé (±1 px) tant que le reflet n'est pas mesuré : un premier évènement perdu sur une
+    // machine chargée ne fait plus échouer le test.
+    let wiggle = 0;
     const glow = await waitFor(async () => {
+      await mouse("mouseMoved", lit.x + (wiggle++ % 2), lit.y);
+      await sleep(60);
       const g = Number(await evaluate(`document.querySelector('.card[data-id="${lit.id}"]').dataset.glow || 0`));
       return g > 0 ? g : null;
     }, "reflet", 5000).catch(() => 0);
