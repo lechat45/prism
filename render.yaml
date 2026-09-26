@@ -9,7 +9,8 @@ services:
     region: frankfurt
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health
-    autoDeployTrigger: commit
+    # Déploiement seulement quand la CI GitHub est verte (tests Python, Node, E2E Chrome, image Docker).
+    autoDeployTrigger: checksPass
     envVars:
       - key: PRISM_ENV
         value: production
@@ -19,7 +20,7 @@ services:
       # Chaîne de connexion Neon (postgresql://…?sslmode=require), saisie dans le tableau de bord.
       - key: PRISM_DATABASE_URL
         sync: false
-      # Clé Gemini (Google AI Studio), saisie dans le tableau de bord.
+      # Clé(s) Gemini (Google AI Studio), saisies dans le tableau de bord ; plusieurs : séparées par des virgules.
       - key: GEMINI_API_KEY
         sync: false
       # Frontend GitHub Pages autorisé à appeler l'API (le frontend servi par Render est de même origine).
