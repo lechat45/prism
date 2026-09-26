@@ -39,6 +39,10 @@
     </button>
     <div class="account" id="account" hidden>
       <button type="button" class="tool" id="btn-login">Se connecter</button>
+      <button type="button" class="tool hub-open" id="btn-hub" aria-haspopup="dialog" hidden>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 3.5h5v5h-5zM11.5 3.5h5v5h-5zM3.5 11.5h5v5h-5zM11.5 11.5h5v5h-5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        Mon Hub
+      </button>
       <button type="button" class="sparks" id="sparks" popovertarget="account-menu" hidden>
         <svg class="ring" viewBox="0 0 36 36" aria-hidden="true">
           <defs>
@@ -223,6 +227,22 @@
         <button type="submit" class="cta cta-small" id="auth-submit"><span class="cta-icon" aria-hidden="true"></span><span class="cta-label">Se connecter</span></button>
       </div>
     </form>
+  </dialog>
+
+  <dialog class="dialog glass hub-dialog" id="hub" aria-labelledby="hub-title">
+    <header class="hub-head">
+      <div>
+        <h2 id="hub-title">Mon Hub</h2>
+        <p class="fine" id="hub-count"></p>
+      </div>
+      <span class="spacer"></span>
+      <label class="sr-only" for="hub-search">Rechercher un widget</label>
+      <input id="hub-search" type="search" placeholder="Rechercher…" autocomplete="off" spellcheck="false">
+      <button type="button" class="icon-btn" id="hub-close" aria-label="Fermer Mon Hub">×</button>
+    </header>
+    <div class="hub-grid" id="hub-grid"></div>
+    <p class="hub-empty" id="hub-empty" hidden></p>
+    <div class="hub-foot"><button type="button" class="tool" id="hub-more" hidden>Afficher plus</button></div>
   </dialog>
 
   <dialog class="dialog glass pro-dialog" id="pro" aria-labelledby="pro-title">

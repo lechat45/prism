@@ -1,5 +1,27 @@
 # Changelog
 
+## 3.5.0-alpha.3 — 2026-09-26 (phase 3 : Mon Hub)
+
+- **Mon Hub** : bibliothèque des widgets du compte (bouton dans la barre du haut) avec miniatures, recherche,
+  réouverture sur le canvas (« Afficher » si la carte y est déjà), suppression définitive à double
+  confirmation, pagination. Fermer une carte la retire du canvas, pas du Hub.
+- **Miniatures fabriquées dans la sandbox** : sur demande de la page, le prélude du widget clone son document
+  (`<canvas>` figés en images, saisies reportées), le rend en image SVG sans réseau et renvoie un
+  `data:image/webp` ; la page le valide (image matricielle base64, 300 000 caractères au plus) puis l'envoie.
+- **Synchronisation du canvas** : disposition, état du widget, couleur et titre des cartes liées envoyés par
+  lots (champs changés seulement) ; données du fichier joint téléversées une fois, en Blob, via le nouveau
+  `PUT /api/widgets/{id}/file` (JSON brut, 16 Mo au plus, lu par morceaux) ; carte fermée → `clear_layout`.
+  À la connexion (ou au démarrage), les cartes posées sur le canvas depuis un autre appareil sont restaurées.
+- **Import** d'une carte créée hors compte (`POST /api/widgets`, gratuit, 1 000 widgets par compte) à sa
+  première refactorisation ; l'annulation utilise les versions du serveur, même après réouverture.
+- Backend : données du fichier dans une colonne à part (`file_data_json`) pour une liste du Hub légère
+  (code, état et données non chargés) ; `on_canvas` et `has_file_data` dans chaque entrée, filtre
+  `?on_canvas=` ; mini-migration SQLite qui ajoute les colonnes nouvelles à une base existante.
+- Tests : 83 Python (import, JSON brut, plafonds, présence sur le canvas, migration), 36 Node ; E2E serveur :
+  Hub avec miniatures réelles, réouverture avec état conservé, **second appareil** (contexte de navigateur
+  vierge) restauré à la connexion avec données et état, suppression depuis le Hub (41 contrôles avec faux
+  Gemini, 38 en démo) ; E2E statique 29/29.
+
 ## 3.5.0-alpha.2 — 2026-09-26 (phase 2 : comptes côté interface)
 
 Le frontend en mode serveur retrouve la génération, désormais liée à un compte.

@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { acceptStorage, bootSrcdoc, buildSrcdoc, exportHtml, FRAME_SANDBOX, isAccent, needsBoot } from "../js/sandbox.js";
+import { acceptStorage, acceptThumbnail, bootSrcdoc, buildSrcdoc, exportHtml, FRAME_SANDBOX, isAccent, MAX_THUMBNAIL, needsBoot } from "../js/sandbox.js";
 
 const libs = JSON.parse(readFileSync(new URL("../engine/libs.json", import.meta.url), "utf8"));
 const DOC = '<!DOCTYPE html><html lang="fr"><head><title>T</title></head><body><script>localStorage.setItem("state","1")</script></body></html>';
@@ -104,6 +104,22 @@ test("export d'une carte à Blob : données lues et échappées pour le <script>
 test("documents sans <head> ou sans <html>", () => {
   assert.match(buildSrcdoc({ html: "<html><body>x</body></html>" }, libs), /^<html><head><meta http-equiv/);
   assert.match(buildSrcdoc({ html: "<p>fragment</p>" }, libs), /^<!DOCTYPE html><html><head><meta/);
+});
+
+test("miniature envoyée par un widget : image matricielle base64 uniquement, plafonnée", () => {
+  assert.ok(acceptThumbnail("data:image/webp;base64,UklGRg=="));
+  assert.ok(acceptThumbnail("data:image/png;base64,iVBORw0KGgo="));
+  for (const bad of ["data:image/svg+xml;base64,PHN2Zz4=", "javascript:alert(1)", "data:image/png;base64,<script>", 42, null,
+    `data:image/png;base64,${"A".repeat(MAX_THUMBNAIL)}`]) {
+    assert.equal(acceptThumbnail(bad), false, String(bad).slice(0, 40));
+  }
+});
+
+test("le prélude sait fabriquer une miniature (demande « snapshot » du parent uniquement)", () => {
+  const doc = buildSrcdoc({ html: DOC, storage: {} }, libs);
+  assert.match(doc, /e\.data\.prism === "snapshot"/);
+  assert.match(doc, /e\.source !== parent/);
+  assert.match(doc, /foreignObject/);
 });
 
 test("stockage envoyé par un widget : validé et plafonné", () => {

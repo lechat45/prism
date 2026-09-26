@@ -10,7 +10,7 @@ import os
 from collections.abc import Iterator
 from pathlib import Path
 
-from sqlalchemy import Engine, create_engine, event
+from sqlalchemy import Engine, create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 DEFAULT_URL = f"sqlite:///{(Path(__file__).resolve().parent.parent / 'data' / 'prism.db').as_posix()}"
@@ -49,11 +49,25 @@ def configure(url: str | None = None) -> Engine:
     import models  # noqa: F401 — enregistre les tables sur Base.metadata
 
     Base.metadata.create_all(engine)
+    _add_missing_columns(engine)
     if _engine is not None:
         _engine.dispose()
     _engine = engine
     SessionLocal.configure(bind=engine)
     return engine
+
+
+def _add_missing_columns(engine: Engine) -> None:
+    """Mini-migration : create_all ne modifie pas une table existante ; on y ajoute les colonnes
+    nullables apparues depuis (ex. widgets.file_data_json en v3 phase 3). Rien n'est jamais supprimé."""
+    inspector = inspect(engine)
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            existing = {c["name"] for c in inspector.get_columns(table.name)}
+            for column in table.columns:
+                if column.name not in existing and column.nullable:
+                    kind = column.type.compile(engine.dialect)
+                    conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {kind}'))
 
 
 def engine() -> Engine:

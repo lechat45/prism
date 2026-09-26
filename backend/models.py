@@ -49,8 +49,11 @@ class Widget(Base):
     html: Mapped[str] = mapped_column(Text)
     # Versions précédentes (refactorisations), la plus récente en tête, 5 au plus.
     history_json: Mapped[str] = mapped_column(Text, default="[]")
-    # Fichier joint : { name, kind, summary } à la génération, { …, data } une fois téléversé.
+    # Fichier joint : { name, kind, summary } (ce que voit le modèle).
     file_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # window.PRISM_FILE complet (JSON brut, jusqu'à ~16 Mo), téléversé par le navigateur : colonne à
+    # part pour que la liste du Hub ne relise jamais ces données.
+    file_data_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     storage_json: Mapped[str] = mapped_column(Text, default="{}")  # localStorage du widget
     layout_json: Mapped[str | None] = mapped_column(Text, nullable=True)  # { x, y, w, h, z }
     accent: Mapped[str | None] = mapped_column(String(7), nullable=True)

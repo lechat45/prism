@@ -23,6 +23,8 @@ const SHOT = opt("screenshot");
 const REFACTOR = argv.includes("--refactor");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ACCENT = "#ff5e8a";
+const E2E_EMAIL = `e2e-${Date.now()}@prism.test`; // compte jetable (base temporaire de tools/e2e_server.py)
+const E2E_PASSWORD = "mot-de-passe-e2e";
 
 const BROWSER = [
   process.env.PRISM_BROWSER,
@@ -94,7 +96,7 @@ async function main() {
     const { sessionId: S } = await cdp.send("Target.attachToTarget", { targetId: targetInfos.find((t) => t.type === "page").targetId, flatten: true });
 
     // Iframes sandbox isolées (OOPIF) : une session CDP chacune.
-    const frames = new Set();
+    const frames = new Map(); // session de l'iframe -> session de la page qui la contient
     const downloadEvents = [];
     const inflight = new Map(); // requêtes réseau de la page non terminées (diagnostic)
     cdp.listeners.push((msg) => {
@@ -102,7 +104,7 @@ async function main() {
       if (msg.sessionId === S && (msg.method === "Network.loadingFinished" || msg.method === "Network.loadingFailed")) inflight.delete(msg.params.requestId);
       if (msg.method === "Browser.downloadWillBegin") downloadEvents.push(`début ${msg.params.suggestedFilename}`);
       if (msg.method === "Browser.downloadProgress" && msg.params.state !== "inProgress") downloadEvents.push(msg.params.state);
-      if (msg.method === "Target.attachedToTarget" && msg.params.targetInfo.type === "iframe") frames.add(msg.params.sessionId);
+      if (msg.method === "Target.attachedToTarget" && msg.params.targetInfo.type === "iframe") frames.set(msg.params.sessionId, msg.sessionId);
       if (msg.method === "Target.detachedFromTarget") frames.delete(msg.params.sessionId);
       if (msg.method === "Runtime.exceptionThrown" && msg.sessionId === S) {
         const d = msg.params.exceptionDetails;
@@ -129,8 +131,9 @@ async function main() {
       }
       throw new Error(`délai dépassé : ${label}${last ? ` (${last.message})` : ""}`);
     };
-    const findFrame = (predicate, label) => waitFor(async () => {
-      for (const session of frames) {
+    const findFrame = (predicate, label, page = S) => waitFor(async () => {
+      for (const [session, parent] of frames) {
+        if (parent !== page) continue;
         try { if (await evaluate(`document.readyState === "complete" && (${predicate})`, session)) return session; } catch { /* iframe en cours de chargement */ }
       }
       return null;
@@ -197,9 +200,9 @@ async function main() {
         await evaluate(`document.getElementById("auth-gift").textContent`));
       await clickSel("#tab-register");
       await clickSel("#auth-email");
-      await typeText(`e2e-${Date.now()}@prism.test`);
+      await typeText(E2E_EMAIL);
       await clickSel("#auth-password");
-      await typeText("mot-de-passe-e2e");
+      await typeText(E2E_PASSWORD);
       await clickSel("#auth-submit");
       await waitFor(() => evaluate(`!document.getElementById("auth").open`), "inscription", 20000).catch(async (err) => {
         throw new Error(`${err.message} — ${await evaluate(`document.getElementById("auth-error").textContent`)}`);
@@ -459,6 +462,67 @@ async function main() {
           await evaluate(`document.getElementById("pro-reason").textContent`));
         await clickSel("#pro-close");
       }
+    }
+
+    // ------------------------------------------------------------------ 13. Mon Hub (serveur)
+    if (serverMode) {
+      // Miniatures fabriquées dans la sandbox de chaque widget, puis envoyées au serveur.
+      const token = await evaluate(`JSON.parse(localStorage.getItem("prism:session")).token`);
+      await waitFor(async () => {
+        const page = await evaluate(`fetch("/api/widgets", { headers: { Authorization: "Bearer ${token}" } }).then((r) => r.json())`);
+        return page.items.length === 2 && page.items.every((i) => i.thumbnail && i.thumbnail.startsWith("data:image/"));
+      }, "miniatures envoyées", 40000).catch(() => null);
+      await clickSel("#btn-hub");
+      await waitFor(() => evaluate(`document.getElementById("hub").open && document.getElementById("hub").dataset.state === "ready" && document.querySelectorAll(".hub-item").length === 2`), "Mon Hub chargé");
+      const hub = await evaluate(`[...document.querySelectorAll(".hub-item")].map((el) => ({ id: el.dataset.id, title: el.querySelector(".hub-title").textContent,
+        meta: el.querySelector(".hub-meta").textContent, onCanvas: !!el.querySelector(".hub-badge"), thumb: !!el.querySelector(".hub-thumb img") }))`);
+      check("Mon Hub : 2 widgets avec miniatures fabriquées dans la sandbox, carte fermée hors canvas",
+        hub.every((h) => h.thumb) && hub.filter((h) => h.onCanvas).length === 1, hub.map((h) => `${h.title}${h.onCanvas ? " (canvas)" : ""}${h.thumb ? " 🖼" : ""}`).join(", "));
+
+      // Réouverture de la carte fermée : code et état du widget repris du serveur.
+      const closedItem = hub.find((h) => !h.onCanvas);
+      await clickSel(`.hub-item[data-id="${closedItem.id}"] .hub-actions [data-action="open"]`);
+      await waitFor(() => evaluate(`!document.getElementById("hub").open && document.querySelectorAll('.card-body[data-frame="live"]').length === 2`), "carte rouverte");
+      const reopened = await findFrame(`!!document.getElementById("magic")`, "compteur rouvert");
+      check("réouverture depuis Mon Hub : état du widget conservé par le serveur", (await evaluate(`document.getElementById("count").textContent`, reopened)) === "3");
+      await sleep(2000); // disposition de la carte rouverte envoyée (regroupement 1,2 s)
+
+      // Second appareil : autre contexte de navigateur (stockage vierge), même compte.
+      const { browserContextId } = await cdp.send("Target.createBrowserContext");
+      const { targetId: remoteTarget } = await cdp.send("Target.createTarget", { url: "about:blank", browserContextId });
+      const { sessionId: S2 } = await cdp.send("Target.attachToTarget", { targetId: remoteTarget, flatten: true });
+      await cdp.send("Page.enable", {}, S2);
+      await cdp.send("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true }, S2);
+      await cdp.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false }, S2);
+      await cdp.send("Page.bringToFront", {}, S2);
+      await cdp.send("Page.navigate", { url: BASE }, S2);
+      await waitFor(() => evaluate(`document.body.classList.contains("is-ready") && !document.getElementById("btn-login").hidden`, S2), "second appareil chargé", 60000);
+      await evaluate(`(() => { document.getElementById("btn-login").click(); document.getElementById("auth-email").value = ${JSON.stringify(E2E_EMAIL)};
+        document.getElementById("auth-password").value = ${JSON.stringify(E2E_PASSWORD)}; document.getElementById("auth-form").requestSubmit(); return true; })()`, S2);
+      const remoteCards = await waitFor(async () => {
+        const n = await evaluate(`document.querySelectorAll('.card-body[data-frame="live"]').length`, S2);
+        return n === 2 ? n : null;
+      }, "canvas restauré sur le second appareil", 60000).catch(async () => evaluate(`document.querySelectorAll(".card").length + " carte(s)"`, S2));
+      const csvRemote = await findFrame(`window.PRISM_FILE && window.PRISM_FILE.rowCount === 12`, "CSV sur le second appareil", S2).catch(() => null);
+      const counterRemote = await findFrame(`!!document.getElementById("magic")`, "compteur sur le second appareil", S2).catch(() => null);
+      const remoteCount = counterRemote ? await evaluate(`document.getElementById("count").textContent`, counterRemote) : "absent";
+      check("second appareil : canvas restauré à la connexion (données du fichier et état compris)",
+        remoteCards === 2 && Boolean(csvRemote) && remoteCount === "3", `${remoteCards} cartes, CSV ${csvRemote ? "avec" : "sans"} données, compteur ${remoteCount}`);
+      await cdp.send("Target.disposeBrowserContext", { browserContextId });
+      await cdp.send("Page.bringToFront", {}, S);
+
+      // Suppression définitive depuis le Hub : retirée du Hub et du canvas.
+      await clickSel("#btn-hub");
+      await waitFor(() => evaluate(`document.getElementById("hub").dataset.state === "ready" && document.querySelectorAll(".hub-item").length === 2`), "Mon Hub rechargé");
+      const csvItem = hub.find((h) => h.meta.includes("ventes-test.csv"));
+      const del = `.hub-item[data-id="${csvItem.id}"] [data-action="delete"]`;
+      await clickSel(del);
+      await waitFor(() => evaluate(`document.querySelector(${JSON.stringify(del)}).textContent === "Confirmer ?"`), "confirmation");
+      await clickSel(del);
+      await waitFor(() => evaluate(`document.querySelectorAll(".hub-item").length === 1`), "widget supprimé du Hub");
+      await waitFor(async () => (await cards()).length === 1, "carte retirée du canvas");
+      check("suppression depuis Mon Hub (double confirmation) : retiré du Hub et du canvas", true, csvItem.title);
+      await clickSel("#hub-close");
     }
   } catch (err) {
     check("scénario complet", false, err.message);

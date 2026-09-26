@@ -6,7 +6,7 @@ const $ = (id) => document.getElementById(id);
 const dateFmt = new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" });
 
 export class Inspector {
-  /** actions : { refactor, undo, setAccent, copy, download, toggleCode, reload, resetData, remove, openSettings, hasModel, engineKind } */
+  /** actions : { refactor, undo, setAccent, copy, download, toggleCode, reload, resetData, remove, openSettings, hasModel, engineKind, canUndo } */
   constructor(actions) {
     this.actions = actions;
     this.card = null;
@@ -133,7 +133,7 @@ export class Inspector {
     note.textContent = a.engineKind() === "server"
       ? "La refactorisation utilise un modèle : ajoutez GEMINI_API_KEY dans backend/.env."
       : "La refactorisation utilise un modèle : ajoutez votre clé Gemini gratuite.";
-    $("undo-btn").hidden = !(card.history && card.history.length) || busy;
+    $("undo-btn").hidden = !a.canUndo(card) || busy;
 
     document.querySelectorAll("#swatches button.swatch").forEach((sw) => {
       sw.setAttribute("aria-checked", String((sw.dataset.accent || null) === (card.accent || null)));

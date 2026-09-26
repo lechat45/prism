@@ -89,8 +89,82 @@ class WidgetTests(DbTestCase):
         data = {"name": "d.json", "kind": "json", "data": {"a": [1, 2]}}
         self.assertEqual(self.client.patch(f"/api/widgets/{with_file}", json={"file_data": data}, headers=self.alice).status_code, 200)
         detail = self.client.get(f"/api/widgets/{with_file}", headers=self.alice).json()
-        self.assertEqual(detail["file"]["data"], data)
-        self.assertEqual(detail["file"]["summary"], "objet")
+        self.assertEqual(detail["file"], {"name": "d.json", "kind": "json", "summary": "objet"}, "données servies à part")
+        self.assertTrue(detail["has_file_data"])
+        self.assertEqual(self.client.get(f"/api/widgets/{with_file}/file", headers=self.alice).json(), data)
+
+    def test_file_data_raw_put_and_get(self):
+        plain = self.generate(self.alice)["widget"]["id"]
+        wid = self.generate(self.alice, file={"name": "v.csv", "kind": "csv", "summary": "2 colonnes"})["widget"]["id"]
+        url = f"/api/widgets/{wid}/file"
+        self.assertEqual(self.client.get(url, headers=self.alice).status_code, 404, "rien de téléversé")
+        raw = '{"name":"v.csv","kind":"csv","rows":[{"mois":"Jan","texte":"é</script> "}],"rowCount":1}'
+        res = self.client.put(url, content=raw.encode(), headers={**self.alice, "Content-Type": "application/json"})
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertTrue(res.json()["has_file_data"])
+        got = self.client.get(url, headers=self.alice)
+        self.assertEqual((got.headers["content-type"], got.text), ("application/json", raw), "JSON rendu tel quel")
+        listed = self.client.get("/api/widgets", headers=self.alice).json()["items"]
+        self.assertEqual({i["id"]: i["has_file_data"] for i in listed}, {wid: True, plain: False})
+        for body, code in ((b"{pas du json", 422), (b"[1, 2]", 422), (b"\xff\xfe", 422)):
+            with self.subTest(body=body):
+                self.assertEqual(self.client.put(url, content=body, headers=self.alice).status_code, code)
+        self.assertEqual(self.client.put(f"/api/widgets/{plain}/file", content=b"{}", headers=self.alice).status_code, 409)
+        self.assertEqual(self.client.put(url, content=b"{}", headers=self.bob).status_code, 404)
+        self.assertEqual(self.client.get(url, headers=self.bob).status_code, 404)
+
+    def test_file_data_size_limit(self):
+        wid = self.generate(self.alice, file={"name": "t.txt", "kind": "txt", "summary": "texte"})["widget"]["id"]
+        saved = prism.widgets.MAX_FILE_DATA
+        prism.widgets.MAX_FILE_DATA = 1000
+        try:
+            big = ('{"text":"' + "x" * 2000 + '"}').encode()
+            self.assertEqual(self.client.put(f"/api/widgets/{wid}/file", content=big, headers=self.alice).status_code, 413)
+            ok = ('{"text":"' + "x" * 100 + '"}').encode()
+            self.assertEqual(self.client.put(f"/api/widgets/{wid}/file", content=ok, headers=self.alice).status_code, 200)
+        finally:
+            prism.widgets.MAX_FILE_DATA = saved
+
+    def test_canvas_presence(self):
+        placed = self.generate(self.alice)["widget"]["id"]
+        closed = self.generate(self.alice, prompt="autre")["widget"]["id"]
+        layout = {"x": 0, "y": 0, "w": 460, "h": 420, "z": 1}
+        for wid in (placed, closed):
+            self.client.patch(f"/api/widgets/{wid}", json={"layout": layout}, headers=self.alice)
+        self.client.patch(f"/api/widgets/{closed}", json={"clear_layout": True}, headers=self.alice)
+        on = self.client.get("/api/widgets?on_canvas=true", headers=self.alice).json()
+        off = self.client.get("/api/widgets?on_canvas=false", headers=self.alice).json()
+        self.assertEqual(([i["id"] for i in on["items"]], on["total"]), ([placed], 1))
+        self.assertEqual([i["id"] for i in off["items"]], [closed])
+        self.assertTrue(on["items"][0]["on_canvas"])
+        self.assertIsNone(self.client.get(f"/api/widgets/{closed}", headers=self.alice).json()["layout"], "retirée du canvas, gardée au Hub")
+
+    def test_import_local_card(self):
+        body = {"html": V1, "prompt": "un compteur", "mode": "gemini", "model": "gemini-3.8-flash", "accent": "#3ddc84",
+                "layout": {"x": 5, "y": 6, "w": 460, "h": 420, "z": 2}, "storage": {"state": "{}"},
+                "file": {"name": "v.csv", "kind": "csv", "summary": "2 colonnes"}}
+        before = self.client.get("/api/auth/me", headers=self.alice).json()["sparks"]
+        res = self.client.post("/api/widgets", json=body, headers=self.alice)
+        self.assertEqual(res.status_code, 201, res.text)
+        out = res.json()
+        self.assertEqual((out["title"], out["html"], out["mode"], out["accent"], out["on_canvas"]), ("Version 1", V1, "gemini", "#3ddc84", True))
+        self.assertEqual(out["file"], body["file"])
+        self.assertEqual(self.client.get("/api/auth/me", headers=self.alice).json()["sparks"], before, "import gratuit")
+        self.assertEqual(self.client.get(f"/api/widgets/{out['id']}", headers=self.bob).status_code, 404)
+        for bad in ({"html": ""}, {"html": "x" * 1_000_001}, {"html": V1, "accent": "red"},
+                    {"html": V1, "storage": {"k": "x" * 1_000_001}}, {"html": V1, "file": {"name": "a", "kind": "exe", "summary": ""}}):
+            with self.subTest(bad=str(bad)[:60]):
+                self.assertEqual(self.client.post("/api/widgets", json=bad, headers=self.alice).status_code, 422)
+        self.assertEqual(self.client.post("/api/widgets", json={"html": V1}).status_code, 401)
+
+    def test_import_is_capped(self):
+        saved = prism.widgets.MAX_WIDGETS
+        prism.widgets.MAX_WIDGETS = 2
+        try:
+            codes = [self.client.post("/api/widgets", json={"html": V1}, headers=self.alice).status_code for _ in range(3)]
+            self.assertEqual(codes, [201, 201, 409])
+        finally:
+            prism.widgets.MAX_WIDGETS = saved
 
     def test_refactor_keeps_history_and_undo_restores(self):
         answers = [V1, V2]

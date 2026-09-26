@@ -82,18 +82,22 @@ function messageOf(detail, status) {
   return `erreur serveur (HTTP ${status})`;
 }
 
-export async function api(path, { method = "GET", body, signal } = {}) {
+/** body : objet (envoyé en JSON) ou Blob déjà en JSON (envoyé tel quel, sans copie ni analyse).
+ *  as: "json" (défaut) ou "blob" (réponse gardée brute : données d'un fichier joint). */
+export async function api(path, { method = "GET", body, signal, as = "json" } = {}) {
   const headers = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (account.token) headers.Authorization = `Bearer ${account.token}`;
+  const payloadOut = body === undefined || body instanceof Blob ? body : JSON.stringify(body);
   let res;
   try {
-    res = await fetch(API_BASE + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal });
+    res = await fetch(API_BASE + path, { method, headers, body: payloadOut, signal });
   } catch (err) {
     if (err.name === "AbortError") throw err;
     throw new ApiError(0, { code: "network", message: "serveur injoignable (lancez « python backend/app.py »)" });
   }
-  const payload = await res.json().catch(() => null);
+  if (res.ok && as === "blob") return res.blob();
+  const payload = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {
     const err = new ApiError(res.status, payload && payload.detail);
     if (res.status === 401 && account.token) forget(); // jeton expiré ou révoqué

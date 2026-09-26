@@ -1,14 +1,16 @@
 // Prism v2 — orchestration : dock de saisie, cycle de vie des cartes, messages des widgets, persistance.
 
-import { account, api, canAfford, setSparks } from "./account.js";
+import { account, api, canAfford, onAccountChange, setSparks } from "./account.js";
 import { initAccountUi, openAuth, openPro, requireAccount } from "./account-ui.js";
 import { Canvas, CARD_MIN_H, CARD_MIN_W } from "./canvas.js";
 import { engine, engineReady, generate, hasModel, initSettings, onEngineChange, openSettings } from "./engine.js";
 import { forRequest } from "./files.js";
 import { Inspector } from "./inspector.js";
 import { run } from "./offload.js";
-import { acceptStorage, bootSrcdoc, buildSrcdoc, exportHtml, FRAME_SANDBOX, isAccent, needsBoot } from "./sandbox.js";
+import { initHub } from "./hub.js";
+import { acceptStorage, acceptThumbnail, bootSrcdoc, buildSrcdoc, exportHtml, FRAME_SANDBOX, isAccent, needsBoot } from "./sandbox.js";
 import { cardStore, loadView, saveView } from "./store.js";
+import { fetchWidget, importCard, isLinked, listWidgets, markSynced, pushThumbnail, queueSync, removeFromCanvas, unlink, uploadFile } from "./sync.js";
 
 const $ = (id) => document.getElementById(id);
 const cards = new Map(); // id -> carte (champs persistés + état d'exécution : status, controller, timer…)
@@ -94,6 +96,7 @@ async function persist(card) {
   saveTimers.delete(card.id);
   if (!card.html || !cards.has(card.id)) return;
   card.updatedAt = Date.now();
+  queueSync(card); // copie vers « Mon Hub » (champs changés seulement, regroupés)
   try {
     await cardStore.put(card);
   } catch (err) {
@@ -161,6 +164,7 @@ const inspector = new Inspector({
   },
   resetData: (card) => {
     card.storage = {};
+    card.thumbStale = true;
     mountWidget(card);
     persist(card);
     toast("Données du widget effacées");
@@ -169,6 +173,7 @@ const inspector = new Inspector({
   openSettings,
   hasModel,
   engineKind: () => engine.kind,
+  canUndo: (card) => Boolean(card.history?.length) || (isLinked(card) && card.serverVersions > 0),
 });
 
 function updateEmpty() {
@@ -273,6 +278,7 @@ function revealFrame(card) {
   card.revealTimer = null;
   const body = canvas.element(card.id)?.querySelector(".card-body");
   if (body) body.dataset.frame = "live";
+  if (card.thumbStale !== false) scheduleThumbnail(card, 1500); // laisser finir les animations d'entrée
 }
 
 function unmount(card) {
@@ -280,6 +286,33 @@ function unmount(card) {
   mountQueue.delete(card.id);
   clearTimeout(card.revealTimer);
   card.revealTimer = null;
+  clearTimeout(card.thumbTimer);
+}
+
+// ----------------------------------------------------------------------------
+// Miniatures « Mon Hub » : fabriquées par le widget lui-même (cf. sandbox.js), puis envoyées.
+// ----------------------------------------------------------------------------
+function scheduleThumbnail(card, delay) {
+  if (!isLinked(card)) return;
+  clearTimeout(card.thumbTimer);
+  card.thumbTimer = setTimeout(() => {
+    const body = canvas.element(card.id)?.querySelector(".card-body");
+    if (!cards.has(card.id) || body?.dataset.frame !== "live" || card.showCode) return;
+    canvas.frame(card.id)?.contentWindow?.postMessage({ prism: "snapshot", width: 360 }, "*");
+  }, delay);
+}
+
+async function receiveThumbnail(card, data) {
+  if (!acceptThumbnail(data)) return;
+  if (await pushThumbnail(card, data)) {
+    card.thumbStale = false;
+    scheduleSave(card);
+  }
+}
+
+function markChanged(card, thumbDelay = null) {
+  card.thumbStale = true;
+  if (thumbDelay !== null) scheduleThumbnail(card, thumbDelay);
 }
 
 // ============================================================================
@@ -292,8 +325,13 @@ function applyPayload(card, payload) {
   card.elapsed_ms = payload.elapsed_ms;
   card.warnings = payload.warnings || [];
   card.title = titleFrom(payload.html, card.title);
+  card.thumbStale = true;
   // Mode serveur : widget enregistré dans « Mon Hub » (sa refactorisation le désignera) et nouveau solde.
-  if (payload.widget?.id) card.serverId = payload.widget.id;
+  if (payload.widget?.id) {
+    card.serverId = payload.widget.id;
+    card.serverOwner = account.user?.id ?? null;
+    card.serverVersions = payload.widget.versions;
+  }
   if (Number.isFinite(payload.sparks)) setSparks(payload.sparks);
 }
 
@@ -333,6 +371,7 @@ async function runGeneration(card) {
     setStatus(card, "ready");
     mountWidget(card);
     persist(card);
+    uploadFile(card).then(() => scheduleSave(card)); // données du fichier → Hub (réouverture ailleurs)
   } catch (err) {
     if (!cards.has(card.id)) return;
     if (err.name === "AbortError") {
@@ -355,11 +394,18 @@ async function refactorCard(card, instruction) {
   if (card.status === "busy" || card.status === "loading") return;
   if (engine.kind === "server") {
     if (!requireAccount(() => refactorCard(card, instruction), "Connectez-vous pour refactoriser vos widgets.")) return;
-    if (!card.serverId) {
-      toast("Cette carte n'est pas liée à votre compte : régénérez-la pour pouvoir la refactoriser.", { tone: "error", timeout: 7000 });
-      return;
-    }
     if (!canAfford("refactor")) return openPro({ sparks: account.user.sparks, required: account.pricing.refactor });
+    if (!isLinked(card)) {
+      // Carte créée hors compte (moteur navigateur, avant connexion) : ajoutée d'abord à « Mon Hub ».
+      try {
+        await importCard(card);
+        persist(card);
+        toast("Carte ajoutée à Mon Hub");
+      } catch (err) {
+        toast(`Ajout à Mon Hub impossible : ${err.message}`, { tone: "error", timeout: 7000 });
+        return;
+      }
+    }
   }
   const controller = new AbortController();
   card.controller = controller;
@@ -390,23 +436,28 @@ async function refactorCard(card, instruction) {
 }
 
 async function undoRefactor(card) {
-  if (!card.history?.length || !cards.has(card.id)) return;
-  let [previous, ...rest] = card.history;
-  if (engine.kind === "server" && card.serverId && account.user) {
-    // Le serveur garde ses versions : la prochaine refactorisation doit partir de la version restaurée.
+  if (!cards.has(card.id)) return;
+  let [previous, ...rest] = card.history || [];
+  if (isLinked(card) && (card.serverVersions > 0 || previous === undefined)) {
+    // Le serveur garde ses versions (y compris celles d'un autre appareil) : la prochaine
+    // refactorisation doit partir de la version restaurée.
     try {
-      previous = (await api(`/api/widgets/${encodeURIComponent(card.serverId)}/undo`, { method: "POST" })).html;
+      const detail = await api(`/api/widgets/${encodeURIComponent(card.serverId)}/undo`, { method: "POST" });
+      previous = detail.html;
+      card.serverVersions = detail.versions;
     } catch (err) {
-      if (err.code !== "no_history") {
+      if (err.code !== "no_history" || previous === undefined) {
         toast(`Annulation impossible : ${err.message}`, { tone: "error", timeout: 6000 });
         return;
       }
     }
     if (!cards.has(card.id)) return;
   }
+  if (previous === undefined) return;
   card.html = previous;
   card.history = rest;
   card.title = titleFrom(previous, card.title);
+  markChanged(card);
   setStatus(card, "ready");
   mountWidget(card);
   persist(card);
@@ -430,6 +481,7 @@ function closeCard(card) {
   saveTimers.delete(card.id);
   if (!hadWidget) return;
   cardStore.remove(card.id).catch(storageFailure);
+  removeFromCanvas(card); // le widget reste dans « Mon Hub »
   toast(`« ${card.title} » fermée`, {
     action: { label: "Rétablir", onClick: () => restoreCard(card) },
     timeout: 6000,
@@ -452,6 +504,7 @@ function setAccent(card, value) {
   canvas.frame(card.id)?.contentWindow?.postMessage({ prism: "accent", value }, "*");
   inspector.refresh(card);
   scheduleSave(card);
+  markChanged(card, 1500);
 }
 
 function toggleCode(card) {
@@ -530,6 +583,10 @@ window.addEventListener("message", (event) => {
     card.storage = clean;
     scheduleSave(card);
     inspector.refresh(card);
+    markChanged(card, 8000); // miniature rafraîchie une fois l'utilisateur au calme
+  } else if (data.prism === "thumbnail") {
+    if (data.data) receiveThumbnail(card, data.data);
+    else console.warn(`Prism : miniature de « ${card.title} » impossible`, data.error);
   } else if (data.prism === "focus") {
     canvas.select(card.id);
   } else if (data.prism === "zoom") {
@@ -777,11 +834,101 @@ addEventListener("keydown", (e) => {
 });
 
 // ============================================================================
+// « Mon Hub » : réouverture, suppression, restauration du canvas depuis le serveur
+// ============================================================================
+const localCardFor = (serverId) => [...cards.values()].find((c) => c.serverId === serverId && isLinked(c)) || null;
+
+/** Widget du serveur → carte. place : "saved" (sa position enregistrée) ou "view" (place libre à l'écran). */
+function cardFromServer({ detail, blob }, place) {
+  const layout = place === "saved" ? detail.layout : null;
+  const size = detail.layout ? { w: detail.layout.w, h: detail.layout.h } : newCardSize(detail.file ? SIZES.file : SIZES.widget);
+  const card = {
+    id: uid(),
+    title: detail.title,
+    prompt: detail.prompt,
+    html: detail.html,
+    file: detail.file ? { ...detail.file, meta: `${detail.file.kind.toUpperCase()} · ${detail.file.name}`, blob: blob || undefined } : null,
+    storage: detail.storage || {},
+    accent: detail.accent,
+    ...(layout ? { x: layout.x, y: layout.y, z: layout.z } : canvas.findSpot(size.w, size.h)),
+    ...size,
+    mode: detail.mode,
+    model: detail.model,
+    createdAt: Date.parse(detail.created_at) || Date.now(),
+    history: [],
+    status: "ready",
+    serverId: detail.id,
+    serverOwner: account.user.id,
+    serverVersions: detail.versions,
+    fileSynced: Boolean(blob),
+    thumbStale: !detail.thumbnail,
+  };
+  markSynced(card);
+  if (!layout) card.synced.layout = null; // nouvelle position : à envoyer
+  cards.set(card.id, card);
+  canvas.add(card, { animate: !layout });
+  setStatus(card, "ready");
+  mountWidget(card);
+  persist(card);
+  if (detail.file && !blob) {
+    toast(`« ${card.title} » : données du fichier absentes (jamais téléversées depuis l'appareil d'origine).`, { tone: "error", timeout: 7000 });
+  }
+  return card;
+}
+
+async function openWidget(serverId) {
+  const card = localCardFor(serverId) || cardFromServer(await fetchWidget(serverId), "view");
+  canvas.select(card.id);
+  canvas.ensureVisible(card);
+}
+
+function onWidgetDeleted(serverId) {
+  const card = localCardFor(serverId);
+  if (!card) return toast("Widget supprimé de Mon Hub");
+  unlink(card); // plus rien à synchroniser
+  card.controller?.abort();
+  discard(card);
+  cardStore.remove(card.id).catch(storageFailure);
+  toast(`« ${card.title} » supprimé de Mon Hub et du canvas`);
+}
+
+/** Connexion (ou démarrage) : les cartes posées sur le canvas depuis un autre appareil arrivent ici. */
+let syncing = null;
+function syncCanvasFromServer() {
+  if (engine.kind !== "server" || !account.user || syncing) return syncing;
+  syncing = (async () => {
+    try {
+      const page = await listWidgets({ onCanvas: true, limit: 200 });
+      const missing = page.items.filter((item) => !localCardFor(item.id));
+      let restored = 0;
+      for (const item of missing) {
+        try {
+          cardFromServer(await fetchWidget(item.id), "saved");
+          restored += 1;
+        } catch (err) {
+          console.warn("Prism : widget non restauré", item.id, err);
+        }
+      }
+      if (restored) toast(`${restored} widget${restored > 1 ? "s" : ""} de Mon Hub ${restored > 1 ? "restaurés" : "restauré"} sur le canvas`);
+    } catch (err) {
+      if (err.status !== 401) console.warn("Prism : canvas non synchronisé avec Mon Hub", err);
+    } finally {
+      syncing = null;
+    }
+  })();
+  return syncing;
+}
+
+// ============================================================================
 // Démarrage : restauration du canvas
 // ============================================================================
 async function start() {
   initSettings((message) => toast(message));
   initAccountUi({ toast: (message) => toast(message) });
+  initHub({ openWidget, isOnCanvas: (serverId) => Boolean(localCardFor(serverId)), onDeleted: onWidgetDeleted, toast });
+  onAccountChange((state, change) => {
+    if (change.signedIn) syncCanvasFromServer();
+  });
   onEngineChange(() => inspector.refresh(inspector.card));
   try {
     promptEl.value = localStorage.getItem(DRAFT_KEY) || "";
@@ -813,6 +960,7 @@ async function start() {
   });
   updateEmpty();
   document.body.classList.add("is-ready");
+  syncCanvasFromServer();
 }
 
 start();

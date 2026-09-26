@@ -30,6 +30,7 @@ dans une carte que l'on déplace, redimensionne, refactorise, recolore et export
 | Sans clé Gemini | widgets de démonstration | widgets de démonstration |
 | Avec une clé Gemini | la vôtre, via le badge du moteur (en haut à droite), appel direct navigateur → `generativelanguage.googleapis.com` | `GEMINI_API_KEY` dans `backend/.env` (+ compte Prism, cf. v3) |
 | Compte | aucun (votre clé, votre quota) | inscription par e-mail, 50 Sparks offerts ; génération 1 Spark, refactorisation 0,5 |
+| Mon Hub | — | bibliothèque des widgets, canvas retrouvé sur tout appareil connecté |
 | Refactorisation | avec une clé | avec une clé |
 
 Le frontend choisit tout seul : il interroge `GET /api/health` et, faute de backend (ou sur `*.github.io`),
@@ -69,7 +70,7 @@ Le code généré est non fiable par principe. Chaque widget tourne dans
 | CSP `default-src 'none'` + `script-src` limité aux fichiers Tailwind et Chart.js épinglés | aucune requête réseau (pas d'exfiltration) ; bibliothèques vérifiées par SRI |
 | `localStorage` fourni par Prism | persistant **et** isolé : chaque écriture est envoyée à la page par `postMessage`, validée (≤ 1 Mo, chaînes uniquement) et rangée avec la carte. Un vrai `localStorage` aurait exigé `allow-same-origin`, qui rend la sandbox contournable |
 | `window.PRISM_FILE` | données du fichier joint : un Blob JSON remis par un chargeur minimal (même CSP), lu et parsé dans le processus du widget ; une seule livraison, au seul demandeur |
-| Prélude | remonte les erreurs JS (statut de la carte), relaie Ctrl + molette vers le canvas, applique l'accent à chaud |
+| Prélude | remonte les erreurs JS (statut de la carte), relaie Ctrl + molette vers le canvas, applique l'accent à chaud, fabrique la miniature du Hub à la demande de la page (image matricielle seulement, vérifiée avant envoi) |
 | Messages entrants | Prism n'accepte que ceux de ses propres iframes, et les valide |
 
 ## Performance (v3.5 « Velocity »)
@@ -98,6 +99,24 @@ Machine de mesure : 2 cœurs, souvent saturée ; les chiffres absolus varient, l
   dérive que canvas vide ; les cartes n'utilisent plus `backdrop-filter` (re-flou de chaque carte à chaque image
   d'un déplacement) ; le squelette holographique n'anime que `transform` et `opacity` (compositeur).
 
+## Mon Hub (mode serveur, compte connecté)
+
+- **Bibliothèque** (bouton « Mon Hub ») : tous vos widgets, du plus récent au plus ancien, avec miniature,
+  recherche, « Ouvrir » (ou « Afficher » s'il est déjà sur le canvas) et suppression définitive (double clic
+  de confirmation). Fermer une carte la retire du canvas, pas du Hub.
+- **Miniatures** fabriquées par le widget lui-même, dans sa sandbox : la page ne peut pas lire l'iframe,
+  alors le prélude clone le document (graphiques `<canvas>` figés en images, saisies reportées), le rend dans
+  une image SVG sans réseau et renvoie un `data:image/webp` de quelques Ko. Refaite après une génération, une
+  refactorisation, un changement de couleur ou quelques secondes après la dernière modification de l'état.
+- **Synchronisation** : chaque carte liée envoie ses changements (disposition, état du widget, couleur, titre),
+  regroupés toutes les 1,2 s ; les données du fichier joint partent une fois, en Blob, sans passer par le
+  fil principal. À la connexion sur un autre appareil, les cartes posées sur le canvas y sont restaurées,
+  données du fichier et état compris ; l'annulation d'une refactorisation passe par les versions du serveur.
+- **Import** : une carte créée hors compte (GitHub Pages, avant connexion) rejoint le Hub au moment de sa
+  première refactorisation, sans coût en Sparks.
+- Limites actuelles : fusion additive (une carte fermée sur un appareil reste ouverte sur un autre jusqu'à
+  sa fermeture là-bas) ; données de fichier au-delà de 16 Mo gardées sur l'appareil d'origine.
+
 ## Architecture
 
 ```
@@ -122,6 +141,8 @@ frontend/
   js/engine.js          choix du moteur, clé Gemini, génération
   js/account.js         compte (mode serveur) : session Bearer, appels authentifiés, solde de Sparks
   js/account-ui.js      anneau de Sparks, menu du compte, fenêtres connexion/inscription et « Prism Pro »
+  js/hub.js             « Mon Hub » : bibliothèque des widgets (miniatures, recherche, réouverture, suppression)
+  js/sync.js            copie des cartes vers le serveur, import des cartes locales, restauration
   js/store.js           persistance IndexedDB
   engine/               ── partagé par les deux moteurs ──
     system-prompt.txt     contrat de sortie : HTML seul, Tailwind uniquement, persistance, --accent, Chart.js, PRISM_FILE
@@ -175,7 +196,7 @@ curl -s -X POST http://127.0.0.1:8000/api/generate -H "Content-Type: application
 | 1. Backend | comptes (JWT + scrypt), Sparks (réservation atomique, remboursement, grand livre), historique des widgets, API | **fait** (`3.0.0-alpha.1`) |
 | 3.5 Velocity & Elegance | Gemini, design system Tailwind, Web Worker, données en Blob, injection au rythme des images, squelette holographique | **fait** (`3.5.0-alpha.1`) |
 | 2. Comptes côté interface | fenêtre de connexion/inscription Liquid Glass, jauge de Sparks en anneau, fenêtre « Prism Pro » sur 403 | **fait** (`3.5.0-alpha.2`) |
-| 3. Mon Hub | panneau d'historique, miniatures générées dans la sandbox, synchronisation du canvas avec le serveur | à faire |
+| 3. Mon Hub | panneau d'historique, miniatures générées dans la sandbox, synchronisation du canvas avec le serveur | **fait** (`3.5.0-alpha.3`) |
 | 4. Bus d'évènements | `prism.emit` / `prism.on` entre widgets, relayés par le canvas ; le prompt connaît les sujets des widgets présents | à faire |
 | 5. Spotlight et reflets | invite flottante Ctrl/Cmd + K ; reflets des bords via IntersectionObserver et position du pointeur | à faire |
 | 6. Déploiement | hébergement gratuit de l'API, PostgreSQL, secrets, frontend Pages pointé vers l'API | à faire |
@@ -188,7 +209,9 @@ API ajoutée en phase 1 (jeton `Authorization: Bearer …` sauf `register`/`logi
 | `GET /api/auth/me` | profil et solde |
 | `POST /api/generate` | `{ prompt, file?, widget_id? }` : génère (1 Spark) ou refactorise ce widget (0,5 Spark) ; **403** `insufficient_sparks` si le solde manque |
 | `GET /api/sparks` | solde, tarifs, derniers mouvements |
-| `GET /api/widgets`, `GET/PATCH/DELETE /api/widgets/{id}`, `POST /api/widgets/{id}/undo` | historique « Mon Hub » |
+| `GET /api/widgets[?on_canvas=true]`, `GET/PATCH/DELETE /api/widgets/{id}`, `POST /api/widgets/{id}/undo` | « Mon Hub » : liste légère, détail, état de la carte (`layout`, `clear_layout`, `storage`, `accent`, `title`, `thumbnail`), annulation, suppression |
+| `POST /api/widgets` | importe une carte créée hors compte (gratuit, 1 000 widgets par compte au plus) |
+| `GET/PUT /api/widgets/{id}/file` | données du fichier joint (`window.PRISM_FILE`) en JSON brut, 16 Mo au plus |
 
 ## Configuration du serveur
 

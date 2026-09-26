@@ -102,8 +102,66 @@ function prelude(snapshot) {
     try { Object.defineProperty(window, pair[0], { value: pair[1], configurable: true }); } catch (e) {}
   });
 
+  // Miniature pour « Mon Hub », fabriquée ICI (la page ne peut pas lire le widget) : le document est
+  // cloné (graphiques <canvas> figés en images, saisies en cours reportées), rendu dans une image SVG
+  // (foreignObject, sans aucun réseau), réduit sur un <canvas> puis renvoyé en data:image/webp.
+  function snapshot(width) {
+    var fail = function (err) { send("thumbnail", { error: String((err && err.message) || err || "rendu impossible") }); };
+    try {
+      var root = document.documentElement;
+      var w = Math.max(1, root.clientWidth);
+      var h = Math.max(1, Math.min(root.clientHeight, Math.round(w * 1.25)));
+      var clone = root.cloneNode(true);
+      var drop = clone.querySelectorAll("script, meta, noscript");
+      for (var i = 0; i < drop.length; i++) drop[i].parentNode.removeChild(drop[i]);
+      var live = document.querySelectorAll("canvas");
+      var copies = clone.querySelectorAll("canvas");
+      for (i = 0; i < copies.length && i < live.length; i++) {
+        var img = document.createElement("img");
+        try { img.src = live[i].toDataURL(); } catch (e) { /* toile illisible : laissée vide */ }
+        img.className = live[i].className;
+        img.setAttribute("style", (live[i].getAttribute("style") || "") + ";width:" + live[i].clientWidth + "px;height:" + live[i].clientHeight + "px");
+        copies[i].parentNode.replaceChild(img, copies[i]);
+      }
+      var fields = document.querySelectorAll("input, textarea, select");
+      var fieldCopies = clone.querySelectorAll("input, textarea, select");
+      for (i = 0; i < fields.length && i < fieldCopies.length; i++) {
+        var f = fields[i], c = fieldCopies[i];
+        if (f.type === "checkbox" || f.type === "radio") {
+          if (f.checked) c.setAttribute("checked", ""); else c.removeAttribute("checked");
+        } else if (f.tagName === "TEXTAREA") c.textContent = f.value;
+        else if (f.tagName === "SELECT") { for (var o = 0; o < f.options.length; o++) if (f.options[o].selected) c.options[o].setAttribute("selected", ""); }
+        else if (f.type !== "file" && f.type !== "password") c.setAttribute("value", f.value);
+      }
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '"><foreignObject x="0" y="0" width="100%" height="100%">' +
+        new XMLSerializer().serializeToString(clone) + "</foreignObject></svg>";
+      var image = new Image();
+      image.onload = function () {
+        try {
+          var scale = Math.min(1, width / w);
+          var out = document.createElement("canvas");
+          out.width = Math.round(w * scale);
+          out.height = Math.round(h * scale);
+          var ctx = out.getContext("2d");
+          var bg = getComputedStyle(document.body).backgroundColor;
+          ctx.fillStyle = !bg || /rgba\(0, 0, 0, 0\)|transparent/.test(bg) ? "#0b0d12" : bg;
+          ctx.fillRect(0, 0, out.width, out.height);
+          ctx.scale(scale, scale);
+          ctx.drawImage(image, 0, 0);
+          var data = out.toDataURL("image/webp", 0.75);
+          if (data.indexOf("data:image/webp") !== 0) data = out.toDataURL("image/jpeg", 0.8);
+          send("thumbnail", { data: data });
+        } catch (err) { fail(err); }
+      };
+      image.onerror = function () { fail("rendu impossible"); };
+      image.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    } catch (err) { fail(err); }
+  }
+
   window.addEventListener("message", function (e) {
-    if (e.source !== parent || !e.data || e.data.prism !== "accent") return;
+    if (e.source !== parent || !e.data) return;
+    if (e.data.prism === "snapshot") return snapshot(Math.max(80, Math.min(640, Number(e.data.width) || 360)));
+    if (e.data.prism !== "accent") return;
     var root = document.documentElement;
     var forced = document.getElementById("prism-accent");
     if (forced) forced.remove();
@@ -210,6 +268,12 @@ export async function exportHtml(card) {
   const file = card.file && card.file.blob ? dataScript(await card.file.blob.text()) : inlineFile(card.file);
   return injectInHead(card.html, note + accentStyle(card.accent) + file);
 }
+
+const THUMBNAIL_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
+export const MAX_THUMBNAIL = 300_000;
+
+/** Miniature envoyée par un widget (données non fiables) : image matricielle en base64 uniquement. */
+export const acceptThumbnail = (data) => typeof data === "string" && data.length <= MAX_THUMBNAIL && THUMBNAIL_RE.test(data);
 
 /** Valide un instantané de stockage envoyé par un widget (données non fiables). */
 export function acceptStorage(data) {
