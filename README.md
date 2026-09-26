@@ -179,6 +179,18 @@ son caractère et ses émotions.
   (son caractère en une phrase) et son **climat émotionnel** (2 à 4 émotions pondérées) : puces dans l'en-tête et
   **aura** qui teinte toute la carte. Émotions lues dans les sources publiques (écrits, journaux et lettres publiés,
   témoignages), décrites comme des expériences vécues, jamais comme des troubles.
+- **Discuter avec la personne** : le bouton « Discuter avec Marie Curie » de la carte (ou Spotlight, ou « Mon Hub »)
+  ouvre une conversation avec une simulation fondée sur toutes les données écrites de l'Engramme (tempérament, climat,
+  bulles, sources, liens), à la première personne, clairement présentée comme une simulation (jamais la personne, aucune
+  citation inventée). Chaque réponse arrive avec sa **logique** : 1 à 4 bulles, dans l'ordre du raisonnement, que des
+  **ronds numérotés** écrivent un à un sur la carte (fil lumineux de bulle en bulle, explication tapée lettre à lettre).
+  ¼ de Spark par message ; sans clé, une réponse de démonstration honnête. Historique gardé avec la carte.
+- **Mon Hub** : les personnes (Engrammes) en tête, avec « Discuter » et « Ouvrir ».
+- **Mouvement logique et organique** : chaque bulle a une place calculée. Les artefacts forment une horloge (ordre
+  chronologique, sens horaire depuis midi) ; chaque bulle intérieure se tourne vers ce qui l'a forgée ou qu'elle nourrit
+  (lecture radiale : évènement → émotion → trait → noyau), les types restent groupés, les places sont équidistantes
+  (aucun chevauchement) et tout l'Engramme tourne d'un bloc : les alignements restent vrais. Organique par-dessus :
+  respiration, battement du cœur, ombres erratiques qui reviennent à leur place, épicycles vifs des artefacts.
 - **Moteur physique natif** (`frontend/engine/engram/physics.js`, sans D3) : ressort-masse, Euler semi-implicite
   à pas fixe (1/120 s), déterministe (graine), anneaux elliptiques épousant la carte, répulsion à courte portée.
   La bulle survolée s'arrête et grossit ; une fiche **Liquid Glass** (`bg-white/10 backdrop-blur-xl
@@ -339,6 +351,7 @@ API ajoutée en phase 1 (jeton `Authorization: Bearer …` sauf `register`/`logi
 | `GET /api/auth/me` | profil et solde |
 | `POST /api/generate` | `{ prompt, file?, widget_id?, canvas?, dna? }` : génère (1 Spark) ou refactorise ce widget (0,5 Spark) ; `canvas` = autres widgets et sujets du bus (20 au plus) ; `dna` = trait d'Engramme qui filtre la génération (V4) ; **403** `insufficient_sparks` si le solde manque |
 | `POST /api/engram` | `{ person, language? }` : Engramme cognitif (2 Sparks, V4) ; **422** `engram_refused` (personne non publique, Sparks rendus) |
+| `POST /api/engram/chat` | `{ engram, history?, message, language? }` : « Discuter avec … » → `{ reply, trace: [{ id, why }] }` (¼ de Spark, V4) |
 | `GET /api/sparks` | solde, tarifs, derniers mouvements |
 | `GET /api/widgets[?on_canvas=true]`, `GET/PATCH/DELETE /api/widgets/{id}`, `POST /api/widgets/{id}/undo` | « Mon Hub » : liste légère, détail, état de la carte (`layout`, `clear_layout`, `storage`, `accent`, `title`, `thumbnail`), annulation, suppression |
 | `POST /api/widgets` | importe une carte créée hors compte (gratuit, 1 000 widgets par compte au plus) |

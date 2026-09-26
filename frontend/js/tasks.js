@@ -29,4 +29,5 @@ export const tasks = {
   sample: async () => pack(sampleCsvAttachment()),
   generate: ({ prompt, options }, signal) => engine().generate(prompt, { ...options, signal }),
   engram: ({ person, options }, signal) => engine().engram(person, { ...options, signal }),
+  engramChat: ({ engram, history, message, options }, signal) => engine().engramChat(engram, history, message, { ...options, signal }),
 };

@@ -1,0 +1,20 @@
+{
+  "type": "OBJECT",
+  "properties": {
+    "trace": {
+      "type": "ARRAY",
+      "description": "1 to 4 engram nodes that shape the answer, in the order of the reasoning.",
+      "items": {
+        "type": "OBJECT",
+        "properties": {
+          "id": { "type": "STRING", "description": "Node id from the engram." },
+          "why": { "type": "STRING", "description": "What this node brings to the answer, at most 90 characters." }
+        },
+        "required": ["id", "why"]
+      }
+    },
+    "reply": { "type": "STRING", "description": "The answer, first person, 2 to 6 sentences, no Markdown." }
+  },
+  "required": ["trace", "reply"],
+  "propertyOrdering": ["trace", "reply"]
+}

@@ -327,7 +327,33 @@
       throw new Error(`Engramme impossible : ${errors.slice(-6).join(" | ")}`);
     }
 
-    return { generate, mock, engram, defaults: () => load("gemini.json", "json"), libs: () => load("libs.json", "json") };
+    /** Même contrat que POST /api/engram/chat : { reply, trace, mode, model }. Sans clé : réponse de démonstration. */
+    async function engramChat(engramData, history, message, { key = "", models = [], language = "fr", signal } = {}) {
+      if (!key) return { ...E.demoChat(engramData, message), mode: "mock", model: "mock:engram-chat" };
+      const [cfg, schema, system, template] = await Promise.all([
+        load("gemini.json", "json"),
+        load("engram/chat-schema.json", "json"),
+        load("engram/chat-system.txt"),
+        load("engram/chat-template.txt"),
+      ]);
+      const userMessage = E.buildChatMessage(template, engramData, history, message, language);
+      const errors = [];
+      for (const model of models.length ? models : cfg.models) {
+        for (const withSchema of [true, false]) {
+          try {
+            const text = await requestGemini(model, system.trim(), userMessage, key, cfg, signal, { json: true, schema: withSchema ? schema : null });
+            return { ...E.normalizeChat(E.parse(text), engramData), mode: "gemini", model };
+          } catch (err) {
+            if (err.fatal || (err.name === "AbortError" && signal && signal.aborted)) throw err;
+            errors.push(err.name === "EngramError" ? `${model}: ${err.message}` : err.message);
+            if (err.name !== "SchemaRejected") break;
+          }
+        }
+      }
+      throw new Error(`Réponse impossible : ${errors.slice(-6).join(" | ")}`);
+    }
+
+    return { generate, mock, engram, engramChat, defaults: () => load("gemini.json", "json"), libs: () => load("libs.json", "json") };
   }
 
   return { createLocalEngine, extractSeries, route, escapeHtml, buildUserMessage, buildCanvasBlock, buildDnaBlock, allowedUrls };

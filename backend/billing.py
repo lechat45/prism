@@ -18,7 +18,8 @@ from models import SparkLedger, User
 
 CENTS = 100  # un Spark = 100 centièmes
 SIGNUP_BONUS = round(float(os.getenv("PRISM_SIGNUP_SPARKS", "50")) * CENTS)
-PRICES = {"generate": 1 * CENTS, "refactor": CENTS // 2, "engram": 2 * CENTS}  # engramme : 30 à 36 nœuds
+PRICES = {"generate": 1 * CENTS, "refactor": CENTS // 2, "engram": 2 * CENTS,  # engramme : 36 à 44 nœuds
+          "engram_chat": CENTS // 4}  # un message de conversation avec un Engramme
 
 
 def as_sparks(cents: int) -> float:

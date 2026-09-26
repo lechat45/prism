@@ -199,6 +199,19 @@ export async function createEngram(person, signal) {
   return payload;
 }
 
+/**
+ * « Discuter avec … » : réponse à la première personne fondée sur l'Engramme → { reply, trace, mode, model, sparks?, cost? }.
+ * history : [{ role: "user" | "persona", text }] ; trace : [{ id, why }] (les bulles qui ont guidé la réponse).
+ */
+export async function chatWithEngram(engram, history, message, signal) {
+  await engineReady;
+  const payload = engine.kind === "server"
+    ? await api("/api/engram/chat", { method: "POST", body: { engram, history, message, language: "fr" }, signal })
+    : await run("engramChat", { engram, history, message, options: { key: readKey(), models: readModels(), language: "fr" } }, { signal });
+  if (!payload || typeof payload.reply !== "string" || !payload.reply.trim()) throw new Error("réponse vide");
+  return payload;
+}
+
 // --------------------------------------------------------------------------
 // Dialogue des réglages
 // --------------------------------------------------------------------------

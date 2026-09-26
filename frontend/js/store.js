@@ -41,7 +41,9 @@ const FIELDS = ["id", "title", "prompt", "html", "file", "storage", "accent", "x
   // fichier déjà téléversées, miniature à refaire.
   "serverId", "serverOwner", "serverVersions", "fileSynced", "thumbStale",
   // Bus d'évènements : sujets émis/écoutés connus, carte isolée.
-  "topics", "busMuted"];
+  "topics", "busMuted",
+  // Engramme : conversation « Discuter avec … » (messages et traces logiques, sur cet appareil).
+  "chat"];
 
 export function serialize(card) {
   const out = {};

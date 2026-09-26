@@ -19,6 +19,7 @@ import json
 import logging
 import math
 import re
+import unicodedata
 from pathlib import Path
 from typing import Literal
 
@@ -38,6 +39,10 @@ SCHEMA = json.loads((ENGRAM_DIR / "schema.json").read_text(encoding="utf-8"))
 SYSTEM_PROMPT = (ENGRAM_DIR / "system-prompt.txt").read_text(encoding="utf-8").strip()
 USER_TEMPLATE = (ENGRAM_DIR / "user-template.txt").read_text(encoding="utf-8").strip()
 DEMO = json.loads((ENGRAM_DIR / "demo-marie-curie.json").read_text(encoding="utf-8"))
+# Conversation avec un Engramme (« Discuter avec … ») : mêmes fichiers pour le moteur navigateur.
+CHAT_SYSTEM = (ENGRAM_DIR / "chat-system.txt").read_text(encoding="utf-8").strip()
+CHAT_TEMPLATE = (ENGRAM_DIR / "chat-template.txt").read_text(encoding="utf-8").strip()
+CHAT_SCHEMA = json.loads((ENGRAM_DIR / "chat-schema.json").read_text(encoding="utf-8"))
 
 TYPES = {
     "core": ("axiome",),
@@ -258,6 +263,166 @@ def demo_engram() -> dict:
 
 
 # --------------------------------------------------------------------------- #
+# Conversation (« Discuter avec … ») : même algorithme dans engine/engram/engram.js (parité testée)
+# --------------------------------------------------------------------------- #
+CHAT_NODES_MAX = 50
+CHAT_HISTORY_MAX = 12
+TRACE_MAX = 4
+BASES = ("documente", "declare", "interpretation")
+KINDS = ("forge", "nourrit", "contredit")
+STOPWORDS = {
+    "pour", "dans", "avec", "vous", "votre", "vos", "quoi", "comment", "pourquoi", "quel", "quelle", "quels", "quelles",
+    "etre", "avoir", "fait", "faire", "cette", "elle", "lui", "leur", "leurs", "sont", "plus", "moins", "tout", "tous",
+    "toute", "toutes", "mais", "donc", "alors", "aussi", "tres", "bien", "etait", "avez", "etes", "est-ce", "what",
+    "your", "with", "have", "that", "this", "about", "would", "could", "there", "their", "from", "were",
+}
+
+
+def _clip(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def _reply(value, limit: int) -> str:
+    """Texte sur plusieurs lignes : espaces réduits, lignes vides en trop retirées, coupé à limit points de code."""
+    text = _scalar(value).replace("\r\n", "\n").replace("\r", "\n")
+    lines = [re.sub(r"[^\S\n]+", " ", line).strip() for line in text.split("\n")]
+    return _clip(re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip(), limit)
+
+
+def chat_nodes(engram: dict) -> list[dict]:
+    """Bulles d'un Engramme reçu du client (données non fiables) : champs utiles, bornés, identifiants nettoyés."""
+    nodes, seen = [], set()
+    raw = engram.get("nodes") if isinstance(engram, dict) and isinstance(engram.get("nodes"), list) else []
+    for index, node in enumerate(raw[:CHAT_NODES_MAX]):
+        if not isinstance(node, dict):
+            continue
+        node_id = _slug(node.get("id"), f"n{index}")
+        if node_id in seen:
+            continue
+        seen.add(node_id)
+        keywords = node.get("keywords") if isinstance(node.get("keywords"), list) else []
+        nodes.append({
+            "id": node_id,
+            "category": _text(node.get("category"), 30),
+            "type": _text(node.get("type"), 30),
+            "title": _text(node.get("title"), LIMITS["title"]),
+            "content": _text(node.get("content"), LIMITS["content"]),
+            "evidence": _text(node.get("evidence"), LIMITS["evidence"]),
+            "basis": node.get("basis") if node.get("basis") in BASES else "interpretation",
+            "emotion": node.get("emotion") if isinstance(node.get("emotion"), str) and node.get("emotion") in EMOTIONS else "",
+            "date": _text(node.get("date"), 20),
+            "impact": _text(node.get("impact"), LIMITS["impact"]),
+            "keywords": [_text(k, 40) for k in keywords if isinstance(k, str) and k.strip()][:8],
+        })
+    return nodes
+
+
+def chat_dossier(engram: dict) -> str:
+    """Toutes les données écrites de l'Engramme, en texte compact pour le modèle."""
+    engram = engram if isinstance(engram, dict) else {}
+    person, domain = _text(engram.get("person"), 120), _text(engram.get("domain"), LIMITS["domain"])
+    lines = [f"PERSON: {person}" + (f" — {domain}" if domain else "")]
+    for label, key in (("SUMMARY", "summary"), ("TEMPERAMENT", "temperament")):
+        value = _text(engram.get(key), LIMITS[key])
+        if value:
+            lines.append(f"{label}: {value}")
+    climate = []
+    for item in engram.get("climate") if isinstance(engram.get("climate"), list) else []:
+        if isinstance(item, dict) and isinstance(item.get("emotion"), str) and item["emotion"] in EMOTIONS:
+            climate.append(f"{EMOTIONS[item['emotion']]} {math.floor(_intensity(item.get('weight')) * 100 + 0.5)}%")
+    if climate:
+        lines.append("EMOTIONAL CLIMATE: " + ", ".join(climate[:CLIMATE_MAX]))
+    nodes = chat_nodes(engram)
+    lines.append("NODES:")
+    for n in nodes:
+        parts = [f"[{n['id']}] {n['category']}/{n['type']} · {n['title']} — {n['content']}"]
+        if n["emotion"]:
+            parts.append(f"emotion: {EMOTIONS[n['emotion']]}")
+        if n["date"]:
+            parts.append(f"{n['date']}: {n['impact']}" if n["impact"] else n["date"])
+        if n["keywords"]:
+            parts.append("keywords: " + ", ".join(n["keywords"]))
+        if n["evidence"]:
+            parts.append(f"source ({n['basis']}): {n['evidence']}")
+        lines.append(" · ".join(parts))
+    ids = {n["id"] for n in nodes}
+    links = []
+    for link in engram.get("links") if isinstance(engram.get("links"), list) else []:
+        if not isinstance(link, dict):
+            continue
+        a, b, kind = _slug(link.get("from"), ""), _slug(link.get("to"), ""), link.get("kind")
+        if a in ids and b in ids and a != b and kind in KINDS:
+            links.append(f"{a} {kind} {b}")
+    if links:
+        lines.append("LINKS: " + "; ".join(links[:40]))
+    return "\n".join(lines)
+
+
+def build_chat_message(engram: dict, history: list, message: str, language: str) -> str:
+    person = _text(engram.get("person") if isinstance(engram, dict) else "", 120) or "?"
+    turns = []
+    for turn in (history if isinstance(history, list) else [])[-CHAT_HISTORY_MAX:]:
+        if isinstance(turn, dict) and turn.get("role") in ("user", "persona"):
+            text = _text(turn.get("text"), 1200)
+            if text:
+                turns.append(f"{'User' if turn['role'] == 'user' else person}: {text}")
+    values = {"person": person, "dossier": chat_dossier(engram), "history": "\n".join(turns) or "(none)",
+              "message": _reply(message, 2000), "language": LANGUAGES.get(language, "French")}
+    # Une seule passe : rien de ce qui est inséré n'est réinterprété comme gabarit.
+    return re.sub(r"\{\{(person|dossier|history|message|language)\}\}", lambda m: values[m.group(1)], CHAT_TEMPLATE)
+
+
+def normalize_chat(raw, engram: dict) -> dict:
+    """Réponse du modèle → { reply, trace } ; la trace ne cite que des bulles de cet Engramme."""
+    if not isinstance(raw, dict):
+        raise EngramError("réponse qui n'est pas un objet JSON")
+    reply = _reply(raw.get("reply"), 1500)
+    if not reply:
+        raise EngramError("réponse vide")
+    ids = {n["id"] for n in chat_nodes(engram)}
+    trace, seen = [], set()
+    for step in raw.get("trace") if isinstance(raw.get("trace"), list) else []:
+        if not isinstance(step, dict):
+            continue
+        node_id = _slug(step.get("id"), "")
+        if node_id in ids and node_id not in seen:
+            seen.add(node_id)
+            trace.append({"id": node_id, "why": _text(step.get("why"), 120)})
+    return {"reply": reply, "trace": trace[:TRACE_MAX]}
+
+
+def _words(text: str) -> list[str]:
+    decomposed = unicodedata.normalize("NFKD", text.lower())
+    plain = "".join(c for c in decomposed if not 0x300 <= ord(c) <= 0x36F)
+    return [w for w in re.findall(r"[a-z0-9]+", plain) if len(w) >= 4 and w not in STOPWORDS]
+
+
+def demo_chat(engram: dict, message: str) -> dict:
+    """Sans modèle : les bulles dont les mots rejoignent la question (sinon noyau, cœur, moteur), et une réponse honnête."""
+    nodes = chat_nodes(engram)
+    person = _text(engram.get("person") if isinstance(engram, dict) else "", 120) or "cette personne"
+    question = list(dict.fromkeys(_words(_scalar(message))))
+    scored = []
+    for index, n in enumerate(nodes):
+        words = set(_words(n["title"] + " " + n["content"]))
+        common = [w for w in question if w in words]
+        if common:
+            scored.append((len(common), index, n, common[0]))
+    scored.sort(key=lambda s: (-s[0], s[1]))
+    trace = [{"id": n["id"], "why": f"mot commun : « {word} »"} for _, _, n, word in scored[:3]]
+    if not trace:
+        for category, why in (("core", "l'axiome au centre de tout"), ("heart", "son caractère"), ("engine", "sa manière de penser")):
+            n = next((m for m in nodes if m["category"] == category), None)
+            if n:
+                trace.append({"id": n["id"], "why": why})
+    titles = ", ".join(f"« {next(n['title'] for n in nodes if n['id'] == s['id'])} »" for s in trace)
+    reply = (f"(Mode démo : sans modèle de langage, {person} ne peut pas vraiment vous répondre.) "
+             f"Voici les traits de l'Engramme qui guideraient sa réponse : {titles}. "
+             "Ajoutez une clé Gemini pour une vraie conversation.")
+    return {"reply": reply, "trace": trace}
+
+
+# --------------------------------------------------------------------------- #
 # Génération
 # --------------------------------------------------------------------------- #
 async def run_models(providers, http_client, person: str, language: str, timeout: float) -> tuple[dict, str, str]:
@@ -289,6 +454,52 @@ async def run_models(providers, http_client, person: str, language: str, timeout
         if not rejected_all:
             break
     raise HTTPException(status_code=502, detail="Engramme impossible : " + " | ".join(errors[-6:]))
+
+
+async def run_chat(providers, http_client, engram: dict, history: list, message: str, language: str,
+                   timeout: float) -> tuple[dict, str, str]:
+    """(réponse, fournisseur, modèle) : réponse JSON imposée à Gemini, JSON simple si le schéma est refusé."""
+    user = build_chat_message(engram, history, message, language)
+    errors: list[str] = []
+    async with http_client() as client:
+        for provider in providers:
+            for model in provider.models:
+                for schema in ((CHAT_SCHEMA, None) if provider.name == "gemini" else (None,)):
+                    try:
+                        text = await provider.complete(client, model, CHAT_SYSTEM, user, timeout, json_mode=True, schema=schema)
+                        return normalize_chat(parse(text), engram), provider.name, model
+                    except SchemaRejected as exc:
+                        errors.append(str(exc))
+                        continue
+                    except FatalGenerationError as exc:
+                        errors.append(str(exc))
+                        break
+                    except (GenerationError, EngramError) as exc:
+                        log.warning("conversation : %s", exc)
+                        errors.append(f"{model}: {exc}" if isinstance(exc, EngramError) else str(exc))
+                        break
+    raise HTTPException(status_code=502, detail="Réponse impossible : " + " | ".join(errors[-6:]))
+
+
+class ChatTurn(BaseModel):
+    role: Literal["user", "persona"]
+    text: str = Field(..., min_length=1, max_length=4000)
+
+
+class ChatRequest(BaseModel):
+    engram: dict
+    history: list[ChatTurn] = Field([], max_length=40)
+    message: str = Field(..., min_length=1, max_length=2000)
+    language: Literal["fr", "en"] = "fr"
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    trace: list[dict]
+    mode: str
+    model: str
+    sparks: float
+    cost: float
 
 
 class EngramRequest(BaseModel):
@@ -328,6 +539,35 @@ async def create_engram(req: EngramRequest, user: User = Depends(current_user)) 
     await asyncio.to_thread(billing.confirm, reservation, None)
     return EngramResponse(
         engram=engram, mode=mode, model=model,
+        sparks=billing.as_sparks(await asyncio.to_thread(billing.balance, user.id)),
+        cost=billing.as_sparks(reservation.cost_cents),
+    )
+
+
+@router.post("/engram/chat", response_model=ChatResponse)
+async def chat_with_engram(req: ChatRequest, user: User = Depends(current_user)) -> ChatResponse:
+    """« Discuter avec … » : réponse à la première personne, fondée sur l'Engramme, et sa trace logique."""
+    import app  # noqa: PLC0415
+
+    if len(json.dumps(req.engram, ensure_ascii=False)) > 120_000 or not chat_nodes(req.engram):
+        raise HTTPException(status_code=422, detail="Engramme illisible ou trop volumineux.")
+    try:
+        reservation = await asyncio.to_thread(billing.reserve, user.id, "engram_chat")
+    except billing.InsufficientSparks as exc:
+        raise app.insufficient(exc) from exc
+    history = [turn.model_dump() for turn in req.history]
+    try:
+        providers = app.active_providers()
+        if providers:
+            answer, mode, model = await run_chat(providers, app._http_client, req.engram, history, req.message, req.language, app.TIMEOUT_S)
+        else:
+            answer, mode, model = demo_chat(req.engram, req.message), "mock", "mock:engram-chat"
+    except BaseException:
+        await asyncio.shield(asyncio.to_thread(billing.refund, reservation))
+        raise
+    await asyncio.to_thread(billing.confirm, reservation, None)
+    return ChatResponse(
+        **answer, mode=mode, model=model,
         sparks=billing.as_sparks(await asyncio.to_thread(billing.balance, user.id)),
         cost=billing.as_sparks(reservation.cost_cents),
     )

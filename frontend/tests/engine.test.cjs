@@ -155,6 +155,20 @@ test("plusieurs clés : toutes au quota → modèle suivant ; toutes refusées �
   assert.equal(refused.calls.length, 2);
 });
 
+test("« Discuter avec … » : démo sans clé, réponse JSON imposée et trace vérifiée avec une clé", async () => {
+  const E = require("../engine/engram/engram.js");
+  const demo = E.normalize(JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "../engine/engram/demo-marie-curie.json"), "utf8")));
+  const offline = await fakeGemini({}).engine.engramChat(demo, [], "Parlez-moi de la mort de Pierre");
+  assert.equal(offline.mode, "mock");
+  assert.ok(offline.trace.some((s) => s.id === "h4"));
+  const answer = JSON.stringify({ trace: [{ id: "h4", why: "deuil" }, { id: "zz", why: "?" }], reply: "Je me suis tue, et j'ai travaillé." });
+  const { engine, calls } = fakeGemini({ [PRIMARY]: gemini(answer) });
+  const r = await engine.engramChat(demo, [{ role: "user", text: "Bonjour" }], "Et après ?", { key: "k" });
+  assert.deepEqual([r.mode, r.model, r.reply, r.trace.map((s) => s.id)], ["gemini", PRIMARY, "Je me suis tue, et j'ai travaillé.", ["h4"]]);
+  assert.ok(calls[0].body.generationConfig.responseSchema.properties.trace);
+  assert.ok(calls[0].body.contents[0].parts[0].text.includes("[h4] heart/emotion · Le deuil de Pierre"));
+});
+
 test("tous les modèles en échec : message détaillé", async () => {
   const { engine } = fakeGemini({ [PRIMARY]: httpError(500), [SECONDARY]: gemini("Non.") });
   await assert.rejects(engine.generate("x", { key: "k" }), /Tous les modèles ont échoué.*HTTP 500.*aucune balise HTML/);

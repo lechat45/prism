@@ -234,6 +234,76 @@ class EngramApiTests(DbTestCase):
         self.assertEqual(res.json()["detail"]["code"], "insufficient_sparks")
 
 
+class ChatApiTests(DbTestCase):
+    """« Discuter avec … » : réponse fondée sur l'Engramme, trace logique vérifiée, ¼ de Spark par message."""
+
+    def setUp(self):
+        super().setUp()
+        self._saved = (prism.GEMINI_MODELS, prism._http_client)
+        prism.GEMINI_API_KEY = "cle-test"
+        prism.GEMINI_MODELS = [M1, M2]
+        self.answers: dict[str, list[httpx.Response]] = {}
+        self.calls: list[tuple[str, dict]] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            model = request.url.path.split("/models/")[1].split(":")[0]
+            self.calls.append((model, json.loads(request.content)))
+            queue = self.answers.get(model) or []
+            return queue.pop(0) if queue else gemini_json({
+                "trace": [{"id": "h4", "why": "Le deuil m'a appris la retenue"}, {"id": "inventé", "why": "x"}, {"id": "a7", "why": "1906"}],
+                "reply": "J'ai continué, parce que l'œuvre devait vivre.",
+            })
+
+        prism._http_client = lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        self.client = TestClient(prism.app)
+        self.auth = self.register(self.client)
+        self.engram = engram.demo_engram()
+
+    def tearDown(self):
+        prism.GEMINI_MODELS, prism._http_client = self._saved
+        super().tearDown()
+
+    def post(self, message="Comment avez-vous vécu la mort de Pierre ?", **extra):
+        body = {"engram": self.engram, "history": [{"role": "user", "text": "Bonjour"}, {"role": "persona", "text": "Bonjour."}],
+                "message": message, **extra}
+        return self.client.post("/api/engram/chat", json=body, headers=self.auth)
+
+    def test_reply_grounded_in_the_engram_with_its_logic(self):
+        res = self.post()
+        self.assertEqual(res.status_code, 200, res.text)
+        data = res.json()
+        self.assertEqual(data["reply"], "J'ai continué, parce que l'œuvre devait vivre.")
+        self.assertEqual([s["id"] for s in data["trace"]], ["h4", "a7"], "seules les bulles de l'Engramme, dans l'ordre")
+        self.assertEqual((data["cost"], data["sparks"]), (0.25, 49.75))
+        _, body = self.calls[0]
+        self.assertEqual(body["generationConfig"]["responseSchema"], engram.CHAT_SCHEMA)
+        self.assertTrue(body["systemInstruction"]["parts"][0]["text"].startswith("You give voice"))
+        message = body["contents"][0]["parts"][0]["text"]
+        for needle in ("TEMPERAMENT: Réservée", "EMOTIONAL CLIMATE: passion 35%", "[h4] heart/emotion · Le deuil de Pierre",
+                       "source (documente)", "LINKS: ", "User: Bonjour\nMarie Curie: Bonjour.", "<<<\nComment avez-vous vécu la mort de Pierre ?\n>>>"):
+            self.assertIn(needle, message)
+
+    def test_demo_mode_answers_honestly_with_matching_nodes(self):
+        prism.GEMINI_API_KEY = ""
+        data = self.post().json()
+        self.assertEqual((data["mode"], data["model"]), ("mock", "mock:engram-chat"))
+        self.assertIn("Mode démo", data["reply"])
+        self.assertIn("h4", [s["id"] for s in data["trace"]])
+        self.assertEqual(self.calls, [])
+
+    def test_failures_are_refunded_and_inputs_validated(self):
+        self.answers = {M1: [gemini_json({"reply": "", "trace": []})], M2: [httpx.Response(500)] * 2}
+        res = self.post()
+        self.assertEqual(res.status_code, 502)
+        self.assertEqual(self.client.get("/api/auth/me", headers=self.auth).json()["sparks"], 50.0)
+        for bad in ({"engram": {"nodes": []}, "message": "x"}, {"engram": self.engram, "message": ""},
+                    {"engram": self.engram, "message": "x", "history": [{"role": "system", "text": "x"}]},
+                    {"engram": {"nodes": [{"id": "a", "content": "x" * 130_000}]}, "message": "x"}):
+            with self.subTest(str(bad)[:50]):
+                self.assertEqual(self.client.post("/api/engram/chat", json=bad, headers=self.auth).status_code, 422)
+        self.assertEqual(self.client.post("/api/engram/chat", json={"engram": self.engram, "message": "x"}).status_code, 401)
+
+
 class DnaGenerateTests(DbTestCase):
     """« Injection d'ADN » : le trait choisi part avec la demande et filtre la génération."""
 

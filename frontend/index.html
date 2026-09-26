@@ -184,6 +184,25 @@
     </section>
   </aside>
 
+  <!-- « Discuter avec … » (V4) : conversation fondée sur l'Engramme, avec la trace logique de chaque réponse. -->
+  <aside class="chat glass" id="chat" aria-labelledby="chat-title" hidden>
+    <header class="chat-head">
+      <span class="chat-orb" id="chat-orb" aria-hidden="true"></span>
+      <div class="chat-who">
+        <h2 id="chat-title"></h2>
+        <p class="fine">Simulation par IA fondée sur son Engramme (sources publiques) : ce n'est pas la personne.</p>
+      </div>
+      <button type="button" class="icon-btn" id="chat-close" aria-label="Fermer la conversation">×</button>
+    </header>
+    <ol class="chat-log" id="chat-log" aria-live="polite"></ol>
+    <div class="chat-suggest" id="chat-suggest"></div>
+    <form class="chat-form" id="chat-form">
+      <label class="sr-only" for="chat-input">Votre message</label>
+      <textarea id="chat-input" rows="2" maxlength="2000" placeholder="Posez une question…"></textarea>
+      <button type="submit" class="cta cta-small" id="chat-send"><span class="cta-label">Envoyer</span></button>
+    </form>
+  </aside>
+
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <!-- Incantation : orbe d'écoute au pointeur (voice.js) ; zoom fractal : proposition après un double-clic. -->
@@ -284,6 +303,10 @@
       <input id="hub-search" type="search" placeholder="Rechercher…" autocomplete="off" spellcheck="false">
       <button type="button" class="icon-btn" id="hub-close" aria-label="Fermer Mon Hub">×</button>
     </header>
+    <section class="hub-people" id="hub-people" aria-labelledby="hub-people-title" hidden>
+      <h3 id="hub-people-title">Personnes</h3>
+      <div class="hub-people-list" id="hub-people-list"></div>
+    </section>
     <div class="hub-grid" id="hub-grid"></div>
     <p class="hub-empty" id="hub-empty" hidden></p>
     <div class="hub-foot"><button type="button" class="tool" id="hub-more" hidden>Afficher plus</button></div>

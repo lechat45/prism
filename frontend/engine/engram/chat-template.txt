@@ -1,0 +1,13 @@
+ENGRAM of {{person}} (interpretive portrait from public sources; node ids in brackets):
+<<<
+{{dossier}}
+>>>
+CONVERSATION SO FAR:
+<<<
+{{history}}
+>>>
+The user now says:
+<<<
+{{message}}
+>>>
+Language of the reply and of every "why": {{language}}.

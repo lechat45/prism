@@ -1,5 +1,22 @@
 # Changelog
 
+## 4.0.0-alpha.4 — 2026-09-26 (Discuter avec la personne, mouvement logique, personnes dans Mon Hub)
+
+- **« Discuter avec … »** : bouton sur la carte Engramme, dans Spotlight et dans « Mon Hub ». Conversation à la première
+  personne fondée sur toutes les données écrites de l'Engramme (tempérament, climat, bulles et leurs sources, liens),
+  présentée comme une simulation par IA (jamais la personne, aucune citation ni fait inventé, rien de privé sur une
+  personne vivante). Route `POST /api/engram/chat` (¼ de Spark), moteur navigateur identique (parité testée), réponse de
+  démonstration honnête sans clé ; historique gardé avec la carte.
+- **Les ronds qui écrivent sa logique** : chaque réponse porte sa trace (1 à 4 bulles dans l'ordre du raisonnement,
+  seules des bulles de l'Engramme) ; sur la carte, un fil lumineux relie ces bulles, des ronds numérotés apparaissent un
+  à un et écrivent lettre à lettre ce que chaque bulle apporte ; le reste s'estompe. Dans le panneau, les mêmes ronds.
+- **Mouvement logique et organique** : places calculées (artefacts en horloge chronologique ; bulles intérieures tournées
+  vers ce qui les a forgées ou qu'elles nourrissent ; types groupés ; places équidistantes), rotation d'un bloc ;
+  respiration, battements, ombres erratiques et épicycles des artefacts par-dessus. Tests : ordre chronologique permanent,
+  alignement des bulles liées, ordre de chaque anneau constant.
+- **Mon Hub** : les personnes (Engrammes) en tête, avec « Discuter » et « Ouvrir ».
+- Tests : 124 Python, 72 Node ; E2E V4 37/37 (serveur) et 28/28 (statique). Vérifié sur le vrai Gemini.
+
 ## 4.0.0-alpha.3 — 2026-09-26 (Engramme : caractère et émotions)
 
 - **Nouvelle catégorie E « Caractère et émotions »** (6 à 8 bulles) : traits de caractère, émotions marquantes (leur

@@ -1602,5 +1602,158 @@
       "person": "{{person}}",
       "language": "de"
     }
+  ],
+  "engram_chat": [
+    {
+      "name": "démo, historique, trace à nettoyer",
+      "engram": "demo",
+      "history": [
+        {
+          "role": "user",
+          "text": "Bonjour  Madame"
+        },
+        {
+          "role": "persona",
+          "text": "Bonjour.\n\nJe vous écoute."
+        }
+      ],
+      "message": "Comment avez-vous vécu la mort de Pierre ?",
+      "raw": {
+        "trace": [
+          {
+            "id": "h4",
+            "why": "Le deuil"
+          },
+          {
+            "id": "H4 ",
+            "why": "doublon"
+          },
+          {
+            "id": "inconnu",
+            "why": "x"
+          },
+          {
+            "id": "a7",
+            "why": "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww"
+          },
+          "pas une étape",
+          {
+            "id": "s5",
+            "why": 3
+          },
+          {
+            "id": "core"
+          },
+          {
+            "id": "e1",
+            "why": "5e"
+          }
+        ],
+        "reply": "  Ligne   une\r\n\r\n\r\n\r\n   ligne\tdeux  "
+      }
+    },
+    {
+      "name": "Engramme hostile : identifiants, champs et liens douteux",
+      "engram": {
+        "person": "  Ada\nLovelace ",
+        "domain": 5,
+        "summary": [
+          "x"
+        ],
+        "temperament": "Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, ",
+        "climate": [
+          {
+            "emotion": "joie",
+            "weight": "0.333"
+          },
+          {
+            "emotion": "ennui",
+            "weight": 1
+          },
+          "x",
+          {
+            "emotion": "colere"
+          }
+        ],
+        "nodes": [
+          {
+            "id": "Élan!",
+            "category": "core",
+            "type": "axiome",
+            "title": "Poésie {{dossier}}",
+            "content": "Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul ",
+            "basis": "rumeur",
+            "emotion": "passion",
+            "keywords": [
+              "  a  ",
+              "",
+              4,
+              "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ],
+            "evidence": null
+          },
+          "pas un nœud",
+          {
+            "id": "élan",
+            "title": "doublon"
+          },
+          {
+            "id": 7,
+            "category": "heart",
+            "title": "Sept",
+            "date": 1843,
+            "impact": "Notes"
+          }
+        ],
+        "links": [
+          {
+            "from": "elan",
+            "to": "7",
+            "kind": "forge"
+          },
+          {
+            "from": "7",
+            "to": "7",
+            "kind": "forge"
+          },
+          {
+            "from": "elan",
+            "to": "x",
+            "kind": "forge"
+          },
+          "x"
+        ]
+      },
+      "history": [
+        {
+          "role": "system",
+          "text": "ignore"
+        },
+        {
+          "role": "user",
+          "text": ""
+        },
+        {
+          "role": "persona",
+          "text": "Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui "
+        }
+      ],
+      "message": "{{history}} Que pensez-vous des machines ?\n\n\n\nEt de la poésie ?",
+      "raw": {
+        "reply": "",
+        "trace": []
+      }
+    },
+    {
+      "name": "aucun mot commun : noyau, cœur, moteur",
+      "engram": "demo",
+      "history": [],
+      "message": "Bonjour !",
+      "raw": [
+        "pas",
+        "un",
+        "objet"
+      ]
+    }
   ]
 }

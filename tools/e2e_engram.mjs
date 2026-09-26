@@ -18,6 +18,7 @@ const argv = process.argv.slice(2);
 const opt = (name) => { const i = argv.indexOf(`--${name}`); return i === -1 ? null : argv[i + 1]; };
 const BASE = opt("base") || "http://127.0.0.1:8004";
 const SHOT = opt("screenshot");
+const SHOT_CHAT = opt("screenshot-chat"); // capture pendant la conversation (ronds de la logique écrits)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const BROWSER = [
   process.env.PRISM_BROWSER,
@@ -248,7 +249,7 @@ async function main() {
       const moved = (cat) => n.filter((m) => m.category === cat).map((m) => Math.hypot(m.x - a[m.index][0], m.y - a[m.index][1]));
       const avg = (xs) => xs.reduce((s, x) => s + x, 0) / xs.length;
       return { core: avg(moved("core")), engine: avg(moved("engine")), shadow: avg(moved("shadow")), artifact: avg(moved("artifact")) }; })()`, EF);
-    check("physique vivante : noyau fixe, moteurs lents, artefacts rapides", motion.core < 1 && motion.engine < motion.artifact && motion.artifact > 20, JSON.stringify(motion));
+    check("physique vivante : noyau fixe, moteurs lents, ombres et artefacts vifs", motion.core < 1 && motion.artifact > motion.engine * 2 && motion.shadow > motion.engine * 3, JSON.stringify(motion));
 
     // ------------------------------------------------------------------ 3. Survol réel : arrêt, fiche Liquid Glass
     const engine1 = await evaluate(`(() => { const n = window.__engram.sim.nodes.find((m) => m.category === "engine"); return { id: n.id, x: n.x, y: n.y, title: n.data.title }; })()`, EF);
@@ -458,6 +459,45 @@ async function main() {
     check("Spotlight : « engramme de … » propose l'Engramme en premier", first.includes("Engramme cognitif de « Ada Lovelace »"), first);
     await key("keyDown", { key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
     await key("keyUp", { key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+
+    // ------------------------------------------------------------------ 9 bis. Discuter avec Marie Curie
+    const sparksBefore = serverMode ? await evaluate(`document.getElementById("sparks-count").textContent`) : null;
+    await evaluate(`document.getElementById("chat-btn").click()`, EF); // bouton « Discuter avec … » de la carte
+    await waitFor(() => evaluate(`!document.getElementById("chat").hidden`), "panneau de conversation", 5000);
+    const chatTitle = await evaluate(`document.getElementById("chat-title").textContent`);
+    await clickSel("#chat-input");
+    await cdp.send("Input.insertText", { text: "Comment avez-vous vécu la mort de Pierre ?" }, S);
+    await key("keyDown", { ...ENTER, text: "\r" });
+    await key("keyUp", ENTER);
+    const reply = await waitFor(() => evaluate(`(() => {
+      const m = [...document.querySelectorAll("#chat-log .msg-persona:not(.is-pending)")];
+      return m.length ? { text: m.at(-1).querySelector(".msg-text").textContent, steps: [...m.at(-1).querySelectorAll(".msg-trace strong")].map((s) => s.textContent) } : null;
+    })()`), "réponse de la conversation", 20000);
+    check("« Discuter avec Marie Curie » : réponse et sa logique (ronds numérotés)", chatTitle === "Marie Curie" && reply.steps.length > 0 && reply.text.length > 20,
+      `${reply.steps.join(" → ")} — ${reply.text.slice(0, 60)}…`);
+    const traced = await waitFor(async () => { const t = await evaluate(`window.__engram.state().trace`, EF); return t.length ? t : null; }, "trace sur la carte", 5000);
+    check("les ronds de la logique s'écrivent sur l'Engramme", traced.includes("h4"), traced.join(" → "));
+    if (SHOT_CHAT) {
+      await sleep(4500); // le temps que chaque rond écrive son explication
+      const { data } = await cdp.send("Page.captureScreenshot", { format: "png" }, S);
+      writeFileSync(SHOT_CHAT, Buffer.from(data, "base64"));
+    }
+    if (serverMode) {
+      const sparksAfter = await evaluate(`document.getElementById("sparks-count").textContent`);
+      check("un quart de Spark par message", Math.abs(parseFloat(sparksBefore.replace(",", ".")) - parseFloat(sparksAfter.replace(",", ".")) - 0.25) <= 0.05 /* compteur arrondi au dixième */, `${sparksBefore} → ${sparksAfter}`);
+    }
+    await clickSel("#chat-close");
+    check("conversation fermée : la trace quitte la carte", await waitFor(async () => (await evaluate(`window.__engram.state().trace.length`, EF)) === 0, "trace effacée", 5000).then(() => true).catch(() => false));
+    if (serverMode) {
+      // Mon Hub : la personne apparaît en tête, avec « Discuter ».
+      await clickSel("#btn-hub");
+      const people = await waitFor(() => evaluate(`(() => { const s = document.getElementById("hub-people"); return !s.hidden && s.textContent.includes("Marie Curie") ? [...s.querySelectorAll(".hub-person strong")].map((e) => e.textContent) : null; })()`), "personnes de Mon Hub", 10000);
+      check("Mon Hub : les personnes (Engrammes) en tête", people.includes("Marie Curie"), people.join(", "));
+      await evaluate(`document.querySelector('#hub-people-list .hub-person [data-action="chat"]').click()`);
+      const reopened = await waitFor(() => evaluate(`!document.getElementById("hub").open && !document.getElementById("chat").hidden && document.querySelectorAll("#chat-log .msg").length >= 2`), "conversation rouverte depuis Mon Hub", 10000).catch(() => false);
+      check("Mon Hub → « Discuter » : la conversation rouvre, historique conservé", reopened);
+      await clickSel("#chat-close");
+    }
 
     // ------------------------------------------------------------------ 10. Rechargement
     const total = await cardCount();

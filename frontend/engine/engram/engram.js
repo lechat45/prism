@@ -281,11 +281,172 @@
     return dna;
   }
 
+  // ------------------------------------------------------------------------
+  // Conversation (« Discuter avec … ») : même algorithme que backend/engram.py (parité testée)
+  // ------------------------------------------------------------------------
+  const CHAT_NODES_MAX = 50;
+  const CHAT_HISTORY_MAX = 12;
+  const TRACE_MAX = 4;
+  const STOPWORDS = new Set([
+    "pour", "dans", "avec", "vous", "votre", "vos", "quoi", "comment", "pourquoi", "quel", "quelle", "quels", "quelles",
+    "etre", "avoir", "fait", "faire", "cette", "elle", "lui", "leur", "leurs", "sont", "plus", "moins", "tout", "tous",
+    "toute", "toutes", "mais", "donc", "alors", "aussi", "tres", "bien", "etait", "avez", "etes", "est-ce", "what",
+    "your", "with", "have", "that", "this", "about", "would", "could", "there", "their", "from", "were",
+  ]);
+
+  function clip(value, limit) {
+    const chars = Array.from(value);
+    return chars.length <= limit ? value : chars.slice(0, limit - 1).join("").trimEnd() + "…";
+  }
+
+  /** Texte sur plusieurs lignes : espaces réduits, lignes vides en trop retirées, coupé à limit points de code. */
+  function multiline(value, limit) {
+    const lines = scalar(value).replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").map((l) => l.replace(/[^\S\n]+/g, " ").trim());
+    return clip(lines.join("\n").replace(/\n{3,}/g, "\n\n").trim(), limit);
+  }
+
+  /** Bulles d'un Engramme (données non fiables) : champs utiles, bornés, identifiants nettoyés. */
+  function chatNodes(engram) {
+    const raw = engram && typeof engram === "object" && Array.isArray(engram.nodes) ? engram.nodes : [];
+    const nodes = [];
+    const seen = new Set();
+    raw.slice(0, CHAT_NODES_MAX).forEach((node, index) => {
+      if (!node || typeof node !== "object" || Array.isArray(node)) return;
+      const id = slug(node.id, `n${index}`);
+      if (seen.has(id)) return;
+      seen.add(id);
+      const keywords = Array.isArray(node.keywords) ? node.keywords : [];
+      nodes.push({
+        id,
+        category: text(node.category, 30),
+        type: text(node.type, 30),
+        title: text(node.title, LIMITS.title),
+        content: text(node.content, LIMITS.content),
+        evidence: text(node.evidence, LIMITS.evidence),
+        basis: BASES.includes(node.basis) ? node.basis : "interpretation",
+        emotion: typeof node.emotion === "string" && has(EMOTIONS, node.emotion) ? node.emotion : "",
+        date: text(node.date, 20),
+        impact: text(node.impact, LIMITS.impact),
+        keywords: keywords.filter((k) => typeof k === "string" && k.trim()).map((k) => text(k, 40)).slice(0, 8),
+      });
+    });
+    return nodes;
+  }
+
+  /** Toutes les données écrites de l'Engramme, en texte compact pour le modèle. */
+  function chatDossier(engram) {
+    const e = engram && typeof engram === "object" ? engram : {};
+    const person = text(e.person, 120);
+    const domain = text(e.domain, LIMITS.domain);
+    const lines = [`PERSON: ${person}${domain ? ` — ${domain}` : ""}`];
+    for (const [label, key] of [["SUMMARY", "summary"], ["TEMPERAMENT", "temperament"]]) {
+      const value = text(e[key], LIMITS[key]);
+      if (value) lines.push(`${label}: ${value}`);
+    }
+    const moods = [];
+    for (const item of Array.isArray(e.climate) ? e.climate : []) {
+      if (item && typeof item === "object" && typeof item.emotion === "string" && has(EMOTIONS, item.emotion)) {
+        moods.push(`${EMOTIONS[item.emotion]} ${Math.floor(intensity(item.weight) * 100 + 0.5)}%`);
+      }
+    }
+    if (moods.length) lines.push(`EMOTIONAL CLIMATE: ${moods.slice(0, CLIMATE_MAX).join(", ")}`);
+    const nodes = chatNodes(e);
+    lines.push("NODES:");
+    for (const n of nodes) {
+      const parts = [`[${n.id}] ${n.category}/${n.type} · ${n.title} — ${n.content}`];
+      if (n.emotion) parts.push(`emotion: ${EMOTIONS[n.emotion]}`);
+      if (n.date) parts.push(n.impact ? `${n.date}: ${n.impact}` : n.date);
+      if (n.keywords.length) parts.push(`keywords: ${n.keywords.join(", ")}`);
+      if (n.evidence) parts.push(`source (${n.basis}): ${n.evidence}`);
+      lines.push(parts.join(" · "));
+    }
+    const ids = new Set(nodes.map((n) => n.id));
+    const links = [];
+    for (const link of Array.isArray(e.links) ? e.links : []) {
+      if (!link || typeof link !== "object" || Array.isArray(link)) continue;
+      const a = slug(link.from, "");
+      const b = slug(link.to, "");
+      if (ids.has(a) && ids.has(b) && a !== b && KINDS.includes(link.kind)) links.push(`${a} ${link.kind} ${b}`);
+    }
+    if (links.length) lines.push(`LINKS: ${links.slice(0, 40).join("; ")}`);
+    return lines.join("\n");
+  }
+
+  /** Même construction que build_chat_message() en Python (une seule passe). */
+  function buildChatMessage(template, engram, history, message, language) {
+    const person = text(engram && typeof engram === "object" ? engram.person : "", 120) || "?";
+    const turns = [];
+    for (const turn of (Array.isArray(history) ? history : []).slice(-CHAT_HISTORY_MAX)) {
+      if (turn && typeof turn === "object" && (turn.role === "user" || turn.role === "persona")) {
+        const said = text(turn.text, 1200);
+        if (said) turns.push(`${turn.role === "user" ? "User" : person}: ${said}`);
+      }
+    }
+    const values = {
+      person, dossier: chatDossier(engram), history: turns.join("\n") || "(none)",
+      message: multiline(message, 2000), language: LANGUAGES[language] || "French",
+    };
+    return template.trim().replace(/\{\{(person|dossier|history|message|language)\}\}/g, (_, key) => values[key]);
+  }
+
+  /** Réponse du modèle → { reply, trace } ; la trace ne cite que des bulles de cet Engramme. */
+  function normalizeChat(raw, engram) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw EngramError("réponse qui n'est pas un objet JSON");
+    const reply = multiline(raw.reply, 1500);
+    if (!reply) throw EngramError("réponse vide");
+    const ids = new Set(chatNodes(engram).map((n) => n.id));
+    const trace = [];
+    const seen = new Set();
+    for (const step of Array.isArray(raw.trace) ? raw.trace : []) {
+      if (!step || typeof step !== "object" || Array.isArray(step)) continue;
+      const id = slug(step.id, "");
+      if (ids.has(id) && !seen.has(id)) {
+        seen.add(id);
+        trace.push({ id, why: text(step.why, 120) });
+      }
+    }
+    return { reply, trace: trace.slice(0, TRACE_MAX) };
+  }
+
+  function words(value) {
+    const plain = value.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
+    return (plain.match(/[a-z0-9]+/g) || []).filter((w) => w.length >= 4 && !STOPWORDS.has(w));
+  }
+
+  /** Sans modèle : les bulles dont les mots rejoignent la question (sinon noyau, cœur, moteur), et une réponse honnête. */
+  function demoChat(engram, message) {
+    const nodes = chatNodes(engram);
+    const person = text(engram && typeof engram === "object" ? engram.person : "", 120) || "cette personne";
+    const question = [...new Set(words(scalar(message)))];
+    const scored = [];
+    nodes.forEach((n, index) => {
+      const own = new Set(words(`${n.title} ${n.content}`));
+      const common = question.filter((w) => own.has(w));
+      if (common.length) scored.push([common.length, index, n, common[0]]);
+    });
+    scored.sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+    const trace = scored.slice(0, 3).map(([, , n, word]) => ({ id: n.id, why: `mot commun : « ${word} »` }));
+    if (!trace.length) {
+      for (const [category, why] of [["core", "l'axiome au centre de tout"], ["heart", "son caractère"], ["engine", "sa manière de penser"]]) {
+        const n = nodes.find((m) => m.category === category);
+        if (n) trace.push({ id: n.id, why });
+      }
+    }
+    const titles = trace.map((s) => `« ${nodes.find((n) => n.id === s.id).title} »`).join(", ");
+    const reply = `(Mode démo : sans modèle de langage, ${person} ne peut pas vraiment vous répondre.) `
+      + `Voici les traits de l'Engramme qui guideraient sa réponse : ${titles}. `
+      + "Ajoutez une clé Gemini pour une vraie conversation.";
+    return { reply, trace };
+  }
+
   /** « Engramme : Marie Curie », « engramme de … », « engramme d'… » en tête de demande → le nom, sinon null. */
   function engramRequest(value) {
     const m = /^\s*engramm?e\s*(?:[:：]|de\s+|d['’]\s*)\s*(.{2,120}?)\s*$/i.exec(String(value || ""));
     return m ? m[1] : null;
   }
 
-  return { TYPES, COUNTS, MIN_NODES, LIMITS, LANGUAGES, EMOTIONS, normalize, parse, buildUserMessage, buildViewer, readViewer, dnaOf, dateKey, engramRequest };
+  return {
+    TYPES, COUNTS, MIN_NODES, LIMITS, LANGUAGES, EMOTIONS, normalize, parse, buildUserMessage, buildViewer, readViewer, dnaOf,
+    dateKey, engramRequest, chatNodes, chatDossier, buildChatMessage, normalizeChat, demoChat,
+  };
 });

@@ -71,10 +71,59 @@ test("B/C/D. moteurs sages, ombres erratiques, artefacts rapides", () => {
   const s = Object.fromEntries(Object.entries(v).map(([k, xs]) => [k, mean(xs)]));
   assert.ok(s.engine < 30, `moteurs : ${s.engine.toFixed(0)} px/s`);
   assert.ok(s.shadow > s.engine * 3, `ombres : ${s.shadow.toFixed(0)} px/s`);
-  assert.ok(s.artifact > s.shadow, `artefacts : ${s.artifact.toFixed(0)} px/s`);
+  assert.ok(s.artifact > s.engine * 2, `artefacts : ${s.artifact.toFixed(0)} px/s (épicycles vifs)`);
   // Erratique = direction imprévisible : la vitesse des ombres change beaucoup d'un instant à l'autre.
   const spread = (xs) => Math.sqrt(mean(xs.map((x) => (x - mean(xs)) ** 2)));
   assert.ok(spread(v.shadow) > spread(v.engine), "ombres plus irrégulières que les moteurs");
+});
+
+/** Angle d'une bulle autour du noyau, ramené dans [0, 2π[ à partir de midi (sens horaire). */
+function clockAngle(sim, n) {
+  const c = core(sim);
+  const a = Math.atan2(n.y - c.y, n.x - c.x) - (sim.time * P.DRIFT - Math.PI / 2);
+  return ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+}
+const angleGap = (a, b) => Math.abs(((a - b + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
+
+test("logique : les artefacts restent une horloge, dans l'ordre chronologique, à tout instant", () => {
+  const sim = P.createSimulation(demo, { width: W, height: H, seed: 8 });
+  const artifacts = of(sim, "artifact"); // la démo les donne dans l'ordre chronologique
+  for (let i = 0; i < 30; i++) {
+    run(sim, 1);
+    const angles = artifacts.map((n) => clockAngle(sim, n));
+    for (let k = 1; k < angles.length; k++) assert.ok(angles[k] > angles[k - 1], `à ${sim.time.toFixed(0)} s : ${artifacts[k].id} avant ${artifacts[k - 1].id}`);
+  }
+});
+
+test("logique : une bulle se place face à ce qui l'a forgée ou qu'elle nourrit (lecture radiale)", () => {
+  const sim = P.createSimulation(demo, { width: W, height: H, seed: 8 });
+  run(sim, 8);
+  const byId = new Map(sim.nodes.map((n) => [n.id, n]));
+  const pairs = demo.links.map((l) => [byId.get(l.from), byId.get(l.to)]).filter(([a, b]) => a && b && a.category !== b.category);
+  const linked = mean(pairs.map(([a, b]) => angleGap(clockAngle(sim, a), clockAngle(sim, b))));
+  // Référence : les mêmes bulles appariées au hasard (écart moyen attendu ≈ 90°).
+  const others = sim.nodes.filter((n) => n.category !== "core");
+  const random = P.rng(3);
+  const shuffled = mean(pairs.map(() => angleGap(clockAngle(sim, others[Math.floor(random() * others.length)]), clockAngle(sim, others[Math.floor(random() * others.length)]))));
+  assert.ok(linked < 45 * Math.PI / 180 && linked < shuffled * 0.6, `liées : ${(linked * 180 / Math.PI).toFixed(0)}°, au hasard : ${(shuffled * 180 / Math.PI).toFixed(0)}°`);
+  // Exemple concret : le deuil de Pierre (cœur) regarde vers la mort de Pierre (1906).
+  assert.ok(angleGap(clockAngle(sim, byId.get("h4")), clockAngle(sim, byId.get("a7"))) < 40 * Math.PI / 180, "deuil face à l'évènement");
+});
+
+test("logique : chaque anneau tourne d'un bloc (l'ordre des bulles ne change jamais)", () => {
+  const sim = P.createSimulation(demo, { width: W, height: H, seed: 6 });
+  run(sim, 3);
+  const orderOf = (cat) => of(sim, cat).slice().sort((a, b) => sim.slotAngle(a.id) - sim.slotAngle(b.id)).map((n) => n.id);
+  const reference = { heart: orderOf("heart"), engine: orderOf("engine") };
+  for (let i = 0; i < 20; i++) {
+    run(sim, 1);
+    for (const cat of ["heart", "engine"]) {
+      const around = of(sim, cat).slice().sort((a, b) => clockAngle(sim, a) - clockAngle(sim, b)).map((n) => n.id);
+      // Ordre cyclique identique à celui des places (à la rotation près).
+      const start = around.indexOf(reference[cat][0]);
+      assert.deepEqual(around.slice(start).concat(around.slice(0, start)), reference[cat], `${cat} à ${sim.time.toFixed(0)} s`);
+    }
+  }
 });
 
 test("aucun chevauchement ; les ombres se repoussent entre elles", () => {

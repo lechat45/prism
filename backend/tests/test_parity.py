@@ -67,6 +67,16 @@ def engram_result(case: dict) -> dict:
         return {"error": "EngramError"}
 
 
+def chat_results(case: dict) -> dict:
+    source = copy.deepcopy(engram.DEMO) if case["engram"] == "demo" else case["engram"]
+    try:
+        normalized = {"ok": engram.normalize_chat(case["raw"], source)}
+    except engram.EngramError:
+        normalized = {"error": "EngramError"}
+    return {"message": engram.build_chat_message(source, case["history"], case["message"], "fr"),
+            "demo": engram.demo_chat(source, case["message"]), "normalized": normalized}
+
+
 def parse_result(text: str) -> dict:
     try:
         return {"ok": engram.parse(text)}
@@ -89,6 +99,7 @@ def python_results() -> dict:
         "engram": [engram_result(c) for c in FIXTURES["engram"]],
         "engram_parse": [parse_result(t) for t in FIXTURES["engram_parse"]],
         "engram_messages": [engram.build_user_message(c["person"], c["language"]) for c in FIXTURES["engram_messages"]],
+        "engram_chat": [chat_results(c) for c in FIXTURES["engram_chat"]],
     }
 
 
