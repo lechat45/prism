@@ -1148,6 +1148,32 @@ body.is-dropping .dock { scale: 1.02; }
 }
 .inc-text.is-placeholder { color: var(--muted); font-style: italic; }
 
+/* Paramètres (roue dentée) : compte, mes écrits, moteur, à propos. */
+.prefs-open svg { width: 18px; height: 18px; transition: rotate 0.5s var(--ease); }
+.prefs-open:hover svg { rotate: 60deg; }
+.prefs-dialog { width: min(560px, calc(100vw - 2 * var(--gutter))); }
+.prefs-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.prefs-head h2 { margin: 0; }
+.prefs-tabs { margin-bottom: 12px; }
+.prefs-body { display: flex; flex-direction: column; gap: 8px; max-height: min(60vh, 520px); overflow-y: auto; scrollbar-width: thin; }
+.prefs-fact { display: flex; justify-content: space-between; gap: 12px; margin: 0; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.prefs-label { color: var(--muted); }
+.prefs-fact strong { font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.prefs-sub { margin: 8px 0 0; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.prefs-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.prefs-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--glass-fill);
+}
+.prefs-item-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
+.prefs-item-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prefs-item-text span { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prefs-links { display: flex; gap: 14px; margin: 6px 0 0; }
+.prefs-links a { color: var(--info); }
+
 /* « Discuter avec … » : panneau de conversation (même place que l'inspecteur, l'un ou l'autre). */
 .chat {
   position: fixed;

@@ -27,7 +27,7 @@
       <img class="logo" src="assets/prism-logo.svg" width="38" height="38" alt="">
       <span class="brand-name">Prism</span>
       <!-- Version de l'interface : doit suivre backend/app.py et CHANGELOG.md (test_version.py). -->
-      <span class="brand-version" id="app-version" title="Version de Prism">v4.0.0-alpha.5</span>
+      <span class="brand-version" id="app-version" title="Version de Prism">v4.0.0-alpha.6</span>
     </a>
     <span class="tagline">Canvas d'interfaces éphémères</span>
     <span class="card-count" id="card-count" aria-live="polite"></span>
@@ -45,6 +45,9 @@
     </div>
     <button type="button" class="engine" id="engine" data-state="pending" title="Moteur de génération" aria-haspopup="dialog">
       <span class="dot"></span><span id="engine-text">Connexion…</span>
+    </button>
+    <button type="button" class="tool icon prefs-open" id="btn-prefs" aria-haspopup="dialog" aria-label="Paramètres" title="Paramètres">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
     <div class="account" id="account" hidden>
       <button type="button" class="tool" id="btn-login">Se connecter</button>
@@ -292,6 +295,21 @@
     <ul class="spot-list" id="spotlight-list" role="listbox" aria-label="Résultats"></ul>
     <p class="spot-empty" id="spotlight-empty" hidden>Aucun résultat : tapez une demande pour générer un widget.</p>
     <p class="spot-foot"><kbd>↑</kbd> <kbd>↓</kbd> naviguer · <kbd>Entrée</kbd> valider · <kbd>Échap</kbd> fermer</p>
+  </dialog>
+
+  <dialog class="dialog glass prefs-dialog" id="prefs" aria-labelledby="prefs-title">
+    <header class="prefs-head">
+      <h2 id="prefs-title">Paramètres</h2>
+      <span class="spacer"></span>
+      <button type="button" class="icon-btn" id="prefs-close" aria-label="Fermer les paramètres">×</button>
+    </header>
+    <div class="segmented prefs-tabs" id="prefs-tabs" role="tablist" aria-label="Sections des paramètres">
+      <button type="button" role="tab" data-tab="account" aria-selected="true">Compte</button>
+      <button type="button" role="tab" data-tab="writings" aria-selected="false">Mes écrits</button>
+      <button type="button" role="tab" data-tab="engine" aria-selected="false">Moteur</button>
+      <button type="button" role="tab" data-tab="about" aria-selected="false">À propos</button>
+    </div>
+    <div class="prefs-body" id="prefs-body" role="tabpanel"></div>
   </dialog>
 
   <dialog class="dialog glass hub-dialog" id="hub" aria-labelledby="hub-title">

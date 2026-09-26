@@ -7,6 +7,7 @@ import { Canvas, CARD_MIN_H, CARD_MIN_W } from "./canvas.js";
 import { chatWithEngram, createEngram, engine, engineReady, generate, hasModel, initSettings, onEngineChange, openSettings } from "./engine.js";
 import { CATEGORY_LABELS, dnaFrom, engramHtml, engramOf, engramRequest, isEngram } from "./engram.js";
 import { EngramChat } from "./chat.js";
+import { initPrefs, openPrefs } from "./prefs.js";
 import { forRequest } from "./files.js";
 import { Inspector } from "./inspector.js";
 import { Links } from "./links.js";
@@ -1330,6 +1331,7 @@ function spotlightItems(query) {
   } else if (engine.kind === "server") {
     command("Se connecter", "⎆", () => openAuth({ mode: "login" }), ["compte", "login", "inscription"]);
   }
+  command("Paramètres", "⚙", () => openPrefs(), ["réglages", "compte", "mes écrits", "conversations", "version", "préférences"]);
   command("Moteur de génération", "⚙", () => openSettings(), ["réglages", "clé", "gemini", "modèle"]);
   if (!text) {
     document.querySelectorAll("#examples .chip[data-prompt]").forEach((chip) => {
@@ -1463,6 +1465,17 @@ async function start() {
     },
     isOnCanvas: (serverId) => Boolean(localCardFor(serverId)),
     onDeleted: onWidgetDeleted,
+    toast,
+  });
+  initPrefs({
+    cards: () => cards.values(),
+    engramOf,
+    openChat,
+    focusCard,
+    openHub,
+    openPro: () => openPro(),
+    openAuth: () => openAuth({ mode: "login" }),
+    openSettings,
     toast,
   });
   onAccountChange((state, change) => {

@@ -58,7 +58,7 @@ from sanitize import (
     validate_document,
 )
 
-__version__ = "4.0.0a5"
+__version__ = "4.0.0a6"
 
 BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
