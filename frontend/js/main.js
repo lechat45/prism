@@ -4,7 +4,8 @@ import { account, api, canAfford, onAccountChange, setSparks, signOut } from "./
 import { initAccountUi, openAuth, openPro, requireAccount } from "./account-ui.js";
 import { Bus } from "./bus.js";
 import { Canvas, CARD_MIN_H, CARD_MIN_W } from "./canvas.js";
-import { engine, engineReady, generate, hasModel, initSettings, onEngineChange, openSettings } from "./engine.js";
+import { createEngram, engine, engineReady, generate, hasModel, initSettings, onEngineChange, openSettings } from "./engine.js";
+import { CATEGORY_LABELS, dnaFrom, engramHtml, engramRequest, isEngram } from "./engram.js";
 import { forRequest } from "./files.js";
 import { Inspector } from "./inspector.js";
 import { Links } from "./links.js";
@@ -15,16 +16,18 @@ import { Spotlight } from "./spotlight.js";
 import { acceptStorage, acceptThumbnail, bootSrcdoc, buildSrcdoc, exportHtml, FRAME_SANDBOX, isAccent, needsBoot } from "./sandbox.js";
 import { cardStore, loadView, saveView } from "./store.js";
 import { fetchWidget, flushAll, importCard, isLinked, listWidgets, markSynced, pushThumbnail, queueSync, removeFromCanvas, unlink, uploadFile } from "./sync.js";
+import { Incantation } from "./voice.js";
 
 const $ = (id) => document.getElementById(id);
 const cards = new Map(); // id -> carte (champs persistés + état d'exécution : status, controller, timer…)
 const saveTimers = new Map();
-const SIZES = { widget: { w: 460, h: 420 }, file: { w: 640, h: 480 } };
+const SIZES = { widget: { w: 460, h: 420 }, file: { w: 640, h: 480 }, engram: { w: 780, h: 560 } };
 const DRAFT_KEY = "prism:draft";
 const PLACEHOLDER = "Décrivez un widget, ou glissez un fichier CSV, JSON ou TXT…";
 const REVEAL_TIMEOUT_MS = 6000; // widget muet (pas de signal « ready ») : affiché quand même
 let attachment = null;
 let reading = null; // nom du fichier en cours d'analyse dans le Web Worker
+let dna = null; // filtre ADN actif : { cardId, nodeId, trait } (bulle d'un Engramme choisie)
 
 // ============================================================================
 // Utilitaires
@@ -148,11 +151,12 @@ const canvas = new Canvas({
     if (!card) return;
     if (action === "close") closeCard(card);
     else if (action === "cancel") card.controller?.abort();
-    else if (action === "retry") runGeneration(card);
+    else if (action === "retry") (card.engramPerson ? runEngram(card) : runGeneration(card));
   },
   onBackground: () => {
     canvas.deselect();
     inspector.close();
+    hideFractal();
   },
   onPlace: () => redrawLinks(),
   onAdd: (card, el) => reflections.observe(card, el),
@@ -210,6 +214,7 @@ const inspector = new Inspector({
   hasModel,
   engineKind: () => engine.kind,
   canUndo: (card) => Boolean(card.history?.length) || (isLinked(card) && card.serverVersions > 0),
+  canRefactor: (card) => !isEngram(card),
   setMuted: (card, muted) => {
     card.busMuted = muted;
     redrawLinks();
@@ -409,16 +414,19 @@ function restorePrompt(card) {
     saveDraft();
   }
   if (card.file && !attachment && !reading) setAttachment(card.file);
+  if (card.dnaSource && !dna) setDna(card.dnaSource.cardId, card.dnaSource.nodeId);
   updateComposer();
 }
 
 async function runGeneration(card) {
   const controller = new AbortController();
   card.controller = controller;
-  setStatus(card, "loading", { text: card.file ? `Prism analyse ${card.file.name}…` : "Prism réfracte votre demande…" });
+  const text = card.file ? `Prism analyse ${card.file.name}…` : "Prism réfracte votre demande…";
+  setStatus(card, "loading", { text: card.dna ? `ADN « ${card.dna.title} » · ${text}` : text });
   startTimer(card);
   try {
-    const payload = await generate({ prompt: card.prompt, file: forRequest(card.file), canvas: bus.context(card) }, controller.signal);
+    const request = { prompt: card.prompt, file: forRequest(card.file), canvas: bus.context(card), dna: card.dna || null };
+    const payload = await generate(request, controller.signal);
     if (!cards.has(card.id)) return;
     applyPayload(card, payload);
     setStatus(card, "ready");
@@ -445,6 +453,10 @@ async function runGeneration(card) {
 
 async function refactorCard(card, instruction) {
   if (card.status === "busy" || card.status === "loading") return;
+  if (isEngram(card)) {
+    toast("Un Engramme ne se refactorise pas : cliquez une bulle pour en faire un filtre ADN, puis décrivez votre widget.", { timeout: 6000 });
+    return;
+  }
   if (engine.kind === "server") {
     if (!requireAccount(() => refactorCard(card, instruction), "Connectez-vous pour refactoriser vos widgets.")) return;
     if (!canAfford("refactor")) return openPro({ sparks: account.user.sparks, required: account.pricing.refactor });
@@ -518,8 +530,239 @@ async function undoRefactor(card) {
   toast("Version précédente restaurée");
 }
 
+// ============================================================================
+// Engramme cognitif (V4) : création, filtre ADN, injection d'ADN
+// ============================================================================
+/** Vérifications du mode serveur (compte, solde) avant une action payante ; faux = action reportée. */
+function canLaunch(action, retry, reason) {
+  if (engine.kind !== "server") return true;
+  if (!requireAccount(retry, reason)) return false;
+  if (!canAfford(action)) {
+    openPro({ sparks: account.user.sparks, required: account.pricing[action] });
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Nouvelle carte générée. Placement : at (point du monde, centre de la carte), near (contre cette
+ * carte) ou une place libre au centre de la vue. from : point du monde d'où la carte émerge.
+ */
+function launchCard({ prompt, title, file = null, dna: trait = null, dnaSource = null, at = null, near = null, from = null }) {
+  const { w, h } = newCardSize(file ? SIZES.file : SIZES.widget);
+  const spot = at ? { x: Math.round(at.x - w / 2), y: Math.round(at.y - h / 2) } : near ? canvas.spotNear(near, w, h) : canvas.findSpot(w, h);
+  const card = {
+    id: uid(), title, prompt, html: "", file, storage: {}, accent: null, ...spot, w, h,
+    createdAt: Date.now(), history: [], status: "loading", dna: trait, dnaSource,
+  };
+  cards.set(card.id, card);
+  canvas.add(card, { from });
+  canvas.select(card.id);
+  canvas.ensureVisible(card);
+  runGeneration(card);
+  return card;
+}
+
+/** « Engramme : Marie Curie » → carte Engramme (vrai si lancée). */
+function startEngram(person, { at = null } = {}) {
+  const name = String(person).replace(/\s+/g, " ").trim().slice(0, 120);
+  if (name.length < 2) return false;
+  if (!canLaunch("engram", () => startEngram(name, { at }), "Connectez-vous pour créer un Engramme cognitif.")) return false;
+  const { w, h } = newCardSize(SIZES.engram);
+  const spot = at ? { x: Math.round(at.x - w / 2), y: Math.round(at.y - h / 2) } : canvas.findSpot(w, h);
+  const card = {
+    id: uid(), title: `Engramme · ${name}`, prompt: `Engramme : ${name}`, html: "", file: null, storage: {}, accent: null,
+    ...spot, w, h, createdAt: Date.now(), history: [], status: "loading", engramPerson: name,
+  };
+  cards.set(card.id, card);
+  canvas.add(card, { from: at });
+  canvas.select(card.id);
+  canvas.ensureVisible(card);
+  runEngram(card);
+  return true;
+}
+
+async function runEngram(card) {
+  const controller = new AbortController();
+  card.controller = controller;
+  setStatus(card, "loading", { text: `Prism cartographie l'esprit de ${card.engramPerson}…` });
+  startTimer(card);
+  const started = performance.now();
+  try {
+    const payload = await createEngram(card.engramPerson, controller.signal);
+    const html = await engramHtml(payload.engram, engine.libs);
+    if (!cards.has(card.id)) return;
+    Object.assign(card, {
+      html, mode: payload.mode, model: payload.model, warnings: [], thumbStale: true,
+      title: `Engramme · ${payload.engram.person}`, elapsed_ms: Math.round(performance.now() - started),
+    });
+    bus.learn(card);
+    if (Number.isFinite(payload.sparks)) setSparks(payload.sparks);
+    setStatus(card, "ready");
+    mountWidget(card);
+    persist(card);
+    if (payload.mode === "mock" && !/curie/i.test(card.engramPerson)) {
+      toast(`Mode démo : voici l'Engramme d'exemple (Marie Curie). ${engine.kind === "server" ? "Le serveur n'a pas de clé Gemini." : "Ajoutez votre clé Gemini pour cartographier « " + card.engramPerson + " »."}`, { timeout: 8000 });
+    }
+    if (engine.kind === "server" && account.user) {
+      // Rangé dans « Mon Hub » (gratuit : les Sparks ont payé l'Engramme) : synchronisé comme un widget.
+      importCard(card).then(() => persist(card)).catch((err) => console.warn("Prism : Engramme non ajouté à Mon Hub", err));
+    }
+  } catch (err) {
+    if (!cards.has(card.id)) return;
+    if (err.name === "AbortError") {
+      discard(card);
+      toast("Engramme annulé");
+    } else if (err.code === "insufficient_sparks" || err.code === "auth_required") {
+      discard(card);
+      handleAccountError(err, () => startEngram(card.engramPerson));
+    } else if (err.code === "engram_refused" || err.name === "EngramRefused") {
+      discard(card);
+      toast(`Pas d'Engramme pour « ${card.engramPerson} » : ${err.message}`, { tone: "error", timeout: 9000 });
+    } else {
+      setStatus(card, "error", { error: `Échec : ${err.message}` });
+    }
+  } finally {
+    stopTimer(card);
+    card.controller = null;
+  }
+}
+
+/** Montre dans l'Engramme la bulle choisie comme filtre (ou aucune). */
+function pinInViewer(cardId, nodeId) {
+  canvas.frame(cardId)?.contentWindow?.postMessage({ prism: "engram-pin", nodeId }, "*");
+}
+
+function setDna(cardId, nodeId) {
+  const source = cards.get(cardId);
+  const trait = source && nodeId ? dnaFrom(source, nodeId) : null;
+  if (dna && dna.cardId !== cardId) pinInViewer(dna.cardId, null);
+  dna = trait ? { cardId, nodeId, trait } : null;
+  if (dna) pinInViewer(cardId, nodeId);
+  renderDna();
+}
+
+function clearDna() {
+  if (dna) pinInViewer(dna.cardId, null);
+  dna = null;
+  renderDna();
+}
+
+function renderDna() {
+  const box = $("dna");
+  box.hidden = !dna;
+  $("dock").classList.toggle("has-dna", Boolean(dna));
+  if (dna) {
+    box.dataset.category = dna.trait.category;
+    $("dna-title").textContent = dna.trait.title;
+    $("dna-meta").textContent = `Filtre ADN · ${dna.trait.person} · ${CATEGORY_LABELS[dna.trait.category]}`;
+  }
+  promptEl.placeholder = placeholder();
+  updateComposer();
+}
+
+/** Fichier ou texte déposé sur une bulle : génération filtrée par ce trait, à côté de l'Engramme. */
+async function injectDna(source, nodeId, { file = null, text = "" }) {
+  const trait = dnaFrom(source, nodeId);
+  if (!trait || (!file && !text.trim())) return;
+  if (!canLaunch("generate", () => injectDna(source, nodeId, { file, text }), "Connectez-vous pour générer à partir d'un Engramme.")) return;
+  let att = null;
+  if (file) {
+    try {
+      att = await run("attach", { file });
+    } catch (err) {
+      toast(`Fichier refusé : ${err.message}`, { tone: "error", timeout: 6000 });
+      return;
+    }
+    if (!cards.has(source.id)) return;
+  }
+  const request = text.trim();
+  launchCard({
+    prompt: request || `Crée le widget le plus utile pour explorer le fichier ${att.name}.`,
+    title: promptTitle(`${trait.title} · ${request || att.name}`),
+    file: att, dna: trait, dnaSource: { cardId: source.id, nodeId }, near: source,
+  });
+  toast(`ADN « ${trait.title} » injecté`);
+}
+
+// ============================================================================
+// Zoom fractal : double-clic sur une partie d'un widget → proposition, puis sous-widget
+// ============================================================================
+let fractalOffer = null; // { card, info, from }
+let fractalTimer = null;
+
+function offerFractal(card, data) {
+  const [x, y] = [Number(data.x), Number(data.y)];
+  const clip = (value, max) => (typeof value === "string" ? value.slice(0, max) : "");
+  const info = { tag: clip(data.tag, 20), label: clip(data.label, 80), text: clip(data.text, 600), html: clip(data.html, 3000) };
+  const frame = canvas.frame(card.id);
+  if (!frame || isEngram(card) || !Number.isFinite(x) || !Number.isFinite(y) || !/^[a-z][a-z0-9-]*$/.test(info.tag)) return;
+  const r = frame.getBoundingClientRect();
+  const scale = frame.offsetWidth ? r.width / frame.offsetWidth : 1;
+  const sx = r.left + x * scale;
+  const sy = r.top + y * scale;
+  fractalOffer = { card, info, from: canvas.screenToWorld(sx, sy) };
+  const box = $("fractal");
+  $("fractal-label").textContent = info.label || `<${info.tag}>`;
+  box.hidden = false;
+  const w = box.offsetWidth;
+  box.style.translate = `${Math.round(Math.min(innerWidth - w - 8, Math.max(8, sx - w / 2)))}px ${Math.round(Math.max(8, sy - box.offsetHeight - 14))}px`;
+  clearTimeout(fractalTimer);
+  fractalTimer = setTimeout(hideFractal, 6000);
+}
+
+function hideFractal() {
+  clearTimeout(fractalTimer);
+  fractalOffer = null;
+  $("fractal").hidden = true;
+}
+
+function launchFractal() {
+  const offer = fractalOffer;
+  hideFractal();
+  if (!offer || !cards.has(offer.card.id)) return;
+  const { card, info, from } = offer;
+  if (!canLaunch("generate", () => { fractalOffer = offer; launchFractal(); }, "Connectez-vous pour zoomer dans vos widgets.")) return;
+  const name = info.label || `<${info.tag}>`;
+  const prompt = [
+    `Zoom fractal sur « ${name} », un composant <${info.tag}> du widget « ${card.title} ».`,
+    "Développe ce sous-composant en un widget complet et autonome, plus riche et plus détaillé que dans l'original",
+    "(données, interactions, états, vues complémentaires), dans le même style visuel.",
+    `Texte visible du composant : ${info.text || "(aucun)"}`,
+    "Extrait de son code d'origine :",
+    info.html,
+  ].join("\n");
+  launchCard({ prompt, title: promptTitle(`⤢ ${name}`), file: card.file || null, near: card, from });
+}
+
+$("fractal-go").addEventListener("click", launchFractal);
+$("fractal-close").addEventListener("click", hideFractal);
+
+// ============================================================================
+// Incantation : Espace maintenu, la demande dictée devient une carte sous le pointeur
+// ============================================================================
+function spell(text, point) {
+  const at = canvas.screenToWorld(point.x, point.y);
+  const person = engramRequest(text);
+  if (person) return startEngram(person, { at });
+  if (!canLaunch("generate", () => spell(text, point), "Connectez-vous pour générer par la voix.")) return;
+  launchCard({
+    prompt: text, title: promptTitle(text), dna: dna?.trait || null, dnaSource: dna ? { cardId: dna.cardId, nodeId: dna.nodeId } : null,
+    at, from: at,
+  });
+  clearDna();
+}
+
+const incantation = new Incantation({
+  onSpell: spell,
+  toast: (message, options) => toast(message, options),
+  blocked: () => Boolean(document.querySelector("dialog[open]")),
+});
+
 /** Retire une carte sans possibilité de retour (génération annulée ou échouée). */
 function discard(card) {
+  if (dna?.cardId === card.id) clearDna();
+  if (fractalOffer?.card === card) hideFractal();
   unmount(card);
   bus.drop(card);
   cards.delete(card.id);
@@ -646,7 +889,36 @@ window.addEventListener("message", (event) => {
   } else if (data.prism === "subscribe") {
     bus.subscribe(card, data.topic, data.replay !== false);
   } else if (data.prism === "pointer") {
-    reflections.moveInFrame(canvas.frame(card.id), Number(data.x), Number(data.y));
+    const frame = canvas.frame(card.id);
+    const [x, y] = [Number(data.x), Number(data.y)];
+    reflections.moveInFrame(frame, x, y);
+    if (frame && Number.isFinite(x + y)) {
+      const r = frame.getBoundingClientRect();
+      const scale = frame.offsetWidth ? r.width / frame.offsetWidth : 1;
+      incantation.movePointer(r.left + x * scale, r.top + y * scale); // l'orbe suit aussi au-dessus des widgets
+    }
+  } else if (data.prism === "fractal") {
+    offerFractal(card, data);
+  } else if (data.prism === "engram-select") {
+    // Bulle cliquée dans un Engramme : elle devient (ou cesse d'être) le filtre ADN du dock.
+    if (!isEngram(card)) return;
+    if (data.nodeId == null) {
+      if (dna?.cardId === card.id) clearDna();
+      return;
+    }
+    if (typeof data.nodeId !== "string") return;
+    setDna(card.id, data.nodeId);
+    if (dna) {
+      promptEl.focus();
+      toast(`Filtre ADN : « ${dna.trait.title} ». Décrivez votre widget dans la barre du bas.`);
+    }
+  } else if (data.prism === "engram-drop") {
+    // Fichier (File cloné) ou texte déposé sur une bulle : « Injection d'ADN ».
+    if (!isEngram(card) || typeof data.nodeId !== "string") return;
+    const file = data.file instanceof Blob ? data.file : null;
+    const text = typeof data.text === "string" ? data.text.slice(0, 12000) : "";
+    if (file && !file.name) return;
+    injectDna(card, data.nodeId, { file, text });
   } else if (data.prism === "spotlight") {
     toggleSpotlight();
   } else if (data.prism === "thumbnail") {
@@ -691,8 +963,13 @@ function autosize() {
 }
 
 function updateComposer() {
-  $("examples").hidden = Boolean(promptEl.value.trim() || attachment);
+  $("examples").hidden = Boolean(promptEl.value.trim() || attachment || dna);
   autosize();
+}
+
+function placeholder() {
+  if (attachment) return "Que voulez-vous faire de ce fichier ? (facultatif)";
+  return dna ? `Décrivez un widget : il passera par « ${dna.trait.title} »…` : PLACEHOLDER;
 }
 
 function saveDraft() {
@@ -717,7 +994,7 @@ function setAttachment(att) {
     $("file-name").textContent = att.name;
     $("file-meta").textContent = att.meta;
   }
-  promptEl.placeholder = att ? "Que voulez-vous faire de ce fichier ? (facultatif)" : PLACEHOLDER;
+  promptEl.placeholder = placeholder();
   updateComposer();
 }
 
@@ -776,37 +1053,30 @@ function submitPrompt() {
     promptEl.focus();
     return;
   }
-  if (engine.kind === "server") {
-    // Compte et solde vérifiés avant de créer la carte : la demande reste dans le dock.
-    const gift = `${String(account.signupSparks).replace(".", ",")} Sparks offerts à l'inscription`;
-    if (!requireAccount(() => submitPrompt(), `Créez votre compte pour générer : ${gift}. Votre demande partira ensuite.`)) return;
-    if (!canAfford("generate")) return openPro({ sparks: account.user.sparks, required: account.pricing.generate });
+  // « Engramme : Marie Curie » : carte Engramme plutôt qu'un widget.
+  const person = attachment ? null : engramRequest(text);
+  if (person) {
+    if (startEngram(person)) {
+      promptEl.value = "";
+      saveDraft();
+      updateComposer();
+    }
+    return;
   }
-  const prompt = text || `Crée le widget le plus utile pour explorer le fichier ${attachment.name}.`;
-  const { w, h } = newCardSize(attachment ? SIZES.file : SIZES.widget);
-  const card = {
-    id: uid(),
+  // Mode serveur : compte et solde vérifiés avant de créer la carte ; la demande reste dans le dock.
+  const gift = engine.kind === "server" ? `${String(account.signupSparks).replace(".", ",")} Sparks offerts à l'inscription` : "";
+  if (!canLaunch("generate", () => submitPrompt(), `Créez votre compte pour générer : ${gift}. Votre demande partira ensuite.`)) return;
+  launchCard({
+    prompt: text || `Crée le widget le plus utile pour explorer le fichier ${attachment.name}.`,
     title: promptTitle(text || attachment.name),
-    prompt,
-    html: "",
     file: attachment,
-    storage: {},
-    accent: null,
-    ...canvas.findSpot(w, h),
-    w,
-    h,
-    createdAt: Date.now(),
-    history: [],
-    status: "loading",
-  };
-  cards.set(card.id, card);
-  canvas.add(card);
-  canvas.select(card.id);
-  canvas.ensureVisible(card);
+    dna: dna?.trait || null,
+    dnaSource: dna ? { cardId: dna.cardId, nodeId: dna.nodeId } : null,
+  });
   promptEl.value = "";
   saveDraft();
   clearAttachment();
-  runGeneration(card);
+  clearDna();
 }
 
 $("form").addEventListener("submit", (e) => {
@@ -844,6 +1114,10 @@ $("file-input").addEventListener("change", (e) => {
 });
 $("file-remove").addEventListener("click", () => {
   clearAttachment();
+  promptEl.focus();
+});
+$("dna-remove").addEventListener("click", () => {
+  clearDna();
   promptEl.focus();
 });
 
@@ -896,6 +1170,8 @@ addEventListener("keydown", (e) => {
   } else if (e.key === "/" && !typing) {
     e.preventDefault();
     promptEl.focus();
+  } else if (e.key === "Escape" && fractalOffer) {
+    hideFractal();
   } else if (e.key === "Escape" && inspector.isOpen && !e.target.closest?.("dialog")) {
     inspector.close();
   }
@@ -940,8 +1216,10 @@ function spotlightItems(query) {
   const items = [];
   const selected = canvas.selectedId ? cards.get(canvas.selectedId) : null;
   if (text) {
+    const person = engramRequest(text);
+    const filter = dna && !person ? ` · ADN « ${dna.trait.title} »` : "";
     items.push({
-      kind: "generate", group: "Générer", icon: "✦", label: `Générer « ${short(text)} »`, hint: "Entrée", always: true, base: 50,
+      kind: "generate", group: "Générer", icon: "✦", label: `Générer « ${short(text)} »${filter}`, hint: "Entrée", always: true, base: person ? 40 : 50,
       run: () => {
         promptEl.value = text;
         saveDraft();
@@ -949,6 +1227,12 @@ function spotlightItems(query) {
         submitPrompt();
       },
     });
+    if (text.length >= 2 && text.length <= 120 && !/^engramm?e\s*[:：]?$/i.test(text)) {
+      items.push({
+        kind: "generate", group: "Générer", icon: "◉", label: `Engramme cognitif de « ${short(person || text)} »`, always: true, base: person ? 55 : 30,
+        keywords: ["engramme", "esprit", "personnalité"], run: () => startEngram(person || text),
+      });
+    }
     if (selected?.html && hasModel()) {
       items.push({
         kind: "generate", group: "Générer", icon: "✎", label: `Refactoriser « ${selected.title} » : ${short(text)}`, always: true, base: 45,
@@ -967,6 +1251,9 @@ function spotlightItems(query) {
   if (cards.size) command("Ranger les cartes", "▤", () => canvas.arrange(), ["grille", "organiser", "aligner"]);
   command("Zoom 100 %", "⊙", () => canvas.zoomBy(1 / canvas.view.z), ["taille réelle", "reset"]);
   command("Nouveau widget", "＋", () => promptEl.focus(), ["écrire", "créer", "demande", "dock"], "/");
+  command("Créer un Engramme cognitif…", "◉", () => spotlight.open("Engramme : "), ["esprit", "personnalité", "portrait", "adn"]);
+  command("Incantation vocale", "◎", () => incantation.start("toggle"), ["voix", "micro", "parler", "dictée", "espace"], "Espace maintenu");
+  if (dna) command(`Retirer le filtre ADN « ${dna.trait.title} »`, "✕", () => clearDna(), ["adn", "filtre", "engramme"]);
   command("Joindre un fichier CSV, JSON ou TXT", "📎", () => $("file-input").click(), ["importer", "fichier", "données", "upload"]);
   command("Essayer avec l'exemple CSV", "📈", () => {
     attach(run("sample"), "ventes-2025.csv");

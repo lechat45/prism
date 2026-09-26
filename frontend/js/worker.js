@@ -2,7 +2,8 @@
 // l'interface garde ses 60 images/s pendant l'analyse d'un gros CSV ou le traitement d'une réponse.
 // Protocole : { id, op, args } → { id, result } | { id, error } ; { id, op: "abort" } annule.
 
-import "../engine/sanitize.js"; // scripts classiques : définissent self.PrismSanitize puis self.PrismLocal
+import "../engine/sanitize.js"; // scripts classiques : définissent self.PrismSanitize, self.PrismEngram puis self.PrismLocal
+import "../engine/engram/engram.js";
 import "../engine/local.js";
 import { tasks } from "./tasks.js";
 

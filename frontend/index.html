@@ -82,7 +82,7 @@
       <img src="assets/prism-logo.svg" width="88" height="88" alt="">
       <p class="empty-title">Votre canvas est vide</p>
       <p class="empty-sub">Décrivez un outil ou glissez un fichier CSV, JSON ou TXT dans la barre du bas. Chaque demande devient une carte que vous pouvez déplacer, redimensionner, refactorer et exporter.</p>
-      <p class="empty-hint">Glisser le fond : se déplacer · Ctrl + molette : zoomer · <kbd>/</kbd> : écrire</p>
+      <p class="empty-hint">Glisser le fond : se déplacer · Ctrl + molette : zoomer · <kbd>/</kbd> : écrire · maintenir <kbd>Espace</kbd> : incanter</p>
     </div>
   </main>
   <p class="sr-only" id="card-help">Entrée : inspecter. Flèches : déplacer. Maj + flèches : redimensionner. Suppr : fermer.</p>
@@ -94,12 +94,19 @@
       <button type="button" class="chip" data-prompt="Tableau de bord des ventes du semestre : Janvier 12400, Février 15100, Mars 13850, Avril 18200, Mai 21400, Juin 19750">Dashboard ventes</button>
       <button type="button" class="chip" data-prompt="Une calculatrice élégante avec l'historique des dernières opérations">Calculatrice</button>
       <button type="button" class="chip chip-file" data-sample="csv">Exemple CSV</button>
+      <button type="button" class="chip chip-engram" data-prompt="Engramme : Marie Curie" title="Carte interprétative de l'esprit d'une personnalité publique">Engramme cognitif</button>
     </div>
 
     <div class="attachment" id="attachment" hidden>
       <span class="file-badge" aria-hidden="true"></span>
       <span class="file-info"><strong id="file-name"></strong><span id="file-meta"></span></span>
       <button type="button" class="icon-btn" id="file-remove" aria-label="Retirer le fichier joint">×</button>
+    </div>
+
+    <div class="dna" id="dna" hidden>
+      <span class="dna-orb" aria-hidden="true"></span>
+      <span class="file-info"><strong id="dna-title"></strong><span id="dna-meta"></span></span>
+      <button type="button" class="icon-btn" id="dna-remove" aria-label="Retirer le filtre ADN">×</button>
     </div>
 
     <form id="form" class="composer" novalidate>
@@ -178,6 +185,16 @@
   </aside>
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <!-- Incantation : orbe d'écoute au pointeur (voice.js) ; zoom fractal : proposition après un double-clic. -->
+  <div class="incantation" id="incantation" role="status" aria-live="polite" hidden>
+    <button type="button" class="inc-orb inc-stop" aria-label="Terminer l'incantation"><span></span></button>
+    <p class="inc-text glass"></p>
+  </div>
+  <div class="fractal glass" id="fractal" hidden>
+    <button type="button" class="fractal-go" id="fractal-go"><span class="fractal-icon" aria-hidden="true">⤢</span><span>Zoom fractal : <strong id="fractal-label"></strong></span></button>
+    <button type="button" class="icon-btn" id="fractal-close" aria-label="Ignorer">×</button>
+  </div>
 
   <dialog class="dialog glass" id="settings" aria-labelledby="settings-title">
     <form id="settings-form" method="dialog">
@@ -292,6 +309,7 @@
   </dialog>
 
   <script src="engine/sanitize.js" defer></script>
+  <script src="engine/engram/engram.js" defer></script>
   <script src="engine/local.js" defer></script>
   <script type="module" src="js/main.js"></script>
 </body>

@@ -2,7 +2,8 @@
 // refuse le worker (page ouverte en file://), sur le fil principal via offload.js.
 //  - attach   : lecture + analyse d'un fichier joint (jusqu'à 5 Mo de CSV) ;
 //  - sample   : fichier CSV d'exemple ;
-//  - generate : moteur navigateur (appel Gemini, nettoyage et validation du code reçu, ou démo).
+//  - generate : moteur navigateur (appel Gemini, nettoyage et validation du code reçu, ou démo) ;
+//  - engram   : Engramme cognitif (appel Gemini en JSON imposé et validation, ou démo).
 
 import { readAttachment, sampleCsvAttachment } from "./files.js";
 
@@ -27,4 +28,5 @@ export const tasks = {
   attach: async ({ file }) => pack(await readAttachment(file)),
   sample: async () => pack(sampleCsvAttachment()),
   generate: ({ prompt, options }, signal) => engine().generate(prompt, { ...options, signal }),
+  engram: ({ person, options }, signal) => engine().engram(person, { ...options, signal }),
 };

@@ -158,7 +158,7 @@ function render() {
 
 // --------------------------------------------------------------------------
 // Génération : même contrat pour les deux moteurs.
-// request = { prompt, file?: {name, kind, summary}, baseHtml?, widgetId?, canvas?: [{ title, emits, listens, samples }] }
+// request = { prompt, file?: {name, kind, summary}, baseHtml?, widgetId?, canvas?: [{ title, emits, listens, samples }], dna? }
 //  - serveur : la refactorisation désigne le widget enregistré (widgetId), jamais du code client ;
 //    la réponse porte aussi { widget, sparks, cost }. Erreurs : ApiError (code auth_required,
 //    insufficient_sparks…).
@@ -172,14 +172,30 @@ export async function generate(request, signal) {
     if (request.file) body.file = request.file;
     if (request.widgetId) body.widget_id = request.widgetId;
     if (request.canvas?.length) body.canvas = request.canvas;
+    if (request.dna && !request.widgetId) body.dna = request.dna;
     payload = await api("/api/generate", { method: "POST", body, signal });
   } else {
     const options = {
       key: readKey(), models: readModels(), file: request.file || null, baseHtml: request.baseHtml || null, canvas: request.canvas || null,
+      dna: request.dna || null,
     };
     payload = await run("generate", { prompt: request.prompt, options }, { signal });
   }
   if (!payload || typeof payload.html !== "string" || !payload.html.trim()) throw new Error("réponse vide");
+  return payload;
+}
+
+/**
+ * Engramme cognitif d'une personnalité publique → { engram, mode, model, sparks?, cost? }.
+ *  - serveur : POST /api/engram (compte et Sparks ; refus motivé : ApiError code « engram_refused ») ;
+ *  - navigateur : Gemini avec la clé de l'utilisateur (même schéma, même validation), sinon la démo.
+ */
+export async function createEngram(person, signal) {
+  await engineReady;
+  const payload = engine.kind === "server"
+    ? await api("/api/engram", { method: "POST", body: { person, language: "fr" }, signal })
+    : await run("engram", { person, options: { key: readKey(), models: readModels(), language: "fr" } }, { signal });
+  if (!payload?.engram?.nodes?.length) throw new Error("réponse vide");
   return payload;
 }
 

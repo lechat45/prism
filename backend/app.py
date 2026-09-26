@@ -36,11 +36,12 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, StringConstraints, ValidationError, field_validator
+from pydantic import BaseModel, Field, StringConstraints, ValidationError, field_validator, model_validator
 
 import auth
 import billing
 import db
+import engram
 import security
 import widgets
 from mocks import mock_component
@@ -57,7 +58,7 @@ from sanitize import (
     validate_document,
 )
 
-__version__ = "3.5.0rc1"
+__version__ = "4.0.0a1"
 
 BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
@@ -131,6 +132,7 @@ USER_TEMPLATE = _engine_text("user-template.txt")
 FILE_TEMPLATE = _engine_text("file-template.txt")
 REFACTOR_TEMPLATE = _engine_text("refactor-template.txt")
 CANVAS_TEMPLATE = _engine_text("canvas-template.txt")
+DNA_TEMPLATE = _engine_text("dna-template.txt")
 TOPIC_RE = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$"  # même règle que frontend/js/bus.js
 
 
@@ -165,6 +167,25 @@ class CanvasWidget(BaseModel):
         return v
 
 
+class DnaTrait(BaseModel):
+    """« Injection d'ADN » (V4) : trait d'un Engramme cognitif qui filtre la génération (style, logique, ton)."""
+
+    person: str = Field(..., min_length=1, max_length=120)
+    category: Literal["core", "engine", "shadow", "artifact"]
+    type: str = Field(..., max_length=40)
+    title: str = Field(..., min_length=1, max_length=engram.LIMITS["title"])
+    content: str = Field("", max_length=engram.LIMITS["content"])
+    directive: str = Field(..., min_length=1, max_length=engram.LIMITS["directive"])
+    palette: list[Annotated[str, StringConstraints(pattern=r"^#[0-9a-fA-F]{6}$")]] = Field([], max_length=5)
+    keywords: list[Annotated[str, StringConstraints(min_length=1, max_length=40)]] = Field([], max_length=8)
+
+    @model_validator(mode="after")
+    def type_matches_category(self) -> DnaTrait:
+        if self.type not in engram.TYPES[self.category]:
+            raise ValueError(f"type {self.type!r} inconnu pour la catégorie {self.category}")
+        return self
+
+
 class GenerateRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=12_000)
     file: AttachedFile | None = None
@@ -173,6 +194,23 @@ class GenerateRequest(BaseModel):
     widget_id: str | None = Field(None, max_length=36)
     # Autres widgets du canvas (sujets du bus), pour que le nouveau widget puisse s'y brancher.
     canvas: list[CanvasWidget] = Field([], max_length=20)
+    # Trait d'Engramme déposé sur la demande (génération seulement ; ignoré en refactorisation).
+    dna: DnaTrait | None = None
+
+
+def dna_block(dna: DnaTrait | None) -> str:
+    """Section FILTRE ADN du message ; même texte que buildDnaBlock() dans engine/local.js."""
+    if not dna:
+        return ""
+    extras = ""
+    if dna.palette:
+        extras += "Palette to use: " + ", ".join(dna.palette) + ".\n"
+    if dna.keywords:
+        extras += "Vocabulary to weave into the texts: " + ", ".join(dna.keywords) + ".\n"
+    values = {"person": dna.person, "category": dna.category, "type": dna.type, "title": dna.title,
+              "content": dna.content or "-", "directive": dna.directive, "extras": extras}
+    # Une seule passe : un titre contenant « {{directive}} » n'est pas réinterprété.
+    return re.sub(r"\{\{(person|category|type|title|content|directive|extras)\}\}", lambda m: values[m.group(1)], DNA_TEMPLATE) + "\n"
 
 
 def canvas_block(canvas: list[CanvasWidget] | None) -> str:
@@ -191,15 +229,17 @@ def canvas_block(canvas: list[CanvasWidget] | None) -> str:
 
 
 def build_user_message(
-    prompt: str, file: AttachedFile | None = None, base_html: str | None = None, canvas: list[CanvasWidget] | None = None
+    prompt: str, file: AttachedFile | None = None, base_html: str | None = None, canvas: list[CanvasWidget] | None = None,
+    dna: DnaTrait | None = None,
 ) -> str:
     file_block = ""
     if file:
         file_block = FILE_TEMPLATE.replace("{{kind}}", file.kind).replace("{{summary}}", file.summary) + "\n"
     template = REFACTOR_TEMPLATE if base_html else USER_TEMPLATE
-    values = {"file": file_block, "canvas": canvas_block(canvas), "prompt": prompt, "html": base_html or ""}
+    values = {"file": file_block, "canvas": canvas_block(canvas), "dna": "" if base_html else dna_block(dna),
+              "prompt": prompt, "html": base_html or ""}
     # Une seule passe : rien de ce qui est inséré (code, demande, titres…) n'est réinterprété comme gabarit.
-    return re.sub(r"\{\{(file|canvas|prompt|html)\}\}", lambda m: values[m.group(1)], template)
+    return re.sub(r"\{\{(file|canvas|dna|prompt|html)\}\}", lambda m: values[m.group(1)], template)
 
 
 class GenerateResponse(BaseModel):
@@ -263,6 +303,7 @@ app.add_middleware(
 )
 app.include_router(auth.router)
 app.include_router(widgets.router)
+app.include_router(engram.router)
 
 
 SECURITY_HEADERS = {
@@ -271,7 +312,7 @@ SECURITY_HEADERS = {
     # Prism ne s'affiche jamais dans le cadre d'un autre site (clic détourné). En-tête de réponse :
     # sans effet sur les widgets, documents srcdoc sans réponse HTTP.
     "X-Frame-Options": "DENY",
-    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+    "Permissions-Policy": "camera=(), microphone=(self), geolocation=(), payment=(), usb=()",
 }
 
 
@@ -459,7 +500,7 @@ async def generate(
         raise insufficient(exc) from exc
 
     try:
-        user_message = build_user_message(prompt, req.file, base_html, req.canvas)
+        user_message = build_user_message(prompt, req.file, base_html, req.canvas, req.dna)
         document, mode, model, issues = await run_model(user_message, prompt, req.file.kind if req.file else None)
         widget = await asyncio.to_thread(_save_widget, user, req, document, mode, model)
     except BaseException:
