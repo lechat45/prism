@@ -1149,6 +1149,7 @@ body.is-dropping .dock { scale: 1.02; }
 .inc-text.is-placeholder { color: var(--muted); font-style: italic; }
 
 /* Paramètres (roue dentée) : compte, mes écrits, moteur, à propos. */
+.btn-try { border-color: rgba(125, 249, 255, 0.4); background: linear-gradient(120deg, rgba(34, 211, 238, 0.14), rgba(166, 107, 255, 0.14)); }
 .prefs-open svg { width: 18px; height: 18px; transition: rotate 0.5s var(--ease); }
 .prefs-open:hover svg { rotate: 60deg; }
 .prefs-dialog { width: min(560px, calc(100vw - 2 * var(--gutter))); }

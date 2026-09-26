@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import secrets
 import threading
 import time
 from collections import defaultdict, deque
@@ -86,15 +87,25 @@ class Credentials(BaseModel):
         return value
 
 
+# Comptes d'essai (bouton « Tester ») : adresse réservée (.invalid : jamais une vraie boîte), mot de passe
+# aléatoire jamais communiqué (on ne peut pas s'y reconnecter), quelques Sparks.
+GUEST_DOMAIN = "essai.prism.invalid"
+
+
+def is_guest(email: str) -> bool:
+    return email.endswith("@" + GUEST_DOMAIN)
+
+
 class UserOut(BaseModel):
     id: int
     email: str
     sparks: float
     plan: str
+    guest: bool = False
 
     @classmethod
     def of(cls, user: User) -> UserOut:
-        return cls(id=user.id, email=user.email, sparks=user.sparks, plan=user.plan)
+        return cls(id=user.id, email=user.email, sparks=user.sparks, plan=user.plan, guest=is_guest(user.email))
 
 
 class Session_(BaseModel):
@@ -139,6 +150,8 @@ def register(body: Credentials, request: Request, s: Session = Depends(get_sessi
     if registrations.blocked(ip):
         raise too_many("Trop d'inscriptions depuis cette adresse : réessayez plus tard.")
     registrations.hit(ip)
+    if is_guest(body.email):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Adresse réservée aux comptes d'essai.")
     user = User(email=body.email, password_hash=security.hash_password(body.password), sparks_cents=0)
     s.add(user)
     try:
@@ -149,6 +162,24 @@ def register(body: Credentials, request: Request, s: Session = Depends(get_sessi
             status.HTTP_409_CONFLICT, detail={"code": "email_taken", "message": "Un compte existe déjà avec cet e-mail."}
         ) from exc
     billing.credit(s, user.id, billing.SIGNUP_BONUS, "signup_bonus")
+    s.commit()
+    s.refresh(user)
+    return Session_(token=security.create_token(user.id, user.token_version), user=UserOut.of(user))
+
+
+@router.post("/guest", response_model=Session_, status_code=status.HTTP_201_CREATED)
+def guest(request: Request, s: Session = Depends(get_session)) -> Session_:
+    """Compte d'essai immédiat (bouton « Tester ») : même fonctionnement qu'un vrai compte, sans e-mail.
+    Mêmes limites par adresse IP que les inscriptions ; perdu à la déconnexion."""
+    ip = client_ip(request)
+    if registrations.blocked(ip):
+        raise too_many("Trop de comptes créés depuis cette adresse : réessayez plus tard.")
+    registrations.hit(ip)
+    user = User(email=f"essai-{secrets.token_hex(6)}@{GUEST_DOMAIN}",
+                password_hash=security.hash_password(secrets.token_urlsafe(32)), sparks_cents=0)
+    s.add(user)
+    s.flush()
+    billing.credit(s, user.id, billing.GUEST_BONUS, "guest_bonus")
     s.commit()
     s.refresh(user)
     return Session_(token=security.create_token(user.id, user.token_version), user=UserOut.of(user))

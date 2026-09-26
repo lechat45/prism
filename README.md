@@ -4,7 +4,8 @@ Générateur d'interfaces éphémères (Generative UI) sur un **canvas spatial**
 langage naturel, ou chaque fichier CSV/JSON/TXT déposé, devient une micro-application interactive
 dans une carte que l'on déplace, redimensionne, refactorise, recolore et exporte.
 
-**En ligne : <https://lechat45.github.io/prism/>**
+**En ligne : <https://lechat45.github.io/prism/>** · description complète du projet et de la recréation de
+personne : **[PROJET.md](PROJET.md)**
 
 ![Logo Prism](frontend/assets/prism-logo.png)
 

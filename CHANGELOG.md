@@ -1,5 +1,18 @@
 # Changelog
 
+## 4.0.0-alpha.7 — 2026-09-26 (mise en ligne réelle, compte d'essai)
+
+- **Mise en ligne réelle** : API sur Render (<https://prism-api-0x4z.onrender.com>, base PostgreSQL sur Neon, clés Gemini
+  du serveur) ; le site GitHub Pages y est branché (`<meta name="prism-api">`) : comptes, Sparks, Mon Hub, Engrammes et
+  conversations sans clé côté visiteur. `check_deploy.py` : 11/11 sur le serveur en ligne.
+- **Bouton « Tester »** (à côté de « Se connecter », et « Tester sans compte » dans la fenêtre de connexion) : compte
+  d'essai immédiat, sans e-mail, 10 Sparks (`PRISM_GUEST_SPARKS`), utilisable comme un vrai compte, perdu à la
+  déconnexion ; mêmes limites par adresse IP que les inscriptions. Route `POST /api/auth/guest`.
+- **PROJET.md** : description complète du projet et de la recréation de personne (Engramme).
+- E2E « GitHub Pages → API » : la page de test vise toujours l'API locale, quelle que soit l'API inscrite dans le dépôt
+  (un test ne touche jamais la production).
+- Tests : 128 Python, 72 Node ; E2E : statique 38/38, démo 47/47, V4 39/39 (serveur) et 29/29 (statique), Pages → API 5/5.
+
 ## 4.0.0-alpha.6 — 2026-09-26 (Paramètres)
 
 - **Bouton Paramètres** (roue dentée, barre du haut ; aussi dans Spotlight) : **Compte** (e-mail, solde, tarifs,

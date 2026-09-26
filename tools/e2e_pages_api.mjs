@@ -35,7 +35,12 @@ function pagesResponse(url) {
   if (!file.startsWith(ROOT) || !existsSync(file) || statSync(file).isDirectory()) return { status: 404, type: "text/plain", body: Buffer.from("introuvable") };
   let body = readFileSync(file);
   if (rel === "frontend/index.html") {
-    body = Buffer.from(body.toString("utf8").replace('<meta name="prism-api" content="">', `<meta name="prism-api" content="${API}">`));
+    // Quelle que soit l'API inscrite dans le dépôt (le serveur de production, par exemple), la page de test vise
+    // l'API locale : un test ne doit jamais toucher la production.
+    const html = body.toString("utf8");
+    const pointed = html.replace(/<meta name="prism-api" content="[^"]*">/, `<meta name="prism-api" content="${API}">`);
+    if (pointed === html) throw new Error("balise prism-api introuvable dans frontend/index.html");
+    body = Buffer.from(pointed);
   }
   return { status: 200, type: TYPES[extname(file)] || "application/octet-stream", body };
 }
