@@ -1,5 +1,58 @@
 # Changelog
 
+## 4.0.0-alpha.4 — 2026-09-26 (Discuter avec la personne, mouvement logique, personnes dans Mon Hub)
+
+- **« Discuter avec … »** : bouton sur la carte Engramme, dans Spotlight et dans « Mon Hub ». Conversation à la première
+  personne fondée sur toutes les données écrites de l'Engramme (tempérament, climat, bulles et leurs sources, liens),
+  présentée comme une simulation par IA (jamais la personne, aucune citation ni fait inventé, rien de privé sur une
+  personne vivante). Route `POST /api/engram/chat` (¼ de Spark), moteur navigateur identique (parité testée), réponse de
+  démonstration honnête sans clé ; historique gardé avec la carte.
+- **Les ronds qui écrivent sa logique** : chaque réponse porte sa trace (1 à 4 bulles dans l'ordre du raisonnement,
+  seules des bulles de l'Engramme) ; sur la carte, un fil lumineux relie ces bulles, des ronds numérotés apparaissent un
+  à un et écrivent lettre à lettre ce que chaque bulle apporte ; le reste s'estompe. Dans le panneau, les mêmes ronds.
+- **Mouvement logique et organique** : places calculées (artefacts en horloge chronologique ; bulles intérieures tournées
+  vers ce qui les a forgées ou qu'elles nourrissent ; types groupés ; places équidistantes), rotation d'un bloc ;
+  respiration, battements, ombres erratiques et épicycles des artefacts par-dessus. Tests : ordre chronologique permanent,
+  alignement des bulles liées, ordre de chaque anneau constant.
+- **Mon Hub** : les personnes (Engrammes) en tête, avec « Discuter » et « Ouvrir ».
+- Tests : 124 Python, 72 Node ; E2E V4 37/37 (serveur) et 28/28 (statique). Vérifié sur le vrai Gemini.
+
+## 4.0.0-alpha.3 — 2026-09-26 (Engramme : caractère et émotions)
+
+- **Nouvelle catégorie E « Caractère et émotions »** (6 à 8 bulles) : traits de caractère, émotions marquantes (leur
+  source, leur manifestation), attachements (personnes, lieux, causes qui émeuvent la personne). 36 à 44 bulles au total.
+- **12 émotions** reconnues, chacune avec sa couleur ; toute bulle peut porter une **charge émotionnelle**. L'Engramme porte
+  le **tempérament** (le caractère en une phrase) et le **climat émotionnel** (2 à 4 émotions pondérées, normalisées ;
+  déduit des bulles si le modèle l'omet). Validation identique en Python et en JS (nouveaux cas de parité).
+- **Rendu** : anneau intérieur du cœur, orbes chauds teintés par leur émotion qui **battent** (« lub-dub ») au rythme de
+  l'émotion (colère rapide, sérénité lente) ; halo émotionnel sur les autres bulles ; **aura** du climat émotionnel autour
+  du noyau ; tempérament et puces du climat dans l'en-tête ; émotion dans la fiche Liquid Glass ; légende à 5 catégories.
+- **ADN émotionnel** : une génération filtrée reprend aussi le tempérament de la personne, l'émotion de la bulle
+  (« registre émotionnel à transmettre : couleurs, mouvement, textes, avec retenue ») et son climat émotionnel.
+- Prompt : émotions lues dans les sources publiques (écrits, journaux et lettres publiés, témoignages), décrites comme
+  vécues, jamais comme des troubles ni des diagnostics ; rien d'inventé, sentiment compris.
+- Démo Marie Curie enrichie (7 bulles du cœur : pudeur, indépendance, émerveillement, deuil de Pierre, joie du hangar,
+  la Pologne, ses filles) ; vérifié sur le vrai Gemini (Frida Kahlo : 6 bulles du cœur, climat passion / tristesse / solitude).
+- CI : tests E2E rendus robustes sous Linux (point du test des reflets, texte de chargement capté au vol, appui bref sur
+  Espace déterministe, point du zoom fractal vérifié dans l'iframe).
+- Tests : 121 Python, 68 Node ; E2E V4 31/31 (serveur) et 25/25 (statique).
+
+## 4.0.0-alpha.2 — 2026-09-26 (Engramme sur le vrai Gemini, plusieurs clés)
+
+- **Correctif** : l'Engramme échouait sur le vrai Gemini (« schéma de réponse refusé », HTTP 400
+  « invalid argument ») : Gemini refuse `maxItems` dans `responseSchema`. Mot-clé retiré du schéma (les
+  limites restent dans le prompt et dans la validation) ; test qui l'interdit. Vérifié sur l'API réelle :
+  Engrammes valides par le serveur (Marie Curie) et par le moteur navigateur (Ada Lovelace).
+- **Plusieurs clés Gemini** : `GEMINI_API_KEY` (serveur) et le champ des réglages (navigateur) acceptent
+  plusieurs clés séparées par des virgules, servies à tour de rôle ; une clé au quota (429) ou refusée passe
+  la main à la suivante sur le même modèle. Toutes refusées : arrêt ; toutes au quota : modèle suivant.
+  Les clés n'apparaissent jamais dans les messages.
+- **Surcharge de Google** (503 « high demand », fréquent sur les longues générations) : une nouvelle
+  tentative après 2 s (`GEMINI_RETRY_DELAY`), puis le modèle suivant ; chaîne par défaut étendue à
+  `gemini-3.5-flash-lite`, bien moins demandé, en dernier recours.
+- Messages d'erreur lisibles : le texte de Google (`error.message`) plutôt que son JSON brut.
+- Tests : 120 Python, 67 Node.
+
 ## 4.0.0-alpha.1 — 2026-09-26 (V4 « Singularité » : l'Engramme cognitif)
 
 - **Engramme cognitif** : « Engramme : Marie Curie » (dock, Spotlight, voix) cartographie l'esprit d'une

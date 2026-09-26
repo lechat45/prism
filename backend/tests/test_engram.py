@@ -33,6 +33,9 @@ class DefinitionTests(unittest.TestCase):
         self.assertIn("directive", engram.SCHEMA["properties"]["nodes"]["items"]["required"], "chaque nœud est un filtre de génération")
         link = engram.SCHEMA["properties"]["links"]["items"]["properties"]["kind"]["enum"]
         self.assertEqual(set(link), {"forge", "nourrit", "contredit"})
+        # Gemini refuse maxItems dans responseSchema (HTTP 400 « invalid argument », constaté le 2026-09-26) :
+        # les limites sont dans le prompt et appliquées par normalize().
+        self.assertNotIn("maxItems", json.dumps(engram.SCHEMA))
 
     def test_prompt_states_the_taxonomy_and_the_ethics(self):
         p = engram.SYSTEM_PROMPT
@@ -48,10 +51,13 @@ class NormalizeTests(unittest.TestCase):
     def test_demo_is_a_valid_engram(self):
         e = engram.demo_engram()
         counts = {c: sum(n["category"] == c for n in e["nodes"]) for c in engram.TYPES}
-        self.assertEqual(counts, {"core": 1, "engine": 9, "shadow": 10, "artifact": 10})
+        self.assertEqual(counts, {"core": 1, "heart": 7, "engine": 9, "shadow": 10, "artifact": 10})
         dates = [n["date"] for n in e["nodes"] if n["category"] == "artifact"]
         self.assertEqual(dates, sorted(dates, key=engram._date_key))
-        self.assertEqual(len(e["links"]), 15)
+        self.assertEqual(len(e["links"]), 23)
+        self.assertTrue(e["temperament"].startswith("Réservée, obstinée"))
+        self.assertEqual([c["emotion"] for c in e["climate"]], ["passion", "emerveillement", "melancolie", "tendresse"])
+        self.assertTrue(all(n.get("emotion") for n in e["nodes"] if n["type"] == "emotion"))
         self.assertTrue(all(n["directive"] for n in e["nodes"]))
 
     def test_refusal_for_non_public_people(self):
@@ -94,7 +100,32 @@ class NormalizeTests(unittest.TestCase):
         self.assertEqual(sum(n["id"].startswith("x") for n in engines), 1, "on garde les plus intenses")
         self.assertEqual(len(e["nodes"][0]["title"]), engram.LIMITS["title"])
         self.assertEqual(next(n for n in e["nodes"] if n["type"] == "matrice_esthetique")["palette"], ["#aabbcc", "#00ff00"])
-        self.assertEqual(len(e["links"]), 15, "liens inconnus, doublons et types invalides écartés")
+        self.assertEqual(len(e["links"]), 23, "liens inconnus, doublons et types invalides écartés")
+
+    def test_character_and_emotions(self):
+        data = demo()
+        heart = [n for n in data["nodes"] if n["category"] == "heart"]
+        heart[0]["emotion"] = "nostalgie"  # émotion inconnue : retirée, le trait reste
+        data["climate"] = [{"emotion": "colere", "weight": 3}, {"emotion": "colere", "weight": 0.2}, {"emotion": "ennui", "weight": 1},
+                           {"emotion": "joie", "weight": "0.5"}, "x"]
+        e = engram.normalize(data)
+        self.assertNotIn("emotion", next(n for n in e["nodes"] if n["id"] == heart[0]["id"]))
+        self.assertEqual(e["climate"], [{"emotion": "colere", "weight": 0.67}, {"emotion": "joie", "weight": 0.33}],
+                         "émotions inconnues et doublons écartés, poids bornés puis normalisés")
+        # Climat absent : déduit des charges émotionnelles des nœuds, pondérées par l'intensité.
+        data = demo()
+        del data["climate"]
+        derived = engram.normalize(data)["climate"]
+        self.assertEqual(len(derived), engram.CLIMATE_MAX)
+        self.assertEqual(derived[0]["emotion"], "tendresse")
+        self.assertAlmostEqual(sum(c["weight"] for c in derived), 1, delta=0.02)
+        # Une bulle « émotion » sans émotion reconnue est écartée ; le cœur exige ses trois types.
+        data = demo()
+        for n in data["nodes"]:
+            if n["type"] == "emotion":
+                n["emotion"] = None
+        with self.assertRaises(engram.EngramError):
+            engram.normalize(data)
 
     def test_duplicate_ids_are_made_unique(self):
         data = demo()
@@ -145,7 +176,7 @@ class EngramApiTests(DbTestCase):
         self.assertEqual(res.status_code, 200, res.text)
         data = res.json()
         self.assertEqual((data["mode"], data["model"], data["cost"], data["sparks"]), ("gemini", M1, 2.0, 48.0))
-        self.assertEqual(len(data["engram"]["nodes"]), 30)
+        self.assertEqual(len(data["engram"]["nodes"]), 37)
         _, body = self.calls[0]
         config = body["generationConfig"]
         self.assertEqual(config["responseMimeType"], "application/json")
@@ -179,7 +210,7 @@ class EngramApiTests(DbTestCase):
         self.assertEqual(self.sparks(), 50.0)
 
     def test_all_models_fail_refund(self):
-        self.answers = {M1: [httpx.Response(500)], M2: [gemini_json("pas du json")]}
+        self.answers = {M1: [httpx.Response(500)] * 2, M2: [gemini_json("pas du json")]}
         res = self.post()
         self.assertEqual(res.status_code, 502)
         self.assertIn("Engramme impossible", res.json()["detail"])
@@ -201,6 +232,76 @@ class EngramApiTests(DbTestCase):
         res = self.post()
         self.assertEqual(res.status_code, 403)
         self.assertEqual(res.json()["detail"]["code"], "insufficient_sparks")
+
+
+class ChatApiTests(DbTestCase):
+    """« Discuter avec … » : réponse fondée sur l'Engramme, trace logique vérifiée, ¼ de Spark par message."""
+
+    def setUp(self):
+        super().setUp()
+        self._saved = (prism.GEMINI_MODELS, prism._http_client)
+        prism.GEMINI_API_KEY = "cle-test"
+        prism.GEMINI_MODELS = [M1, M2]
+        self.answers: dict[str, list[httpx.Response]] = {}
+        self.calls: list[tuple[str, dict]] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            model = request.url.path.split("/models/")[1].split(":")[0]
+            self.calls.append((model, json.loads(request.content)))
+            queue = self.answers.get(model) or []
+            return queue.pop(0) if queue else gemini_json({
+                "trace": [{"id": "h4", "why": "Le deuil m'a appris la retenue"}, {"id": "inventé", "why": "x"}, {"id": "a7", "why": "1906"}],
+                "reply": "J'ai continué, parce que l'œuvre devait vivre.",
+            })
+
+        prism._http_client = lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        self.client = TestClient(prism.app)
+        self.auth = self.register(self.client)
+        self.engram = engram.demo_engram()
+
+    def tearDown(self):
+        prism.GEMINI_MODELS, prism._http_client = self._saved
+        super().tearDown()
+
+    def post(self, message="Comment avez-vous vécu la mort de Pierre ?", **extra):
+        body = {"engram": self.engram, "history": [{"role": "user", "text": "Bonjour"}, {"role": "persona", "text": "Bonjour."}],
+                "message": message, **extra}
+        return self.client.post("/api/engram/chat", json=body, headers=self.auth)
+
+    def test_reply_grounded_in_the_engram_with_its_logic(self):
+        res = self.post()
+        self.assertEqual(res.status_code, 200, res.text)
+        data = res.json()
+        self.assertEqual(data["reply"], "J'ai continué, parce que l'œuvre devait vivre.")
+        self.assertEqual([s["id"] for s in data["trace"]], ["h4", "a7"], "seules les bulles de l'Engramme, dans l'ordre")
+        self.assertEqual((data["cost"], data["sparks"]), (0.25, 49.75))
+        _, body = self.calls[0]
+        self.assertEqual(body["generationConfig"]["responseSchema"], engram.CHAT_SCHEMA)
+        self.assertTrue(body["systemInstruction"]["parts"][0]["text"].startswith("You give voice"))
+        message = body["contents"][0]["parts"][0]["text"]
+        for needle in ("TEMPERAMENT: Réservée", "EMOTIONAL CLIMATE: passion 35%", "[h4] heart/emotion · Le deuil de Pierre",
+                       "source (documente)", "LINKS: ", "User: Bonjour\nMarie Curie: Bonjour.", "<<<\nComment avez-vous vécu la mort de Pierre ?\n>>>"):
+            self.assertIn(needle, message)
+
+    def test_demo_mode_answers_honestly_with_matching_nodes(self):
+        prism.GEMINI_API_KEY = ""
+        data = self.post().json()
+        self.assertEqual((data["mode"], data["model"]), ("mock", "mock:engram-chat"))
+        self.assertIn("Mode démo", data["reply"])
+        self.assertIn("h4", [s["id"] for s in data["trace"]])
+        self.assertEqual(self.calls, [])
+
+    def test_failures_are_refunded_and_inputs_validated(self):
+        self.answers = {M1: [gemini_json({"reply": "", "trace": []})], M2: [httpx.Response(500)] * 2}
+        res = self.post()
+        self.assertEqual(res.status_code, 502)
+        self.assertEqual(self.client.get("/api/auth/me", headers=self.auth).json()["sparks"], 50.0)
+        for bad in ({"engram": {"nodes": []}, "message": "x"}, {"engram": self.engram, "message": ""},
+                    {"engram": self.engram, "message": "x", "history": [{"role": "system", "text": "x"}]},
+                    {"engram": {"nodes": [{"id": "a", "content": "x" * 130_000}]}, "message": "x"}):
+            with self.subTest(str(bad)[:50]):
+                self.assertEqual(self.client.post("/api/engram/chat", json=bad, headers=self.auth).status_code, 422)
+        self.assertEqual(self.client.post("/api/engram/chat", json={"engram": self.engram, "message": "x"}).status_code, 401)
 
 
 class DnaGenerateTests(DbTestCase):
@@ -231,7 +332,9 @@ class DnaGenerateTests(DbTestCase):
     def dna(self, **changes):
         n = self.trait
         return {"person": "Marie Curie", "category": n["category"], "type": n["type"], "title": n["title"],
-                "content": n["content"], "directive": n["directive"], "palette": n.get("palette", []), **changes}
+                "content": n["content"], "directive": n["directive"], "palette": n.get("palette", []),
+                "emotion": n.get("emotion"), "temperament": engram.DEMO["temperament"][:300], "climate": ["passion", "emerveillement"],
+                **changes}
 
     def test_trait_reaches_the_model(self):
         res = self.client.post("/api/generate", json={"prompt": "Un minuteur", "dna": self.dna()}, headers=self.auth)
@@ -240,6 +343,9 @@ class DnaGenerateTests(DbTestCase):
         self.assertIn("COGNITIVE DNA FILTER", message)
         self.assertIn(self.trait["directive"], message)
         self.assertIn("Palette to use: " + ", ".join(self.trait["palette"]), message)
+        self.assertIn("Character of Marie Curie: Réservée", message)
+        self.assertIn("Emotional register to convey (colours, motion, microcopy, with restraint): wonder.", message)
+        self.assertIn("Emotional climate of Marie Curie: passion, wonder.", message)
         self.assertLess(message.index("<<<\nUn minuteur\n>>>"), message.index("COGNITIVE DNA FILTER"), "la demande d'abord")
 
     def test_invalid_trait_is_rejected_before_billing(self):
@@ -248,6 +354,9 @@ class DnaGenerateTests(DbTestCase):
             "couleur invalide": self.dna(palette=["rouge"]),
             "directive vide": self.dna(directive=""),
             "titre trop long": self.dna(title="T" * (engram.LIMITS["title"] + 1)),
+            "émotion inconnue": self.dna(emotion="nostalgie"),
+            "climat inconnu": self.dna(climate=["joie", "ennui"]),
+            "climat trop long": self.dna(climate=["joie", "peur", "colere", "passion", "serenite"]),
         }
         for label, dna in cases.items():
             with self.subTest(label):

@@ -22,7 +22,12 @@
   <p class="text-[10px] font-semibold uppercase tracking-[0.25em] text-cyan-200/70" data-t="kicker"></p>
   <h1 id="person" class="text-lg font-semibold leading-tight"></h1>
   <p id="domain" class="text-xs text-white/55"></p>
+  <p id="temperament" class="clamp-3 mt-1 max-w-md text-[11.5px] italic leading-snug text-rose-100/70 max-[520px]:hidden"></p>
   <p id="summary" class="clamp-3 mt-1 max-w-md text-[11px] leading-snug text-white/40 max-[640px]:hidden"></p>
+  <ul id="climate" class="mt-1.5 flex flex-wrap gap-1.5 max-[460px]:hidden" aria-label=""></ul>
+  <button id="chat-btn" type="button" class="pointer-events-auto mt-2 inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[11.5px] font-medium text-white shadow-2xl backdrop-blur-md transition hover:bg-white/20">
+    <span aria-hidden="true">💬</span><span data-t="chat"></span>
+  </button>
 </header>
 
 <ul id="legend" class="absolute right-3 top-3 z-10 space-y-0.5 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-[11px] text-white/70 backdrop-blur-md max-[460px]:hidden"></ul>
@@ -38,6 +43,7 @@
   </div>
   <h2 data-f="title" class="mt-2 text-[15px] font-semibold leading-snug"></h2>
   <p data-f="date" class="mt-0.5 text-xs font-medium text-amber-200/90"></p>
+  <p data-f="emotion" class="mt-1.5 flex items-center gap-1.5 text-[11px] text-white/75"><span data-f="emotionDot" class="h-2 w-2 rounded-full"></span><span data-f="emotionText"></span></p>
   <p data-f="content" class="clamp-5 mt-2 text-[12.5px] leading-relaxed text-white/80"></p>
   <p data-f="impact" class="clamp-3 mt-2 border-l-2 border-amber-300/60 pl-2 text-[12px] leading-snug text-amber-100/85"></p>
   <div data-f="palette" class="mt-3 flex gap-1.5"></div>
@@ -76,9 +82,17 @@
       selected: "Filtre ADN actif : votre prochaine demande passera par ce trait",
       dropOn: "Injecter l'ADN de « %s »",
       dropMiss: "Déposez sur une bulle",
-      aria: "Engramme cognitif de %s : %d bulles en quatre catégories.",
-      categories: { core: "Noyau", engine: "Moteurs opérationnels", shadow: "Ombres et biais", artifact: "Artefacts chronologiques" },
+      aria: "Engramme cognitif de %s : %d bulles en cinq catégories.",
+      climate: "Climat émotionnel",
+      emotion: "Charge émotionnelle : %s",
+      chat: "Discuter avec %s",
+      categories: { core: "Noyau", heart: "Caractère et émotions", engine: "Moteurs opérationnels", shadow: "Ombres et biais", artifact: "Artefacts chronologiques" },
+      emotions: {
+        joie: "Joie", emerveillement: "Émerveillement", passion: "Passion", tendresse: "Tendresse", serenite: "Sérénité", fierte: "Fierté",
+        melancolie: "Mélancolie", tristesse: "Tristesse", colere: "Colère", peur: "Peur", angoisse: "Angoisse", solitude: "Solitude"
+      },
       types: {
+        trait: "Trait de caractère", emotion: "Émotion", attachement: "Attachement",
         axiome: "Axiome", algorithme_resolution: "Algorithme de résolution", empreinte_syntaxique: "Empreinte syntaxique",
         matrice_esthetique: "Matrice esthétique", methode_travail: "Méthode de travail", paradoxe: "Paradoxe",
         peur_primaire: "Peur primaire", biais_cognitif: "Biais cognitif", succes: "Succès", echec: "Échec", tournant: "Tournant"
@@ -96,9 +110,17 @@
       selected: "DNA filter on: your next request goes through this trait",
       dropOn: "Inject the DNA of “%s”",
       dropMiss: "Drop on a bubble",
-      aria: "Cognitive engram of %s: %d bubbles in four categories.",
-      categories: { core: "Core", engine: "Operational engines", shadow: "Shadows and biases", artifact: "Chronological artifacts" },
+      aria: "Cognitive engram of %s: %d bubbles in five categories.",
+      climate: "Emotional climate",
+      emotion: "Emotional charge: %s",
+      chat: "Talk with %s",
+      categories: { core: "Core", heart: "Character and emotions", engine: "Operational engines", shadow: "Shadows and biases", artifact: "Chronological artifacts" },
+      emotions: {
+        joie: "Joy", emerveillement: "Wonder", passion: "Passion", tendresse: "Tenderness", serenite: "Serenity", fierte: "Pride",
+        melancolie: "Melancholy", tristesse: "Sadness", colere: "Anger", peur: "Fear", angoisse: "Anxiety", solitude: "Loneliness"
+      },
       types: {
+        trait: "Character trait", emotion: "Emotion", attachement: "Attachment",
         axiome: "Axiom", algorithme_resolution: "Problem-solving algorithm", empreinte_syntaxique: "Syntactic fingerprint",
         matrice_esthetique: "Aesthetic matrix", methode_travail: "Working method", paradoxe: "Paradox",
         peur_primaire: "Primal fear", biais_cognitif: "Cognitive bias", succes: "Success", echec: "Failure", tournant: "Turning point"
@@ -112,13 +134,23 @@
 
   // Couleurs [r, g, b] par catégorie (et par type pour les ombres et les artefacts).
   var COLOR = {
-    core: [214, 232, 255], engine: [34, 211, 238],
+    core: [214, 232, 255], heart: [251, 113, 133], engine: [34, 211, 238],
     paradoxe: [168, 85, 247], peur_primaire: [244, 63, 94], biais_cognitif: [139, 92, 246],
     succes: [251, 191, 36], echec: [251, 146, 60], tournant: [253, 230, 138]
   };
-  var colorOf = function (n) { return COLOR[n.category === "core" || n.category === "engine" ? n.category : n.data.type] || COLOR.engine; };
+  // Couleur de chaque émotion : halos des bulles, aura du climat, puces de l'en-tête et de la fiche.
+  var EMOTION_COLOR = {
+    joie: [253, 224, 71], emerveillement: [125, 211, 252], passion: [251, 113, 133], tendresse: [249, 168, 212],
+    serenite: [94, 234, 212], fierte: [251, 191, 36], melancolie: [129, 140, 248], tristesse: [96, 165, 250],
+    colere: [239, 68, 68], peur: [167, 139, 250], angoisse: [192, 132, 252], solitude: [148, 163, 184]
+  };
+  var emotionOf = function (n) { return EMOTION_COLOR[n.data.emotion] || null; };
+  var colorOf = function (n) {
+    if (n.category === "heart") return emotionOf(n) || COLOR.heart;
+    return COLOR[n.category === "core" || n.category === "engine" ? n.category : n.data.type] || COLOR.engine;
+  };
   var rgba = function (c, a) { return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a + ")"; };
-  var LEGEND = { core: [255, 255, 255], engine: COLOR.engine, shadow: [192, 38, 211], artifact: COLOR.succes };
+  var LEGEND = { core: [255, 255, 255], heart: COLOR.heart, engine: COLOR.engine, shadow: [192, 38, 211], artifact: COLOR.succes };
 
   var P = window.PrismEngramPhysics;
   var stage = document.getElementById("stage");
@@ -153,10 +185,28 @@
   document.getElementById("person").textContent = DATA.person || "";
   document.getElementById("domain").textContent = DATA.domain || "";
   document.getElementById("summary").textContent = DATA.summary || "";
+  document.getElementById("temperament").textContent = DATA.temperament || "";
+  document.querySelector('[data-t="chat"]').textContent = fill(TEXT.chat, DATA.person || "?");
   stage.setAttribute("aria-label", fill(TEXT.aria, DATA.person || "?", sim.nodes.length));
+  // Climat émotionnel : puces colorées et pondérées dans l'en-tête.
+  var climate = (DATA.climate || []).filter(function (c) { return EMOTION_COLOR[c.emotion]; });
+  var climateList = document.getElementById("climate");
+  climateList.setAttribute("aria-label", TEXT.climate);
+  climate.forEach(function (c) {
+    var li = document.createElement("li");
+    li.className = "flex items-center gap-1 rounded-full border border-white/10 bg-black/30 px-2 py-px text-[10.5px] text-white/75";
+    var dot = document.createElement("span");
+    dot.className = "h-1.5 w-1.5 rounded-full";
+    dot.style.background = rgba(EMOTION_COLOR[c.emotion], 1);
+    dot.style.boxShadow = "0 0 6px " + rgba(EMOTION_COLOR[c.emotion], 0.9);
+    var label = document.createElement("span");
+    label.textContent = (TEXT.emotions[c.emotion] || c.emotion) + " " + Math.round(c.weight * 100) + " %";
+    li.append(dot, label);
+    climateList.append(li);
+  });
   var legend = document.getElementById("legend");
   var focusCategory = null;
-  ["core", "engine", "shadow", "artifact"].forEach(function (cat) {
+  ["core", "heart", "engine", "shadow", "artifact"].forEach(function (cat) {
     var count = sim.nodes.filter(function (n) { return n.category === cat; }).length;
     var li = document.createElement("li");
     li.className = "flex cursor-default items-center gap-2 rounded-md px-1 py-px hover:bg-white/10";
@@ -210,7 +260,7 @@
     // Anneaux des catégories : l'architecture de l'esprit, à peine visible.
     var a = Math.max(40, W / 2 - 26);
     var b = Math.max(40, H / 2 - 26);
-    [[0.44, "rgba(34,211,238,0.07)"], [0.68, "rgba(168,85,247,0.06)"], [0.92, "rgba(251,191,36,0.05)"]].forEach(function (ring) {
+    [[0.27, "rgba(251,113,133,0.07)"], [0.44, "rgba(34,211,238,0.07)"], [0.68, "rgba(168,85,247,0.06)"], [0.92, "rgba(251,191,36,0.05)"]].forEach(function (ring) {
       g.strokeStyle = ring[1];
       g.lineWidth = 1;
       g.setLineDash([2, 6]);
@@ -281,9 +331,30 @@
   }
 
   window.addEventListener("message", function (e) {
-    if (e.source !== parent || !e.data || e.data.prism !== "engram-pin") return;
-    pin(byId[e.data.nodeId] || null, false);
+    if (e.source !== parent || !e.data) return;
+    if (e.data.prism === "engram-pin") pin(byId[e.data.nodeId] || null, false);
+    else if (e.data.prism === "engram-trace") setTrace(e.data.steps);
   });
+
+  // « Discuter avec … » : la conversation s'ouvre dans la page (elle seule parle au modèle).
+  document.getElementById("chat-btn").addEventListener("click", function () { send({ prism: "engram-chat" }); });
+
+  // Trace logique d'une réponse : des ronds numérotés, posés un à un sur les bulles qui ont guidé la réponse,
+  // reliés par un fil lumineux dans l'ordre du raisonnement ; chacun écrit ce que sa bulle apporte.
+  var trace = null; // { steps: [{ node, why }], start }
+  var STEP_S = 0.9; // délai entre deux ronds
+  var TYPE_RATE = 45; // caractères écrits par seconde
+  function setTrace(steps) {
+    var list = (Array.isArray(steps) ? steps : []).map(function (s) {
+      return s && byId[s.id] ? { node: byId[s.id], why: String(s.why || "").slice(0, 120) } : null;
+    }).filter(Boolean).slice(0, 4);
+    trace = list.length ? { steps: list, start: performance.now() / 1000 } : null;
+  }
+  function traced(n) {
+    if (!trace) return false;
+    for (var i = 0; i < trace.steps.length; i++) if (trace.steps[i].node === n) return true;
+    return false;
+  }
 
   // « Injection d'ADN » : un fichier ou un texte déposé sur une bulle part vers la page.
   function dropAt(e) {
@@ -341,6 +412,13 @@
     field.title.textContent = d.title;
     field.date.textContent = formatDate(d.date);
     field.date.hidden = !d.date;
+    var em = EMOTION_COLOR[d.emotion];
+    field.emotion.hidden = !em;
+    if (em) {
+      field.emotionDot.style.background = rgba(em, 1);
+      field.emotionDot.style.boxShadow = "0 0 8px " + rgba(em, 0.9);
+      field.emotionText.textContent = fill(TEXT.emotion, TEXT.emotions[d.emotion]);
+    }
     field.content.textContent = d.content;
     field.impact.textContent = d.impact || "";
     field.impact.hidden = !d.impact;
@@ -398,6 +476,7 @@
 
   function focusAlpha(n) {
     if (focusCategory) return n.category === focusCategory ? 1 : 0.18;
+    if (trace && !hover) return traced(n) || n.category === "core" ? 1 : 0.32;
     var f = hover || pinned;
     if (!f || f === n) return 1;
     return neighbours[f.id][n.id] ? 1 : 0.42;
@@ -424,6 +503,10 @@
           g.addColorStop(1, "rgba(34,211,238," + (lit ? 0.9 : 0.38) * fade + ")");
           ctx.strokeStyle = g;
           ctx.lineWidth = lit ? 3.4 : 2.4;
+        } else if (b.category === "heart") {
+          // Liens du cœur : courts, chauds, teintés par l'émotion de la bulle.
+          ctx.strokeStyle = rgba(colorOf(b), (lit ? 0.85 : 0.42) * fade);
+          ctx.lineWidth = lit ? 2.6 : 1.8;
         } else if (b.category === "shadow") {
           ctx.strokeStyle = rgba(colorOf(b), (lit ? 0.5 : 0.1) * fade);
           ctx.lineWidth = 0.8;
@@ -499,6 +582,54 @@
     ctx.stroke();
   }
 
+  /** E. Cœur : orbe chaud qui bat (« lub-dub », rythme de l'émotion), teinté par son émotion. */
+  function drawHeart(n, alpha) {
+    var c = colorOf(n);
+    var pulse = sim.pulseOf(n);
+    var r = n.r * pulse;
+    ctx.globalCompositeOperation = "lighter";
+    glow(n.x, n.y, r * (2.4 + (pulse - 1) * 4), c, (0.3 + (pulse - 1) * 1.2) * alpha);
+    ctx.globalCompositeOperation = "source-over";
+    var g = ctx.createRadialGradient(n.x - r * 0.3, n.y - r * 0.35, r * 0.1, n.x, n.y, r);
+    g.addColorStop(0, "rgba(255,241,242," + alpha + ")");
+    g.addColorStop(0.5, rgba(c, alpha));
+    g.addColorStop(1, rgba([Math.round(c[0] * 0.55), Math.round(c[1] * 0.35), Math.round(c[2] * 0.45)], alpha));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,228,230," + 0.8 * alpha + ")";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  /** Charge émotionnelle d'une bulle d'une autre catégorie : fin halo de la couleur de l'émotion. */
+  function drawEmotionHalo(n, t, alpha) {
+    var em = emotionOf(n);
+    if (!em || n.category === "heart") return;
+    ctx.strokeStyle = rgba(em, (0.45 + 0.2 * Math.sin(t * 1.7 + n.phase)) * alpha);
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, n.r * sim.pulseOf(n) + 3.5, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  /** Aura du climat émotionnel : un voile par émotion, pondéré, qui tourne et respire lentement autour du noyau. */
+  function drawAura(core, t) {
+    var base = Math.min(W, H);
+    if (!climate.length) {
+      glow(core.x, core.y, base * 0.5, [70, 110, 255], 0.09);
+      return;
+    }
+    climate.forEach(function (c, i) {
+      var angle = (reduced ? 0 : t * 0.06) + (i * Math.PI * 2) / climate.length;
+      var breath = reduced ? 1 : 1 + 0.06 * Math.sin(t * 0.5 + i * 1.3);
+      var x = core.x + Math.cos(angle) * base * 0.1;
+      var y = core.y + Math.sin(angle) * base * 0.08;
+      glow(x, y, base * (0.32 + 0.3 * c.weight) * breath, EMOTION_COLOR[c.emotion], 0.05 + 0.12 * c.weight);
+    });
+  }
+
   function drawShadow(n, t, alpha) {
     var c = colorOf(n);
     var pulse = sim.pulseOf(n);
@@ -569,7 +700,7 @@
     }
   }
 
-  var RANK = { core: 0, engine: 1, artifact: 2, shadow: 3 };
+  var RANK = { core: 0, heart: 1, engine: 2, artifact: 3, shadow: 4 };
   var LABEL_ORDER = sim.nodes.slice().sort(function (a, b) {
     return RANK[a.category] - RANK[b.category] || (b.data.intensity || 0) - (a.data.intensity || 0);
   });
@@ -596,6 +727,103 @@
   }
   var short = function (s, max) { return s.length > max ? s.slice(0, max - 1) + "…" : s; };
 
+  /** Texte coupé en lignes d'au plus maxWidth pixels (trois lignes au plus). */
+  function wrapLines(textValue, maxWidth) {
+    var lines = [];
+    var line = "";
+    textValue.split(" ").forEach(function (word) {
+      var probe = line ? line + " " + word : word;
+      if (line && ctx.measureText(probe).width > maxWidth) {
+        lines.push(line);
+        line = word;
+      } else line = probe;
+    });
+    if (line) lines.push(line);
+    return lines.slice(0, 3);
+  }
+
+  /** Ronds de la logique : fil tracé de bulle en bulle, rond numéroté, puis explication écrite lettre à lettre. */
+  function drawTrace(now) {
+    if (!trace) return;
+    var elapsed = now - trace.start;
+    var steps = trace.steps;
+    ctx.lineCap = "round";
+    ctx.setLineDash([]);
+    for (var i = 1; i < steps.length; i++) {
+      var p = Math.min(1, Math.max(0, (elapsed - i * STEP_S + 0.5) / 0.5));
+      if (p <= 0) break;
+      var a = steps[i - 1].node;
+      var b = steps[i].node;
+      var x = a.x + (b.x - a.x) * p;
+      var y = a.y + (b.y - a.y) * p;
+      ctx.globalCompositeOperation = "lighter";
+      ctx.strokeStyle = "rgba(255,214,120,0.22)";
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = "rgba(255,244,214,0.9)";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+    steps.forEach(function (s, i) {
+      var appear = elapsed - i * STEP_S;
+      if (appear < 0) return;
+      var n = s.node;
+      var grow = Math.min(1, appear / 0.35);
+      ctx.strokeStyle = "rgba(255,236,179," + (0.45 + 0.3 * Math.sin(now * 4 + i)) + ")";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r * sim.pulseOf(n) + 5, 0, Math.PI * 2);
+      ctx.stroke();
+      // Rond numéroté, en haut à droite de la bulle.
+      var rx = n.x + (n.r + 12) * Math.SQRT1_2;
+      var ry = n.y - (n.r + 12) * Math.SQRT1_2;
+      var g = ctx.createRadialGradient(rx - 3, ry - 3, 1, rx, ry, 10);
+      g.addColorStop(0, "#fff7e0");
+      g.addColorStop(1, "#f5b544");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(rx, ry, 9 * grow, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.9)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      if (grow < 1) return;
+      ctx.font = "700 10.5px Inter, ui-sans-serif, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#3a2600";
+      ctx.fillText(String(i + 1), rx, ry + 0.5);
+      // L'explication s'écrit lettre à lettre.
+      var written = s.why.slice(0, Math.floor(Math.max(0, appear - 0.3) * TYPE_RATE));
+      if (!written) return;
+      ctx.font = "500 10.5px Inter, ui-sans-serif, system-ui, sans-serif";
+      var lines = wrapLines(written, 170);
+      var bw = 12;
+      lines.forEach(function (l) { bw = Math.max(bw, ctx.measureText(l).width + 14); });
+      var bh = lines.length * 13 + 8;
+      var bx = rx + 13 + bw > W - 6 ? rx - 13 - bw : rx + 13;
+      var by = Math.max(6, Math.min(H - bh - 6, ry - bh / 2));
+      ctx.fillStyle = "rgba(10,10,20,0.8)";
+      ctx.strokeStyle = "rgba(255,236,179,0.55)";
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 7);
+      else ctx.rect(bx, by, bw, bh);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255,244,214,0.96)";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      lines.forEach(function (l, k) { ctx.fillText(l, bx + 7, by + 4 + k * 13); });
+    });
+  }
+
   function drawRing(n, t, color, extra) {
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.4;
@@ -616,32 +844,35 @@
     sim.nodes.forEach(function (n) { if (n.category === "core") core = n; });
     if (core) {
       ctx.globalCompositeOperation = "lighter";
-      glow(core.x, core.y, Math.min(W, H) * 0.5, [70, 110, 255], 0.09);
+      drawAura(core, t);
       ctx.globalCompositeOperation = "source-over";
     }
     drawLinks();
-    var order = ["artifact", "shadow", "engine", "core"];
+    var order = ["artifact", "shadow", "engine", "heart", "core"];
     var glitching = [];
     order.forEach(function (cat) {
       sim.nodes.forEach(function (n) {
         if (n.category !== cat) return;
         var alpha = focusAlpha(n);
         if (cat === "core") drawCore(n, t, alpha);
+        else if (cat === "heart") drawHeart(n, alpha);
         else if (cat === "engine") drawEngine(n, alpha);
         else if (cat === "shadow") {
           drawShadow(n, t, alpha);
           if (!reduced && t < n.glitchUntil) glitching.push(n);
         } else drawArtifact(n, alpha);
+        drawEmotionHalo(n, t, alpha);
       });
     });
     glitching.forEach(glitchSlices);
-    // Libellés : noyau, puis moteurs (du plus intense au moins intense, si la carte est assez grande),
+    // Libellés : noyau, puis cœur et moteurs (du plus intense au moins intense, si la carte est assez grande),
     // puis années des artefacts ; un libellé qui en chevaucherait un autre déjà posé est omis.
     var roomy = W >= 560 && H >= 400;
     var placed = [];
     LABEL_ORDER.forEach(function (n) {
       var a = focusAlpha(n);
       if (n.category === "core") label(short(n.data.title, 34), n.x, n.y + n.r * 1.55 + 4, 12.5, "rgba(255,255,255," + 0.92 * a + ")", 600, placed);
+      else if (n.category === "heart" && roomy) label(short(n.data.title, 22), n.x, n.y + n.r + 4, 10, "rgba(255,228,230," + 0.85 * a + ")", 500, placed);
       else if (n.category === "engine" && roomy) label(short(n.data.title, 24), n.x, n.y + n.r + 5, 10.5, "rgba(207,250,254," + 0.8 * a + ")", 500, placed);
       else if (n.category === "artifact" && W >= 640 && n.data.date) {
         var year = n.data.date.charAt(0) === "-" ? n.data.date.split("-")[1] : n.data.date.split("-")[0];
@@ -663,6 +894,7 @@
       ctx.arc(n.x, n.y, n.r + 6 + age * 40, 0, Math.PI * 2);
       ctx.stroke();
     });
+    drawTrace(t);
   }
 
   // ---------------------------------------------------------------- boucle
@@ -696,7 +928,8 @@
 
   // Accès pour les tests de bout en bout (lecture seule en pratique : rien d'autre ne s'y fie).
   window.__engram = { sim: sim, data: DATA, pin: function (id) { pin(byId[id] || null, true); }, state: function () {
-    return { hover: hover && hover.id, pinned: pinned && pinned.id, drop: dropTarget && dropTarget.id, glass: shown && shown.id, pointerIn: pointerIn };
+    return { hover: hover && hover.id, pinned: pinned && pinned.id, drop: dropTarget && dropTarget.id, glass: shown && shown.id, pointerIn: pointerIn,
+      trace: trace ? trace.steps.map(function (s) { return s.node.id; }) : [] };
   } };
 })();
 </script>

@@ -31,6 +31,7 @@ const templates = {
 };
 const demo = JSON.parse(read("engine/engram/demo-marie-curie.json"));
 const engramTemplate = read("engine/engram/user-template.txt");
+const chatTemplate = read("engine/engram/chat-template.txt");
 const clone = (value) => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)));
 
 // Démo de l'Engramme modifiée par les opérations du cas (même algorithme que test_parity.py).
@@ -75,6 +76,14 @@ async function runFixtures() {
     engram: fixtures.engram.map((c) => outcome(() => E.normalize(patched(c)))),
     engram_parse: fixtures.engram_parse.map((t) => outcome(() => E.parse(t))),
     engram_messages: fixtures.engram_messages.map((c) => E.buildUserMessage(engramTemplate, c.person, c.language)),
+    engram_chat: fixtures.engram_chat.map((c) => {
+      const source = c.engram === "demo" ? clone(demo) : c.engram;
+      return {
+        message: E.buildChatMessage(chatTemplate, source, c.history, c.message, "fr"),
+        demo: E.demoChat(source, c.message),
+        normalized: outcome(() => E.normalizeChat(c.raw, source)),
+      };
+    }),
   };
 }
 

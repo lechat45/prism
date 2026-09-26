@@ -1,5 +1,6 @@
 // « Mon Hub » : bibliothèque des widgets du compte (mode serveur). Miniatures, recherche,
 // réouverture sur le canvas (sur cet appareil ou un autre), suppression définitive.
+// En tête, les PERSONNES : les Engrammes cognitifs du compte, à rouvrir ou avec qui « Discuter ».
 
 import { account, onAccountChange } from "./account.js";
 import { deleteWidget, listWidgets } from "./sync.js";
@@ -9,7 +10,7 @@ const PAGE = 60;
 const dateFmt = new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" });
 const rtf = new Intl.RelativeTimeFormat("fr-FR", { numeric: "auto" });
 
-let hooks = null; // { openWidget(id), isOnCanvas(id), onDeleted(id), toast }
+let hooks = null; // { openWidget(id), openChat(id), isOnCanvas(id), onDeleted(id), toast }
 let items = [];
 let total = 0;
 let loading = false;
@@ -28,6 +29,43 @@ function matches(item, query) {
   if (!query) return true;
   const haystack = `${item.title} ${item.prompt} ${item.file_name || ""}`.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
   return query.split(/\s+/).every((word) => haystack.includes(word));
+}
+
+/** Nom de la personne d'un Engramme (« Engramme · Marie Curie », « Engramme : Marie Curie »), sinon null. */
+export function personOf(item) {
+  const m = /^Engramme\s*·\s*(.+)$/.exec(item.title || "") || /^Engramme\s*:\s*(.+)$/i.exec(item.prompt || "");
+  return m ? m[1].trim() : null;
+}
+
+function renderPerson(item) {
+  const name = personOf(item);
+  const el = document.createElement("article");
+  el.className = "hub-person";
+  el.dataset.id = item.id;
+  const orb = document.createElement("span");
+  orb.className = "hub-person-orb";
+  orb.setAttribute("aria-hidden", "true");
+  orb.textContent = (name[0] || "?").toUpperCase();
+  const info = document.createElement("div");
+  info.className = "hub-person-info";
+  const title = document.createElement("strong");
+  title.textContent = name;
+  const meta = document.createElement("span");
+  meta.textContent = [hooks.isOnCanvas(item.id) ? "Sur le canvas" : "", when(item.updated_at)].filter(Boolean).join(" · ");
+  info.append(title, meta);
+  const chat = document.createElement("button");
+  chat.type = "button";
+  chat.className = "tool hub-person-chat";
+  chat.dataset.action = "chat";
+  chat.textContent = `Discuter`;
+  chat.setAttribute("aria-label", `Discuter avec ${name}`);
+  const open = document.createElement("button");
+  open.type = "button";
+  open.className = "tool";
+  open.dataset.action = "open";
+  open.textContent = hooks.isOnCanvas(item.id) ? "Afficher" : "Ouvrir";
+  el.append(orb, info, chat, open);
+  return el;
 }
 
 function thumb(item) {
@@ -88,6 +126,14 @@ function renderItem(item) {
   openBtn.className = "tool";
   openBtn.dataset.action = "open";
   openBtn.textContent = onCanvas ? "Afficher" : "Ouvrir";
+  if (personOf(item)) {
+    const chat = document.createElement("button");
+    chat.type = "button";
+    chat.className = "tool";
+    chat.dataset.action = "chat";
+    chat.textContent = "Discuter";
+    actions.append(chat);
+  }
   const del = document.createElement("button");
   del.type = "button";
   del.className = "tool danger";
@@ -103,6 +149,9 @@ function render() {
   const query = $("hub-search").value.trim().toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
   const shown = items.filter((item) => matches(item, query));
   $("hub-grid").replaceChildren(...shown.map(renderItem));
+  const people = shown.filter((item) => personOf(item));
+  $("hub-people-list").replaceChildren(...people.map(renderPerson));
+  $("hub-people").hidden = people.length === 0;
   $("hub-count").textContent = total ? `${total} widget${total > 1 ? "s" : ""}${query ? ` · ${shown.length} affiché${shown.length > 1 ? "s" : ""}` : ""}` : "";
   $("hub-empty").hidden = loading || shown.length > 0;
   $("hub-empty").textContent = items.length
@@ -139,13 +188,13 @@ export function openHub() {
 
 async function onGridClick(e) {
   const button = e.target.closest("button[data-action]");
-  const itemEl = e.target.closest(".hub-item");
+  const itemEl = e.target.closest("[data-id]");
   if (!button || !itemEl) return;
   const id = itemEl.dataset.id;
-  if (button.dataset.action === "open") {
+  if (button.dataset.action === "open" || button.dataset.action === "chat") {
     itemEl.classList.add("is-busy");
     try {
-      await hooks.openWidget(id);
+      await (button.dataset.action === "chat" ? hooks.openChat(id) : hooks.openWidget(id));
       $("hub").close();
     } catch (err) {
       hooks.toast(`Ouverture impossible : ${err.message}`, { tone: "error", timeout: 6000 });
@@ -185,6 +234,7 @@ export function initHub(options) {
   $("hub-more").addEventListener("click", () => load({ more: true }));
   $("hub-search").addEventListener("input", render);
   $("hub-grid").addEventListener("click", onGridClick);
+  $("hub-people-list").addEventListener("click", onGridClick);
   onAccountChange((state) => {
     $("btn-hub").hidden = !(state.enabled && state.user);
     if (!state.user && $("hub").open) $("hub").close();

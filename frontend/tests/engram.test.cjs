@@ -71,10 +71,59 @@ test("B/C/D. moteurs sages, ombres erratiques, artefacts rapides", () => {
   const s = Object.fromEntries(Object.entries(v).map(([k, xs]) => [k, mean(xs)]));
   assert.ok(s.engine < 30, `moteurs : ${s.engine.toFixed(0)} px/s`);
   assert.ok(s.shadow > s.engine * 3, `ombres : ${s.shadow.toFixed(0)} px/s`);
-  assert.ok(s.artifact > s.shadow, `artefacts : ${s.artifact.toFixed(0)} px/s`);
+  assert.ok(s.artifact > s.engine * 2, `artefacts : ${s.artifact.toFixed(0)} px/s (épicycles vifs)`);
   // Erratique = direction imprévisible : la vitesse des ombres change beaucoup d'un instant à l'autre.
   const spread = (xs) => Math.sqrt(mean(xs.map((x) => (x - mean(xs)) ** 2)));
   assert.ok(spread(v.shadow) > spread(v.engine), "ombres plus irrégulières que les moteurs");
+});
+
+/** Angle d'une bulle autour du noyau, ramené dans [0, 2π[ à partir de midi (sens horaire). */
+function clockAngle(sim, n) {
+  const c = core(sim);
+  const a = Math.atan2(n.y - c.y, n.x - c.x) - (sim.time * P.DRIFT - Math.PI / 2);
+  return ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+}
+const angleGap = (a, b) => Math.abs(((a - b + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
+
+test("logique : les artefacts restent une horloge, dans l'ordre chronologique, à tout instant", () => {
+  const sim = P.createSimulation(demo, { width: W, height: H, seed: 8 });
+  const artifacts = of(sim, "artifact"); // la démo les donne dans l'ordre chronologique
+  for (let i = 0; i < 30; i++) {
+    run(sim, 1);
+    const angles = artifacts.map((n) => clockAngle(sim, n));
+    for (let k = 1; k < angles.length; k++) assert.ok(angles[k] > angles[k - 1], `à ${sim.time.toFixed(0)} s : ${artifacts[k].id} avant ${artifacts[k - 1].id}`);
+  }
+});
+
+test("logique : une bulle se place face à ce qui l'a forgée ou qu'elle nourrit (lecture radiale)", () => {
+  const sim = P.createSimulation(demo, { width: W, height: H, seed: 8 });
+  run(sim, 8);
+  const byId = new Map(sim.nodes.map((n) => [n.id, n]));
+  const pairs = demo.links.map((l) => [byId.get(l.from), byId.get(l.to)]).filter(([a, b]) => a && b && a.category !== b.category);
+  const linked = mean(pairs.map(([a, b]) => angleGap(clockAngle(sim, a), clockAngle(sim, b))));
+  // Référence : les mêmes bulles appariées au hasard (écart moyen attendu ≈ 90°).
+  const others = sim.nodes.filter((n) => n.category !== "core");
+  const random = P.rng(3);
+  const shuffled = mean(pairs.map(() => angleGap(clockAngle(sim, others[Math.floor(random() * others.length)]), clockAngle(sim, others[Math.floor(random() * others.length)]))));
+  assert.ok(linked < 45 * Math.PI / 180 && linked < shuffled * 0.6, `liées : ${(linked * 180 / Math.PI).toFixed(0)}°, au hasard : ${(shuffled * 180 / Math.PI).toFixed(0)}°`);
+  // Exemple concret : le deuil de Pierre (cœur) regarde vers la mort de Pierre (1906).
+  assert.ok(angleGap(clockAngle(sim, byId.get("h4")), clockAngle(sim, byId.get("a7"))) < 40 * Math.PI / 180, "deuil face à l'évènement");
+});
+
+test("logique : chaque anneau tourne d'un bloc (l'ordre des bulles ne change jamais)", () => {
+  const sim = P.createSimulation(demo, { width: W, height: H, seed: 6 });
+  run(sim, 3);
+  const orderOf = (cat) => of(sim, cat).slice().sort((a, b) => sim.slotAngle(a.id) - sim.slotAngle(b.id)).map((n) => n.id);
+  const reference = { heart: orderOf("heart"), engine: orderOf("engine") };
+  for (let i = 0; i < 20; i++) {
+    run(sim, 1);
+    for (const cat of ["heart", "engine"]) {
+      const around = of(sim, cat).slice().sort((a, b) => clockAngle(sim, a) - clockAngle(sim, b)).map((n) => n.id);
+      // Ordre cyclique identique à celui des places (à la rotation près).
+      const start = around.indexOf(reference[cat][0]);
+      assert.deepEqual(around.slice(start).concat(around.slice(0, start)), reference[cat], `${cat} à ${sim.time.toFixed(0)} s`);
+    }
+  }
 });
 
 test("aucun chevauchement ; les ombres se repoussent entre elles", () => {
@@ -95,34 +144,63 @@ test("aucun chevauchement ; les ombres se repoussent entre elles", () => {
 });
 
 test("le pointeur fait fuir les ombres, pas les moteurs", () => {
-  const sim = P.createSimulation(demo, { width: W, height: H, seed: 4 });
-  run(sim, 4);
-  // Pointeur immobile posé à 20 px d'une bulle : où en est-elle une seconde plus tard ?
-  const after = (node) => {
+  // Pointeur immobile posé à 20 px d'une bulle : où en est-elle une seconde plus tard ? Comparé au même tirage
+  // sans pointeur (jumeau), pour isoler l'effet de la répulsion ; moyenne sur toutes les ombres (une ombre
+  // coincée par ses voisines fuit moins loin).
+  const distance = (index, withPointer) => {
+    const sim = P.createSimulation(demo, { width: W, height: H, seed: 4 });
+    run(sim, 4);
+    const node = sim.nodes[index];
     const px = node.x + 20;
     const py = node.y;
-    sim.setPointer(px, py);
+    if (withPointer) sim.setPointer(px, py);
     run(sim, 1);
-    sim.setPointer(null);
     return Math.hypot(node.x - px, node.y - py);
   };
-  // Même tirage sans pointeur, pour isoler l'effet de la répulsion.
-  const twin = P.createSimulation(demo, { width: W, height: H, seed: 4 });
-  run(twin, 4);
-  const shadowIdx = sim.nodes.findIndex((n) => n.category === "shadow");
-  const engineIdx = sim.nodes.findIndex((n) => n.category === "engine");
-  const fled = after(sim.nodes[shadowIdx]);
-  const px = twin.nodes[shadowIdx].x + 20;
-  const py = twin.nodes[shadowIdx].y;
-  run(twin, 1);
-  const baseline = Math.hypot(twin.nodes[shadowIdx].x - px, twin.nodes[shadowIdx].y - py);
-  assert.ok(fled > 80 && fled > baseline + 30, `ombre à ${fled.toFixed(0)} px du pointeur (sans pointeur : ${baseline.toFixed(0)} px)`);
-  const engine = sim.nodes[engineIdx];
-  const ex = engine.x;
-  const ey = engine.y;
-  after(engine);
-  // Un moteur ne fuit pas : il suit seulement sa lente orbite (≈ 11 px/s).
-  assert.ok(Math.hypot(engine.x - ex, engine.y - ey) < 40, "le moteur n'est pas repoussé");
+  const shadows = demo.nodes.map((n, i) => (n.category === "shadow" ? i : -1)).filter((i) => i >= 0);
+  const fled = mean(shadows.map((i) => distance(i, true)));
+  const baseline = mean(shadows.map((i) => distance(i, false)));
+  assert.ok(fled > 80 && fled > baseline + 40, `ombres à ${fled.toFixed(0)} px du pointeur en moyenne (sans pointeur : ${baseline.toFixed(0)} px)`);
+  // Un moteur ne fuit pas : il suit seulement sa lente orbite.
+  const engines = demo.nodes.map((n, i) => (n.category === "engine" ? i : -1)).filter((i) => i >= 0);
+  const pushed = mean(engines.map((i) => distance(i, true) - distance(i, false)));
+  assert.ok(Math.abs(pushed) < 10, `moteurs déplacés de ${pushed.toFixed(1)} px par le pointeur`);
+});
+
+test("E. cœur : anneau intérieur, entre le noyau et les moteurs ; battement au rythme de l'émotion", () => {
+  const sim = P.createSimulation(demo, { width: W, height: H, seed: 3 });
+  run(sim, 6);
+  const heart = [];
+  const engine = [];
+  for (let i = 0; i < 20; i++) {
+    run(sim, 0.5);
+    heart.push(mean(of(sim, "heart").map((n) => ring(sim, n))));
+    engine.push(mean(of(sim, "engine").map((n) => ring(sim, n))));
+  }
+  assert.ok(mean(heart) < mean(engine), `cœur ${mean(heart).toFixed(2)}, moteurs ${mean(engine).toFixed(2)}`);
+  assert.ok(Math.abs(mean(heart) - 0.27) < 0.27 * 0.35, `cœur à ${mean(heart).toFixed(2)} pour 0.27`);
+  // Battements comptés sur 10 s : la colère bat plus vite que la sérénité.
+  const beats = (emotion) => {
+    const data = JSON.parse(JSON.stringify(demo));
+    data.nodes.filter((n) => n.category === "heart").forEach((n) => { n.emotion = emotion; });
+    const s = P.createSimulation(data, { width: W, height: H, seed: 3 });
+    const n = s.nodes.find((m) => m.category === "heart");
+    let count = 0;
+    let prev = s.pulseOf(n);
+    let rising = false;
+    for (let i = 0; i < 600; i++) {
+      s.advance(1 / 60);
+      const v = s.pulseOf(n);
+      if (rising && v < prev && prev > 1.15) count += 1; // sommet d'une contraction principale
+      rising = v > prev;
+      prev = v;
+    }
+    return count;
+  };
+  const angry = beats("colere");
+  const calm = beats("serenite");
+  assert.ok(angry > calm * 2, `colère : ${angry} battements, sérénité : ${calm}`);
+  assert.ok(calm >= 4 && calm <= 8, `sérénité : ${calm} battements en 10 s`);
 });
 
 test("survol : la bulle s'arrête et grossit, puis repart", () => {

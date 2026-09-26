@@ -31,8 +31,9 @@ class DbTestCase(unittest.TestCase):
     def setUp(self):
         import app  # noqa: PLC0415 — clés des fournisseurs neutralisées : seuls les tests les activent
 
-        self._keys = (app.GEMINI_API_KEY, app.GROQ_API_KEY)
+        self._keys = (app.GEMINI_API_KEY, app.GROQ_API_KEY, app.GEMINI_RETRY_DELAY)
         app.GEMINI_API_KEY = app.GROQ_API_KEY = ""
+        app.GEMINI_RETRY_DELAY = 0  # nouvelle tentative immédiate après une surcharge simulée
         self._tmp = tempfile.mkdtemp(prefix="prism-test-")
         if TEST_DATABASE_URL:
             engine = db.configure(TEST_DATABASE_URL)
@@ -46,7 +47,7 @@ class DbTestCase(unittest.TestCase):
     def tearDown(self):
         import app  # noqa: PLC0415
 
-        app.GEMINI_API_KEY, app.GROQ_API_KEY = self._keys
+        app.GEMINI_API_KEY, app.GROQ_API_KEY, app.GEMINI_RETRY_DELAY = self._keys
         db.engine().dispose()
         shutil.rmtree(self._tmp, ignore_errors=True)
 

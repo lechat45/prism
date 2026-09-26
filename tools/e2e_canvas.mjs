@@ -611,7 +611,21 @@ async function main() {
     await waitFor(async () => !(await spotOpen()), "Spotlight fermé", 5000).catch(() => null);
 
     // ------------------------------------------------------------------ 17. Reflets des bords (pointeur)
-    const lit = await evaluate(`(() => { const c = document.querySelector(".card"); const r = c.getBoundingClientRect(); return { id: c.dataset.id, x: r.right + 40, y: r.top + 30 }; })()`);
+    // Point à 40 px du bord d'une carte, dans la fenêtre et sur le fond du canvas (ni autre carte, ni barre,
+    // ni dock) : la mise en page varie d'un système à l'autre (polices), un point fixe pouvait sortir de l'écran.
+    const lit = await evaluate(`(() => {
+      for (const c of document.querySelectorAll(".card")) {
+        const r = c.getBoundingClientRect();
+        const spots = [[r.right + 40, r.top + 30], [r.left - 40, r.top + 30], [r.left + 30, r.bottom + 40], [r.left + 30, r.top - 40]];
+        for (const [x, y] of spots) {
+          if (x < 8 || y < 8 || x > innerWidth - 8 || y > innerHeight - 8) continue;
+          const at = document.elementFromPoint(x, y);
+          if (at && (at.id === "workspace" || at.id === "world")) return { id: c.dataset.id, x, y, on: at.id };
+        }
+      }
+      const c = document.querySelector(".card"); const r = c.getBoundingClientRect();
+      return { id: c.dataset.id, x: r.right + 40, y: r.top + 30, on: "aucun point libre" };
+    })()`);
     await mouse("mouseMoved", lit.x, lit.y);
     const glow = await waitFor(async () => {
       const g = Number(await evaluate(`document.querySelector('.card[data-id="${lit.id}"]').dataset.glow || 0`));
@@ -625,7 +639,7 @@ async function main() {
       const values = await evaluate(`[...document.querySelectorAll(".card")].map((c) => Number(c.dataset.glow || 0))`);
       return values.every((v) => v === 0) ? values : null;
     }, "reflets éteints", 5000).catch(() => null);
-    check("reflets : le bord s'éclaire à l'approche du pointeur, s'éteint au loin", glow > 0 && (off !== null || far.d < 300), `éclat ${glow}, loin : ${Math.round(far.d)} px`);
+    check("reflets : le bord s'éclaire à l'approche du pointeur, s'éteint au loin", glow > 0 && (off !== null || far.d < 300), `éclat ${glow}, loin : ${Math.round(far.d)} px${glow > 0 ? "" : ` — point (${Math.round(lit.x)}, ${Math.round(lit.y)}) sur ${lit.on}`}`);
 
     // ------------------------------------------------------------------ 18. Cartes hors écran : démarrage différé
     const empty = await evaluate(`(() => { for (let y = 120; y < 640; y += 40) for (let x = 40; x < 1400; x += 40) {

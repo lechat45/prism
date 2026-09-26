@@ -1,7 +1,7 @@
 {
-  "_doc": "Réglages Gemini (API REST officielle, celle qu'appellent les SDK), partagés par le backend (surchargés par les variables d'environnement) et le moteur navigateur. {model} est remplacé par l'identifiant du modèle.",
+  "_doc": "Réglages Gemini (API REST officielle, celle qu'appellent les SDK), partagés par le backend (surchargés par les variables d'environnement) et le moteur navigateur. {model} est remplacé par l'identifiant du modèle. Chaîne : les plus capables d'abord, puis un modèle « lite », bien moins demandé quand Google est saturé (HTTP 503 « high demand »).",
   "url": "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-  "models": ["gemini-3.8-flash", "gemini-3.6-flash"],
+  "models": ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"],
   "temperature": 0.6,
   "max_output_tokens": 32768
 }

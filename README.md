@@ -23,7 +23,7 @@ dans une carte que l'on déplace, redimensionne, refactorise, recolore et export
 | **Bus d'évènements** | les widgets se parlent : `prism.emit(sujet, données)` / `prism.on(sujet, fn)` ; liaisons tracées sur le canvas ; une nouvelle génération connaît les sujets des widgets présents et peut s'y brancher |
 | **Spotlight** | Ctrl/Cmd + K (même dans un widget) : générer, refactoriser la carte sélectionnée, sauter à une carte, commandes, widgets de « Mon Hub », au clavier |
 | **Liquid Glass** | aurore sous le verre dépoli, reflets des bords qui suivent le pointeur, squelette holographique pendant la génération, fondu enchaîné vers le widget une fois prêt |
-| **Engramme cognitif** (V4) | « Engramme : Marie Curie » : carte interprétative de l'esprit d'une personnalité publique en 30 à 36 bulles vivantes (noyau, moteurs, ombres, artefacts datés), moteur physique ressort-masse natif ; chaque bulle devient un **filtre ADN** pour vos générations |
+| **Engramme cognitif** (V4) | « Engramme : Marie Curie » : carte interprétative de l'esprit d'une personnalité publique en 36 à 44 bulles vivantes (noyau, caractère et émotions, moteurs, ombres, artefacts datés), moteur physique ressort-masse natif ; chaque bulle devient un **filtre ADN** pour vos générations |
 | **Zoom fractal** (V4) | double-clic sur une partie d'un widget : Prism propose d'en faire un widget complet, qui émerge du point cliqué |
 | **Incantation** (V4) | maintenir Espace et parler : la demande dictée devient une carte sous le pointeur ; pendant l'écoute, le **verre organique** respire avec la voix |
 
@@ -162,15 +162,35 @@ prism.on("*", (data, { topic, from }) => { … });                       // tout
 ## Prism V4 « Singularité » : l'Engramme cognitif
 
 Tapez **« Engramme : Marie Curie »** (dock, Spotlight ou voix) : Prism cartographie l'esprit d'une
-personnalité publique, vivante ou historique, en une constellation de 30 à 36 bulles.
+personnalité publique, vivante ou historique, en une constellation de 36 à 44 bulles : sa façon de penser, mais aussi
+son caractère et ses émotions.
 
 | Catégorie | Bulles | Rendu et physique |
 | --- | --- | --- |
 | **A. Noyau** | 1 axiome | orbe blanc massif, rappelé au centre par un ressort très raide : immobile |
+| **E. Caractère et émotions** | 6 à 8 : traits de caractère, émotions (source, manifestation), attachements (ce qui l'émeut) | orbes chauds teintés par leur émotion, anneau intérieur au plus près du noyau, **battement de cœur** (« lub-dub ») au rythme de l'émotion : colère rapide, sérénité lente |
 | **B. Moteurs opérationnels** | 8 à 10 : algorithme de résolution, empreinte syntaxique (mots-clés), matrice esthétique (palette), méthode de travail | cyan, orbite proche, liens épais vers le noyau, dérive lente et amortie |
 | **C. Ombres et biais** | 10 à 15 : paradoxes, peurs primaires, biais cognitifs | violet / cramoisi, orbite médiane, bruit lissé et sursauts, se repoussent entre elles, **fuient le pointeur**, pulsation asynchrone, glitch (aberration chromatique, tranches décalées) |
 | **D. Artefacts chronologiques** | exactement 10 évènements datés, avec leur impact | or, minuscules, orbite lointaine, rapides, traînées |
 
+- **Caractère et émotions** : 12 émotions reconnues (joie, émerveillement, passion, tendresse, sérénité, fierté,
+  mélancolie, tristesse, colère, peur, angoisse, solitude), chacune avec sa couleur. Toute bulle peut porter une
+  **charge émotionnelle** (fin halo coloré, ligne dans sa fiche) ; l'Engramme porte le **tempérament** de la personne
+  (son caractère en une phrase) et son **climat émotionnel** (2 à 4 émotions pondérées) : puces dans l'en-tête et
+  **aura** qui teinte toute la carte. Émotions lues dans les sources publiques (écrits, journaux et lettres publiés,
+  témoignages), décrites comme des expériences vécues, jamais comme des troubles.
+- **Discuter avec la personne** : le bouton « Discuter avec Marie Curie » de la carte (ou Spotlight, ou « Mon Hub »)
+  ouvre une conversation avec une simulation fondée sur toutes les données écrites de l'Engramme (tempérament, climat,
+  bulles, sources, liens), à la première personne, clairement présentée comme une simulation (jamais la personne, aucune
+  citation inventée). Chaque réponse arrive avec sa **logique** : 1 à 4 bulles, dans l'ordre du raisonnement, que des
+  **ronds numérotés** écrivent un à un sur la carte (fil lumineux de bulle en bulle, explication tapée lettre à lettre).
+  ¼ de Spark par message ; sans clé, une réponse de démonstration honnête. Historique gardé avec la carte.
+- **Mon Hub** : les personnes (Engrammes) en tête, avec « Discuter » et « Ouvrir ».
+- **Mouvement logique et organique** : chaque bulle a une place calculée. Les artefacts forment une horloge (ordre
+  chronologique, sens horaire depuis midi) ; chaque bulle intérieure se tourne vers ce qui l'a forgée ou qu'elle nourrit
+  (lecture radiale : évènement → émotion → trait → noyau), les types restent groupés, les places sont équidistantes
+  (aucun chevauchement) et tout l'Engramme tourne d'un bloc : les alignements restent vrais. Organique par-dessus :
+  respiration, battement du cœur, ombres erratiques qui reviennent à leur place, épicycles vifs des artefacts.
 - **Moteur physique natif** (`frontend/engine/engram/physics.js`, sans D3) : ressort-masse, Euler semi-implicite
   à pas fixe (1/120 s), déterministe (graine), anneaux elliptiques épousant la carte, répulsion à courte portée.
   La bulle survolée s'arrête et grossit ; une fiche **Liquid Glass** (`bg-white/10 backdrop-blur-xl
@@ -186,8 +206,9 @@ personnalité publique, vivante ou historique, en une constellation de 30 à 36 
   publiques ».
 - **Injection d'ADN** : un clic sur une bulle en fait le **filtre ADN** du dock (la prochaine demande passe par ce
   trait : esthétique, logique, ton) ; un fichier CSV/JSON/TXT ou un texte **déposé sur une bulle** lance
-  aussitôt la génération filtrée, à côté de l'Engramme. Le trait part avec la demande (`dna`) et le prompt
-  l'applique sans jamais faire parler la personne.
+  aussitôt la génération filtrée, à côté de l'Engramme. Le trait part avec la demande (`dna`), avec le tempérament,
+  l'émotion de la bulle et le climat émotionnel : le widget en reprend le caractère et le registre émotionnel
+  (couleurs, mouvement, textes), sans jamais faire parler la personne.
 - **Zoom fractal** : double-clic sur une partie d'un widget (tableau, graphique, formulaire…) → proposition
   « Zoom fractal » ; le sous-composant devient un widget complet, avec les mêmes données, qui émerge du point cliqué.
 - **Incantation** : Espace maintenu (hors d'un champ) ouvre l'écoute (Web Speech API) ; la transcription
@@ -330,6 +351,7 @@ API ajoutée en phase 1 (jeton `Authorization: Bearer …` sauf `register`/`logi
 | `GET /api/auth/me` | profil et solde |
 | `POST /api/generate` | `{ prompt, file?, widget_id?, canvas?, dna? }` : génère (1 Spark) ou refactorise ce widget (0,5 Spark) ; `canvas` = autres widgets et sujets du bus (20 au plus) ; `dna` = trait d'Engramme qui filtre la génération (V4) ; **403** `insufficient_sparks` si le solde manque |
 | `POST /api/engram` | `{ person, language? }` : Engramme cognitif (2 Sparks, V4) ; **422** `engram_refused` (personne non publique, Sparks rendus) |
+| `POST /api/engram/chat` | `{ engram, history?, message, language? }` : « Discuter avec … » → `{ reply, trace: [{ id, why }] }` (¼ de Spark, V4) |
 | `GET /api/sparks` | solde, tarifs, derniers mouvements |
 | `GET /api/widgets[?on_canvas=true]`, `GET/PATCH/DELETE /api/widgets/{id}`, `POST /api/widgets/{id}/undo` | « Mon Hub » : liste légère, détail, état de la carte (`layout`, `clear_layout`, `storage`, `accent`, `title`, `thumbnail`), annulation, suppression |
 | `POST /api/widgets` | importe une carte créée hors compte (gratuit, 1 000 widgets par compte au plus) |
@@ -339,8 +361,9 @@ API ajoutée en phase 1 (jeton `Authorization: Bearer …` sauf `register`/`logi
 
 | Variable | Défaut | Rôle |
 | --- | --- | --- |
-| `GEMINI_API_KEY` | vide (mode démo) | clé API Gemini (Google AI Studio) |
-| `GEMINI_MODELS` | `gemini.json` | chaîne de modèles, séparés par des virgules (le suivant prend le relais) |
+| `GEMINI_API_KEY` | vide (mode démo) | clé API Gemini (Google AI Studio) ; plusieurs clés séparées par des virgules : servies à tour de rôle, une clé au quota (429) ou refusée passe la main |
+| `GEMINI_RETRY_DELAY` | `2` | surcharge passagère (503 « high demand ») : nouvelle tentative après ce délai, puis modèle suivant |
+| `GEMINI_MODELS` | `gemini.json` (3.8-flash, 3.6-flash, 3.5-flash-lite) | chaîne de modèles, séparés par des virgules (le suivant prend le relais) ; le modèle « lite » final, peu demandé, répond quand Google est saturé |
 | `GEMINI_MAX_OUTPUT_TOKENS` | `32768` | tokens de sortie max par appel |
 | `GROQ_API_KEY` | vide | secours facultatif, essayé seulement si tous les modèles Gemini échouent |
 | `GROQ_MODELS` | `groq.json` | chaîne de modèles Groq |

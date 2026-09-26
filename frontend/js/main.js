@@ -4,8 +4,9 @@ import { account, api, canAfford, onAccountChange, setSparks, signOut } from "./
 import { initAccountUi, openAuth, openPro, requireAccount } from "./account-ui.js";
 import { Bus } from "./bus.js";
 import { Canvas, CARD_MIN_H, CARD_MIN_W } from "./canvas.js";
-import { createEngram, engine, engineReady, generate, hasModel, initSettings, onEngineChange, openSettings } from "./engine.js";
-import { CATEGORY_LABELS, dnaFrom, engramHtml, engramRequest, isEngram } from "./engram.js";
+import { chatWithEngram, createEngram, engine, engineReady, generate, hasModel, initSettings, onEngineChange, openSettings } from "./engine.js";
+import { CATEGORY_LABELS, dnaFrom, engramHtml, engramOf, engramRequest, isEngram } from "./engram.js";
+import { EngramChat } from "./chat.js";
 import { forRequest } from "./files.js";
 import { Inspector } from "./inspector.js";
 import { Links } from "./links.js";
@@ -145,7 +146,10 @@ const canvas = new Canvas({
   onSelect: (id) => {
     if (inspector.isOpen && inspector.card?.id !== id) inspector.open(cards.get(id), { focus: false });
   },
-  onInspect: (id) => inspector.open(cards.get(id)),
+  onInspect: (id) => {
+    chat.close(); // même place à droite : un panneau à la fois
+    inspector.open(cards.get(id));
+  },
   onAction: (id, action) => {
     const card = cards.get(id);
     if (!card) return;
@@ -759,8 +763,46 @@ const incantation = new Incantation({
   blocked: () => Boolean(document.querySelector("dialog[open]")),
 });
 
+// ============================================================================
+// « Discuter avec … » : conversation fondée sur l'Engramme, trace logique montrée sur la carte
+// ============================================================================
+const accountRefusal = (message) => Object.assign(new Error(message), { handled: true });
+
+const chat = new EngramChat({
+  ask: async (card, history, message, signal) => {
+    if (engine.kind === "server") {
+      if (!requireAccount(() => openChat(card), "Connectez-vous pour discuter avec un Engramme.")) throw accountRefusal("compte requis");
+      if (!canAfford("engram_chat")) {
+        openPro({ sparks: account.user.sparks, required: account.pricing.engram_chat });
+        throw accountRefusal("Sparks insuffisants");
+      }
+    }
+    try {
+      const answer = await chatWithEngram(engramOf(card), history, message, signal);
+      if (Number.isFinite(answer.sparks)) setSparks(answer.sparks);
+      return answer;
+    } catch (err) {
+      if (handleAccountError(err, () => openChat(card))) err.handled = true;
+      throw err;
+    }
+  },
+  onTrace: (card, trace) => canvas.frame(card.id)?.contentWindow?.postMessage({ prism: "engram-trace", steps: trace }, "*"),
+  onSave: (card) => scheduleSave(card),
+  onOpen: () => inspector.close(),
+  toast: (message, options) => toast(message, options),
+});
+
+function openChat(card) {
+  const engram = engramOf(card);
+  if (!engram) return;
+  canvas.select(card.id);
+  canvas.ensureVisible(card);
+  chat.open(card, engram);
+}
+
 /** Retire une carte sans possibilité de retour (génération annulée ou échouée). */
 function discard(card) {
+  if (chat.card?.id === card.id) chat.close();
   if (dna?.cardId === card.id) clearDna();
   if (fractalOffer?.card === card) hideFractal();
   unmount(card);
@@ -912,6 +954,9 @@ window.addEventListener("message", (event) => {
       promptEl.focus();
       toast(`Filtre ADN : « ${dna.trait.title} ». Décrivez votre widget dans la barre du bas.`);
     }
+  } else if (data.prism === "engram-chat") {
+    // Bouton « Discuter avec … » de la carte : la conversation s'ouvre dans la page.
+    if (isEngram(card)) openChat(card);
   } else if (data.prism === "engram-drop") {
     // Fichier (File cloné) ou texte déposé sur une bulle : « Injection d'ADN ».
     if (!isEngram(card) || typeof data.nodeId !== "string") return;
@@ -1172,6 +1217,8 @@ addEventListener("keydown", (e) => {
     promptEl.focus();
   } else if (e.key === "Escape" && fractalOffer) {
     hideFractal();
+  } else if (e.key === "Escape" && chat.isOpen && !e.target.closest?.("dialog")) {
+    chat.close();
   } else if (e.key === "Escape" && inspector.isOpen && !e.target.closest?.("dialog")) {
     inspector.close();
   }
@@ -1245,6 +1292,13 @@ function spotlightItems(query) {
       group: "Cartes du canvas", icon: "◧", label: card.title, keywords: [card.prompt, ...(card.topics?.emits || [])],
       hint: "Afficher", base: 2, run: () => focusCard(card),
     });
+    const person = engramOf(card)?.person;
+    if (person) {
+      items.push({
+        group: "Personnes", icon: "💬", label: `Discuter avec ${person}`, keywords: ["discuter", "parler", "conversation", "engramme", person],
+        base: 4, run: () => openChat(card),
+      });
+    }
   }
   const command = (label, icon, run, keywords = [], hint = "") => items.push({ group: "Commandes", icon, label, run, keywords, hint, base: 3 });
   command("Tout voir", "⤢", () => canvas.fit(), ["cadrer", "fit", "zoom", "vue"]);
@@ -1400,7 +1454,17 @@ function syncCanvasFromServer() {
 async function start() {
   initSettings((message) => toast(message));
   initAccountUi({ toast: (message) => toast(message) });
-  initHub({ openWidget, isOnCanvas: (serverId) => Boolean(localCardFor(serverId)), onDeleted: onWidgetDeleted, toast });
+  initHub({
+    openWidget,
+    openChat: async (serverId) => {
+      await openWidget(serverId);
+      const card = localCardFor(serverId);
+      if (card) openChat(card);
+    },
+    isOnCanvas: (serverId) => Boolean(localCardFor(serverId)),
+    onDeleted: onWidgetDeleted,
+    toast,
+  });
   onAccountChange((state, change) => {
     if (change.signedIn) syncCanvasFromServer();
   });

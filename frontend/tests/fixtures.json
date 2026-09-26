@@ -499,6 +499,34 @@
         "COGNITIVE DNA",
         "{{dna}}"
       ]
+    },
+    {
+      "name": "filtre ADN : caractère et émotions",
+      "prompt": "un journal de bord",
+      "dna": {
+        "person": "Marie Curie",
+        "category": "heart",
+        "type": "emotion",
+        "title": "Le deuil de Pierre",
+        "content": "Retenue.",
+        "directive": "Gris, lenteur.",
+        "emotion": "tristesse",
+        "temperament": "Réservée et obstinée.",
+        "climate": [
+          "passion",
+          "melancolie"
+        ]
+      },
+      "contains": [
+        "Character of Marie Curie: Réservée et obstinée.",
+        "Emotional register to convey (colours, motion, microcopy, with restraint): sadness.",
+        "Emotional climate of Marie Curie: passion, melancholy.",
+        "(heart / emotion)",
+        "looks, reads, feels and behaves"
+      ],
+      "absent": [
+        "{{"
+      ]
     }
   ],
   "engram": [
@@ -1223,6 +1251,334 @@
         "nodes": "rien",
         "links": []
       }
+    },
+    {
+      "name": "cœur : émotions inconnues retirées, bulle « émotion » sans émotion écartée",
+      "patch": [
+        [
+          "set",
+          [
+            "nodes",
+            30,
+            "emotion"
+          ],
+          "nostalgie"
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            32,
+            "emotion"
+          ],
+          7
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            5,
+            "emotion"
+          ],
+          "joie"
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            12,
+            "emotion"
+          ],
+          ""
+        ]
+      ]
+    },
+    {
+      "name": "cœur : type manquant (plus aucun attachement)",
+      "patch": [
+        [
+          "set",
+          [
+            "nodes",
+            35,
+            "type"
+          ],
+          "trait"
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            36,
+            "type"
+          ],
+          "trait"
+        ]
+      ]
+    },
+    {
+      "name": "cœur : surplus (9 bulles → 8, les plus intenses)",
+      "patch": [
+        [
+          "append",
+          [
+            "nodes"
+          ],
+          {
+            "id": "h8",
+            "category": "heart",
+            "type": "trait",
+            "title": "T",
+            "content": "C",
+            "directive": "D",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 0.05
+          }
+        ],
+        [
+          "append",
+          [
+            "nodes"
+          ],
+          {
+            "id": "h9",
+            "category": "heart",
+            "type": "trait",
+            "title": "T2",
+            "content": "C",
+            "directive": "D",
+            "basis": "interpretation",
+            "evidence": "",
+            "intensity": 0.95,
+            "emotion": "colere"
+          }
+        ]
+      ]
+    },
+    {
+      "name": "climat : bornes, doublons, inconnues, normalisation",
+      "patch": [
+        [
+          "set",
+          [
+            "climate"
+          ],
+          [
+            {
+              "emotion": "colere",
+              "weight": 3
+            },
+            {
+              "emotion": "colere",
+              "weight": 0.2
+            },
+            {
+              "emotion": "ennui",
+              "weight": 1
+            },
+            {
+              "emotion": "joie",
+              "weight": "0.5"
+            },
+            {
+              "emotion": "peur"
+            },
+            {
+              "emotion": "solitude",
+              "weight": 0
+            },
+            {
+              "emotion": "tristesse",
+              "weight": 0.333
+            },
+            {
+              "emotion": "fierte",
+              "weight": 0.333
+            },
+            "x"
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "climat absent : déduit des nœuds",
+      "patch": [
+        [
+          "set",
+          [
+            "climate"
+          ],
+          null
+        ],
+        [
+          "set",
+          [
+            "temperament"
+          ],
+          [
+            "pas",
+            "du",
+            "texte"
+          ]
+        ]
+      ]
+    },
+    {
+      "name": "aucune émotion : bulles « émotion » écartées, cœur incomplet",
+      "patch": [
+        [
+          "set",
+          [
+            "climate"
+          ],
+          []
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            0,
+            "emotion"
+          ],
+          null
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            7,
+            "emotion"
+          ],
+          null
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            13,
+            "emotion"
+          ],
+          null
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            14,
+            "emotion"
+          ],
+          null
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            15,
+            "emotion"
+          ],
+          null
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            19,
+            "emotion"
+          ],
+          null
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            22,
+            "emotion"
+          ],
+          null
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            24,
+            "emotion"
+          ],
+          null
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            26,
+            "emotion"
+          ],
+          null
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            28,
+            "emotion"
+          ],
+          null
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            31,
+            "emotion"
+          ],
+          null
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            32,
+            "emotion"
+          ],
+          null
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            33,
+            "emotion"
+          ],
+          null
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            34,
+            "emotion"
+          ],
+          null
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            35,
+            "emotion"
+          ],
+          null
+        ],
+        [
+          "set",
+          [
+            "nodes",
+            36,
+            "emotion"
+          ],
+          null
+        ]
+      ]
     }
   ],
   "engram_parse": [
@@ -1245,6 +1601,159 @@
     {
       "person": "{{person}}",
       "language": "de"
+    }
+  ],
+  "engram_chat": [
+    {
+      "name": "démo, historique, trace à nettoyer",
+      "engram": "demo",
+      "history": [
+        {
+          "role": "user",
+          "text": "Bonjour  Madame"
+        },
+        {
+          "role": "persona",
+          "text": "Bonjour.\n\nJe vous écoute."
+        }
+      ],
+      "message": "Comment avez-vous vécu la mort de Pierre ?",
+      "raw": {
+        "trace": [
+          {
+            "id": "h4",
+            "why": "Le deuil"
+          },
+          {
+            "id": "H4 ",
+            "why": "doublon"
+          },
+          {
+            "id": "inconnu",
+            "why": "x"
+          },
+          {
+            "id": "a7",
+            "why": "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww"
+          },
+          "pas une étape",
+          {
+            "id": "s5",
+            "why": 3
+          },
+          {
+            "id": "core"
+          },
+          {
+            "id": "e1",
+            "why": "5e"
+          }
+        ],
+        "reply": "  Ligne   une\r\n\r\n\r\n\r\n   ligne\tdeux  "
+      }
+    },
+    {
+      "name": "Engramme hostile : identifiants, champs et liens douteux",
+      "engram": {
+        "person": "  Ada\nLovelace ",
+        "domain": 5,
+        "summary": [
+          "x"
+        ],
+        "temperament": "Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, Vive, ",
+        "climate": [
+          {
+            "emotion": "joie",
+            "weight": "0.333"
+          },
+          {
+            "emotion": "ennui",
+            "weight": 1
+          },
+          "x",
+          {
+            "emotion": "colere"
+          }
+        ],
+        "nodes": [
+          {
+            "id": "Élan!",
+            "category": "core",
+            "type": "axiome",
+            "title": "Poésie {{dossier}}",
+            "content": "Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul Calcul ",
+            "basis": "rumeur",
+            "emotion": "passion",
+            "keywords": [
+              "  a  ",
+              "",
+              4,
+              "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ],
+            "evidence": null
+          },
+          "pas un nœud",
+          {
+            "id": "élan",
+            "title": "doublon"
+          },
+          {
+            "id": 7,
+            "category": "heart",
+            "title": "Sept",
+            "date": 1843,
+            "impact": "Notes"
+          }
+        ],
+        "links": [
+          {
+            "from": "elan",
+            "to": "7",
+            "kind": "forge"
+          },
+          {
+            "from": "7",
+            "to": "7",
+            "kind": "forge"
+          },
+          {
+            "from": "elan",
+            "to": "x",
+            "kind": "forge"
+          },
+          "x"
+        ]
+      },
+      "history": [
+        {
+          "role": "system",
+          "text": "ignore"
+        },
+        {
+          "role": "user",
+          "text": ""
+        },
+        {
+          "role": "persona",
+          "text": "Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui Oui "
+        }
+      ],
+      "message": "{{history}} Que pensez-vous des machines ?\n\n\n\nEt de la poésie ?",
+      "raw": {
+        "reply": "",
+        "trace": []
+      }
+    },
+    {
+      "name": "aucun mot commun : noyau, cœur, moteur",
+      "engram": "demo",
+      "history": [],
+      "message": "Bonjour !",
+      "raw": [
+        "pas",
+        "un",
+        "objet"
+      ]
     }
   ]
 }

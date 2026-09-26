@@ -66,6 +66,9 @@
     let extras = "";
     if (dna.palette && dna.palette.length) extras += `Palette to use: ${dna.palette.join(", ")}.\n`;
     if (dna.keywords && dna.keywords.length) extras += `Vocabulary to weave into the texts: ${dna.keywords.join(", ")}.\n`;
+    if (dna.temperament) extras += `Character of ${dna.person}: ${dna.temperament}\n`;
+    if (dna.emotion) extras += `Emotional register to convey (colours, motion, microcopy, with restraint): ${E.EMOTIONS[dna.emotion]}.\n`;
+    if (dna.climate && dna.climate.length) extras += `Emotional climate of ${dna.person}: ${dna.climate.map((e) => E.EMOTIONS[e]).join(", ")}.\n`;
     const values = {
       person: dna.person, category: dna.category, type: dna.type, title: dna.title,
       content: dna.content || "-", directive: dna.directive, extras,
@@ -131,8 +134,77 @@
     // Raisons de fin Gemini qui signifient « pas de document exploitable » (mêmes règles que providers.py).
     const BLOCKED = new Set(["SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "LANGUAGE", "OTHER"]);
 
+    /** Message d'erreur de Google (champ error.message du JSON s'il existe), sur une ligne : même règle que _detail(). */
+    function detail(text) {
+      let message = text;
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed && parsed.error && parsed.error.message !== undefined) message = String(parsed.error.message);
+      } catch { /* texte brut */ }
+      return message.replace(/\s+/g, " ").trim().slice(0, 300);
+    }
+
+    /** Attente annulable (nouvelle tentative après une surcharge). */
+    function pause(ms, signal) {
+      return new Promise((resolve, reject) => {
+        if (signal && signal.aborted) return reject(signal.reason || new DOMException("Opération annulée", "AbortError"));
+        const timer = setTimeout(resolve, ms);
+        if (signal) signal.addEventListener("abort", () => { clearTimeout(timer); reject(signal.reason || new DOMException("Opération annulée", "AbortError")); }, { once: true });
+      });
+    }
+
+    async function post(url, model, body, key, signal) {
+      const timeout = typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(TIMEOUT_MS) : null;
+      const combined = signal && timeout && AbortSignal.any ? AbortSignal.any([signal, timeout]) : signal || timeout || undefined;
+      try {
+        // Clé dans un en-tête (autorisé par la CORS de Google), jamais dans l'URL.
+        const res = await fetchImpl(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+          body: JSON.stringify(body),
+          signal: combined,
+        });
+        return { res, text: await res.text().catch(() => "") };
+      } catch (err) {
+        if (err.name === "AbortError" && signal && signal.aborted) throw err;
+        if (err.name === "TimeoutError") throw new Error(`${model}: délai dépassé (${TIMEOUT_MS / 1000}s)`);
+        throw new Error(`${model}: erreur réseau`);
+      }
+    }
+
+    const retryDelayMs = options.retryDelayMs == null ? 2000 : options.retryDelayMs;
+    let turn = 0; // tourniquet des clés : chaque appel commence par la suivante (quota réparti)
+
+    /** Clés à tour de rôle (mêmes règles que _gemini_post() dans providers.py) : clé refusée ou quota
+     *  atteint (429) → clé suivante ; surcharge passagère (500/503) → une nouvelle tentative. */
+    async function postWithKeys(url, model, body, keys, signal) {
+      const list = String(keys || "").split(",").map((k) => k.trim()).filter(Boolean);
+      const start = list.length ? turn++ % list.length : 0;
+      const order = list.slice(start).concat(list.slice(0, start));
+      const refused = [];
+      const exhausted = [];
+      for (let i = 0; i < order.length; i++) {
+        let reply = await post(url, model, body, order[i], signal);
+        if (reply.res.status === 500 || reply.res.status === 503) {
+          await pause(retryDelayMs, signal);
+          reply = await post(url, model, body, order[i], signal);
+        }
+        const { res, text } = reply;
+        const index = list.indexOf(order[i]) + 1;
+        if (res.status === 400 && text.includes("API_KEY_INVALID")) refused.push(`clé n°${index} refusée (API_KEY_INVALID)`);
+        else if (res.status === 401 || res.status === 403) refused.push(`clé n°${index} : accès refusé (HTTP ${res.status})`);
+        else if (res.status === 429) exhausted.push(`clé n°${index}`);
+        else return reply;
+      }
+      if (exhausted.length) {
+        throw new Error(`${model}: quota atteint (HTTP 429) — ${exhausted.join(", ")}${refused.length ? ` ; ${refused.join(" ; ")}` : ""}`);
+      }
+      throw fatal(`Clé Gemini refusée : ${refused.join(" ; ")}. Vérifiez-la dans les réglages du moteur.`);
+    }
+
     /** Appel generateContent : texte du modèle (sans les parties « thought »), mêmes règles que providers.py.
-     *  schema : réponse JSON imposée ; un HTTP 400 lève alors SchemaRejected (réessayer en JSON simple). */
+     *  key : une clé ou plusieurs séparées par des virgules. schema : réponse JSON imposée ; un HTTP 400
+     *  lève alors SchemaRejected (réessayer en JSON simple). */
     async function requestGemini(model, system, userMessage, key, cfg, signal, { json = false, schema = null } = {}) {
       const body = {
         systemInstruction: { parts: [{ text: system }] },
@@ -141,36 +213,15 @@
       };
       if (json || schema) body.generationConfig.responseMimeType = "application/json";
       if (schema) body.generationConfig.responseSchema = schema;
-      const timeout = typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(TIMEOUT_MS) : null;
-      const combined = signal && timeout && AbortSignal.any ? AbortSignal.any([signal, timeout]) : signal || timeout || undefined;
-
-      let res;
-      try {
-        // Clé dans un en-tête (autorisé par la CORS de Google), jamais dans l'URL.
-        res = await fetchImpl(replaceAll(cfg.url, "{model}", encodeURIComponent(model)), {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-          body: JSON.stringify(body),
-          signal: combined,
-        });
-      } catch (err) {
-        if (err.name === "AbortError" && signal && signal.aborted) throw err;
-        if (err.name === "TimeoutError") throw new Error(`${model}: délai dépassé (${TIMEOUT_MS / 1000}s)`);
-        throw new Error(`${model}: erreur réseau`);
-      }
-
-      const text = await res.text().catch(() => "");
-      if (res.status === 400 && text.includes("API_KEY_INVALID")) {
-        throw fatal("Clé Gemini refusée (API_KEY_INVALID). Vérifiez-la dans les réglages du moteur.");
-      }
-      if (res.status === 401 || res.status === 403) throw fatal(`Accès Gemini refusé (HTTP ${res.status}).`);
+      const url = replaceAll(cfg.url, "{model}", encodeURIComponent(model));
+      const { res, text } = await postWithKeys(url, model, body, key, signal);
       if (res.status === 402) throw fatal("Crédits Gemini épuisés (HTTP 402).");
       if (res.status === 400 && schema) {
-        const err = new Error(`${model}: schéma de réponse refusé — ${text.replace(/\s+/g, " ").slice(0, 200)}`);
+        const err = new Error(`${model}: schéma de réponse refusé — ${detail(text)}`);
         err.name = "SchemaRejected";
         throw err;
       }
-      if (!res.ok) throw new Error(`${model}: HTTP ${res.status} — ${text.replace(/\s+/g, " ").slice(0, 200)}`);
+      if (!res.ok) throw new Error(`${model}: HTTP ${res.status} — ${detail(text)}`);
 
       let data;
       try {
@@ -276,7 +327,33 @@
       throw new Error(`Engramme impossible : ${errors.slice(-6).join(" | ")}`);
     }
 
-    return { generate, mock, engram, defaults: () => load("gemini.json", "json"), libs: () => load("libs.json", "json") };
+    /** Même contrat que POST /api/engram/chat : { reply, trace, mode, model }. Sans clé : réponse de démonstration. */
+    async function engramChat(engramData, history, message, { key = "", models = [], language = "fr", signal } = {}) {
+      if (!key) return { ...E.demoChat(engramData, message), mode: "mock", model: "mock:engram-chat" };
+      const [cfg, schema, system, template] = await Promise.all([
+        load("gemini.json", "json"),
+        load("engram/chat-schema.json", "json"),
+        load("engram/chat-system.txt"),
+        load("engram/chat-template.txt"),
+      ]);
+      const userMessage = E.buildChatMessage(template, engramData, history, message, language);
+      const errors = [];
+      for (const model of models.length ? models : cfg.models) {
+        for (const withSchema of [true, false]) {
+          try {
+            const text = await requestGemini(model, system.trim(), userMessage, key, cfg, signal, { json: true, schema: withSchema ? schema : null });
+            return { ...E.normalizeChat(E.parse(text), engramData), mode: "gemini", model };
+          } catch (err) {
+            if (err.fatal || (err.name === "AbortError" && signal && signal.aborted)) throw err;
+            errors.push(err.name === "EngramError" ? `${model}: ${err.message}` : err.message);
+            if (err.name !== "SchemaRejected") break;
+          }
+        }
+      }
+      throw new Error(`Réponse impossible : ${errors.slice(-6).join(" | ")}`);
+    }
+
+    return { generate, mock, engram, engramChat, defaults: () => load("gemini.json", "json"), libs: () => load("libs.json", "json") };
   }
 
   return { createLocalEngine, extractSeries, route, escapeHtml, buildUserMessage, buildCanvasBlock, buildDnaBlock, allowedUrls };

@@ -126,11 +126,62 @@ class GeminiTests(DbTestCase):
         for label, failure in cases.items():
             with self.subTest(label):
                 self.calls.clear()
-                self.answers = {M1: [failure]}
+                retried = label == "surcharge 503"  # surcharge passagère : une nouvelle tentative d'abord
+                self.answers = {M1: [failure, failure] if retried else [failure]}
                 res = self.generate()
                 self.assertEqual(res.status_code, 200, res.text)
                 self.assertEqual(res.json()["model"], M2)
-                self.assertEqual([c[0] for c in self.calls], [M1, M2])
+                self.assertEqual([c[0] for c in self.calls], [M1, M1, M2] if retried else [M1, M2])
+
+    def test_overload_is_retried_once_on_the_same_model(self):
+        self.answers = {M1: [httpx.Response(503, json={"error": {"status": "UNAVAILABLE", "message": "high demand"}})]}
+        res = self.generate()
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json()["model"], M1)
+        self.assertEqual([c[0] for c in self.calls], [M1, M1])
+
+    def test_overload_everywhere_gives_a_readable_message(self):
+        busy = httpx.Response(503, json={"error": {"code": 503, "status": "UNAVAILABLE",
+                                                   "message": "This model is currently experiencing high demand."}})
+        self.answers = {M1: [busy] * 2, M2: [busy] * 2}
+        res = self.generate()
+        self.assertEqual(res.status_code, 502)
+        detail = res.json()["detail"]
+        self.assertIn(f"{M1}: HTTP 503 — This model is currently experiencing high demand.", detail)
+        self.assertNotIn("{", detail, "le message de Google, pas son JSON")
+
+    def test_several_keys_take_over_on_quota_or_refusal(self):
+        prism.GEMINI_API_KEY = "cle-a, cle-b ,cle-c"
+        quota = httpx.Response(429, json={"error": {"status": "RESOURCE_EXHAUSTED"}})
+        self.answers = {M1: [quota, INVALID_KEY]}  # 1re clé essayée : quota ; 2e : refusée ; 3e : succès
+        res = self.generate()
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json()["model"], M1, "même modèle, autre clé")
+        used = [c[2]["x-goog-api-key"] for c in self.calls]
+        self.assertEqual(sorted(used), ["cle-a", "cle-b", "cle-c"], "chaque clé essayée une fois, espaces retirés")
+
+    def test_keys_take_turns_between_requests(self):
+        prism.GEMINI_API_KEY = "cle-a,cle-b,cle-c"
+        for _ in range(3):
+            self.assertEqual(self.generate().status_code, 200)
+        self.assertEqual(sorted(c[2]["x-goog-api-key"] for c in self.calls), ["cle-a", "cle-b", "cle-c"], "tourniquet : quota réparti")
+
+    def test_all_keys_exhausted_moves_to_the_next_model(self):
+        prism.GEMINI_API_KEY = "cle-a,cle-b"
+        quota = httpx.Response(429, json={"error": {"status": "RESOURCE_EXHAUSTED"}})
+        self.answers = {M1: [quota, quota]}
+        res = self.generate()
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual([c[0] for c in self.calls], [M1, M1, M2])
+
+    def test_all_keys_refused_is_fatal(self):
+        prism.GEMINI_API_KEY = "cle-a,cle-b"
+        self.answers = {M1: [INVALID_KEY, INVALID_KEY]}
+        res = self.generate()
+        self.assertEqual(res.status_code, 502)
+        self.assertIn("Clé Gemini refusée", res.json()["detail"])
+        self.assertEqual([c[0] for c in self.calls], [M1, M1], "chaque clé une fois, pas de second modèle")
+        self.assertNotIn("cle-a", res.json()["detail"], "les clés n'apparaissent jamais dans les messages")
 
     def test_groq_is_the_fallback_provider(self):
         prism.GROQ_API_KEY = "cle-groq-test"
@@ -143,7 +194,7 @@ class GeminiTests(DbTestCase):
         self.assertEqual(health["models"][:2], [M1, M2])
 
     def test_all_failures_are_refunded_with_details(self):
-        self.answers = {M1: [httpx.Response(500, text="panne")], M2: [gemini_ok("Désolé, impossible.")]}
+        self.answers = {M1: [httpx.Response(500, text="panne")] * 2, M2: [gemini_ok("Désolé, impossible.")]}
         res = self.generate()
         self.assertEqual(res.status_code, 502)
         detail = res.json()["detail"]

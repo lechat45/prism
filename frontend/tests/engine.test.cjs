@@ -66,9 +66,11 @@ function fakeGemini(responses) {
     if (!init) return fileFetch(url); // fichiers du moteur (prompt, gemini.json…)
     const model = decodeURIComponent(url.split("/models/")[1].split(":")[0]);
     calls.push({ url, model, body: JSON.parse(init.body), headers: init.headers });
-    return Promise.resolve(responses[model] || httpError(404, "modèle inconnu"));
+    const answer = responses[model];
+    // Tableau : une réponse par appel (la dernière se répète) ; sinon, la même réponse à chaque appel.
+    return Promise.resolve((Array.isArray(answer) ? (answer.length > 1 ? answer.shift() : answer[0]) : answer) || httpError(404, "modèle inconnu"));
   };
-  return { engine: L.createLocalEngine({ baseUrl: "engine/", fetch: fetchImpl }), calls };
+  return { engine: L.createLocalEngine({ baseUrl: "engine/", fetch: fetchImpl, retryDelayMs: 0 }), calls };
 }
 
 test("sans clé : mode démo depuis les gabarits partagés", async () => {
@@ -123,6 +125,48 @@ test("clé refusée (400 API_KEY_INVALID) : arrêt immédiat, sans essayer d'aut
   const { engine, calls } = fakeGemini({ [PRIMARY]: INVALID_KEY, [SECONDARY]: gemini(GOOD) });
   await assert.rejects(engine.generate("x", { key: "k" }), /Clé Gemini refusée/);
   assert.equal(calls.length, 1);
+});
+
+test("surcharge passagère (503) : une nouvelle tentative sur le même modèle", async () => {
+  const { engine, calls } = fakeGemini({ [PRIMARY]: [httpError(503), gemini(GOOD)] });
+  const r = await engine.generate("x", { key: "k" });
+  assert.equal(r.model, PRIMARY);
+  assert.deepEqual(calls.map((c) => c.model), [PRIMARY, PRIMARY]);
+});
+
+test("plusieurs clés : quota ou clé refusée → clé suivante, même modèle ; tourniquet entre les appels", async () => {
+  const { engine, calls } = fakeGemini({ [PRIMARY]: [httpError(429), INVALID_KEY, gemini(GOOD)] });
+  const r = await engine.generate("x", { key: "cle-a, cle-b ,cle-c" });
+  assert.equal(r.model, PRIMARY);
+  assert.deepEqual(calls.map((c) => c.headers["x-goog-api-key"]).sort(), ["cle-a", "cle-b", "cle-c"]);
+
+  const turns = fakeGemini({ [PRIMARY]: gemini(GOOD) });
+  for (let i = 0; i < 3; i++) await turns.engine.generate("x", { key: "cle-a,cle-b,cle-c" });
+  assert.deepEqual(turns.calls.map((c) => c.headers["x-goog-api-key"]).sort(), ["cle-a", "cle-b", "cle-c"], "quota réparti");
+});
+
+test("plusieurs clés : toutes au quota → modèle suivant ; toutes refusées → arrêt", async () => {
+  const quota = fakeGemini({ [PRIMARY]: httpError(429), [SECONDARY]: gemini(GOOD) });
+  assert.equal((await quota.engine.generate("x", { key: "a,b" })).model, SECONDARY);
+  assert.deepEqual(quota.calls.map((c) => c.model), [PRIMARY, PRIMARY, SECONDARY]);
+
+  const refused = fakeGemini({ [PRIMARY]: INVALID_KEY, [SECONDARY]: gemini(GOOD) });
+  await assert.rejects(refused.engine.generate("x", { key: "cle-a,cle-b" }), (err) => /Clé Gemini refusée/.test(err.message) && !err.message.includes("cle-a"));
+  assert.equal(refused.calls.length, 2);
+});
+
+test("« Discuter avec … » : démo sans clé, réponse JSON imposée et trace vérifiée avec une clé", async () => {
+  const E = require("../engine/engram/engram.js");
+  const demo = E.normalize(JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "../engine/engram/demo-marie-curie.json"), "utf8")));
+  const offline = await fakeGemini({}).engine.engramChat(demo, [], "Parlez-moi de la mort de Pierre");
+  assert.equal(offline.mode, "mock");
+  assert.ok(offline.trace.some((s) => s.id === "h4"));
+  const answer = JSON.stringify({ trace: [{ id: "h4", why: "deuil" }, { id: "zz", why: "?" }], reply: "Je me suis tue, et j'ai travaillé." });
+  const { engine, calls } = fakeGemini({ [PRIMARY]: gemini(answer) });
+  const r = await engine.engramChat(demo, [{ role: "user", text: "Bonjour" }], "Et après ?", { key: "k" });
+  assert.deepEqual([r.mode, r.model, r.reply, r.trace.map((s) => s.id)], ["gemini", PRIMARY, "Je me suis tue, et j'ai travaillé.", ["h4"]]);
+  assert.ok(calls[0].body.generationConfig.responseSchema.properties.trace);
+  assert.ok(calls[0].body.contents[0].parts[0].text.includes("[h4] heart/emotion · Le deuil de Pierre"));
 });
 
 test("tous les modèles en échec : message détaillé", async () => {

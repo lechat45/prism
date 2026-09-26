@@ -58,7 +58,7 @@ from sanitize import (
     validate_document,
 )
 
-__version__ = "4.0.0a1"
+__version__ = "4.0.0a4"
 
 BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
@@ -90,8 +90,10 @@ def _models(env: str, defaults: dict) -> list[str]:
     return [m.strip() for m in os.getenv(env, ",".join(defaults["models"])).split(",") if m.strip()]
 
 
-# Gemini, fournisseur principal (clé gratuite sur https://aistudio.google.com/apikey).
+# Gemini, fournisseur principal (clé gratuite sur https://aistudio.google.com/apikey). Plusieurs clés
+# possibles, séparées par des virgules : quota atteint ou clé refusée → la suivante (tourniquet).
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_RETRY_DELAY = float(os.getenv("GEMINI_RETRY_DELAY", "2"))  # nouvelle tentative après une surcharge (503)
 GEMINI_URL = os.getenv("GEMINI_URL", GEMINI_DEFAULTS["url"])  # surcharge : faux serveur des tests E2E
 GEMINI_MODELS = _models("GEMINI_MODELS", GEMINI_DEFAULTS)
 GEMINI_MAX_OUTPUT_TOKENS = int(os.getenv("GEMINI_MAX_OUTPUT_TOKENS", str(GEMINI_DEFAULTS["max_output_tokens"])))
@@ -171,18 +173,25 @@ class DnaTrait(BaseModel):
     """« Injection d'ADN » (V4) : trait d'un Engramme cognitif qui filtre la génération (style, logique, ton)."""
 
     person: str = Field(..., min_length=1, max_length=120)
-    category: Literal["core", "engine", "shadow", "artifact"]
+    category: Literal["core", "heart", "engine", "shadow", "artifact"]
     type: str = Field(..., max_length=40)
     title: str = Field(..., min_length=1, max_length=engram.LIMITS["title"])
     content: str = Field("", max_length=engram.LIMITS["content"])
     directive: str = Field(..., min_length=1, max_length=engram.LIMITS["directive"])
     palette: list[Annotated[str, StringConstraints(pattern=r"^#[0-9a-fA-F]{6}$")]] = Field([], max_length=5)
     keywords: list[Annotated[str, StringConstraints(min_length=1, max_length=40)]] = Field([], max_length=8)
+    # Caractère et émotions : charge du nœud, tempérament et climat émotionnel de la personne.
+    emotion: str | None = Field(None, max_length=20)
+    temperament: str = Field("", max_length=engram.LIMITS["temperament"])
+    climate: list[str] = Field([], max_length=engram.CLIMATE_MAX)
 
     @model_validator(mode="after")
     def type_matches_category(self) -> DnaTrait:
         if self.type not in engram.TYPES[self.category]:
             raise ValueError(f"type {self.type!r} inconnu pour la catégorie {self.category}")
+        unknown = [e for e in [self.emotion, *self.climate] if e is not None and e not in engram.EMOTIONS]
+        if unknown:
+            raise ValueError(f"émotion inconnue : {unknown[0]!r}")
         return self
 
 
@@ -207,6 +216,12 @@ def dna_block(dna: DnaTrait | None) -> str:
         extras += "Palette to use: " + ", ".join(dna.palette) + ".\n"
     if dna.keywords:
         extras += "Vocabulary to weave into the texts: " + ", ".join(dna.keywords) + ".\n"
+    if dna.temperament:
+        extras += f"Character of {dna.person}: {dna.temperament}\n"
+    if dna.emotion:
+        extras += f"Emotional register to convey (colours, motion, microcopy, with restraint): {engram.EMOTIONS[dna.emotion]}.\n"
+    if dna.climate:
+        extras += f"Emotional climate of {dna.person}: " + ", ".join(engram.EMOTIONS[e] for e in dna.climate) + ".\n"
     values = {"person": dna.person, "category": dna.category, "type": dna.type, "title": dna.title,
               "content": dna.content or "-", "directive": dna.directive, "extras": extras}
     # Une seule passe : un titre contenant « {{directive}} » n'est pas réinterprété.
@@ -339,7 +354,8 @@ def active_providers() -> list[Provider]:
     providers = []
     if GEMINI_API_KEY:
         providers.append(Provider("gemini", GEMINI_API_KEY, GEMINI_MODELS, GEMINI_URL, {
-            "temperature": GEMINI_DEFAULTS["temperature"], "max_output_tokens": GEMINI_MAX_OUTPUT_TOKENS}))
+            "temperature": GEMINI_DEFAULTS["temperature"], "max_output_tokens": GEMINI_MAX_OUTPUT_TOKENS,
+            "retry_delay": GEMINI_RETRY_DELAY}))
     if GROQ_API_KEY:
         providers.append(Provider("groq", GROQ_API_KEY, GROQ_MODELS, GROQ_URL, {
             "temperature": GROQ_DEFAULTS["temperature"], "max_completion_tokens": MAX_TOKENS,
