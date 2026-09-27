@@ -72,6 +72,8 @@ jobs:
           done
       - name: Statique (GitHub Pages sans API)
         run: node tools/e2e_canvas.mjs --base http://127.0.0.1:8001/frontend/
+      - name: V6 · Mode Nexus (porte, synapses, fil coupé, anatomie, War Room)
+        run: node tools/e2e_nexus.mjs --base http://127.0.0.1:8001/frontend/
       - name: V5 · aucune fuite à la fermeture des cartes (écouteurs, iframes, mémoire)
         run: node tools/bench_memory.mjs --base http://127.0.0.1:8001/frontend/ --cards 8 --cycles 2 --assert
       - name: Serveur avec faux Gemini

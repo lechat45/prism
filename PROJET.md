@@ -1,14 +1,21 @@
 # Prism — description complète du projet
 
-> Version décrite : **5.0.0-alpha.5** (27 septembre 2026). En ligne : <https://lechat45.github.io/prism/>,
+> Version décrite : **6.0.0-alpha.1** (27 septembre 2026). En ligne : <https://lechat45.github.io/prism/>,
 > API : <https://prism-api-0x4z.onrender.com>. Code : <https://github.com/lechat45/prism> (branches `v3` = site public
-> sur GitHub Pages, `v4` = branche déployée par Render pour l'API, `v5` = développement ; identiques à chaque publication).
+> sur GitHub Pages, `v4` = branche déployée par Render pour l'API, `v5` et `v6` = développement ; identiques à chaque publication).
 > Ce document est mis à jour à chaque livraison ; le détail technique de chaque version est dans `CHANGELOG.md`.
 
 ## Nouveautés
 
 Les dernières mises à jour, de la plus récente à la plus ancienne.
 
+- **6.0.0-alpha.1 — 27 septembre 2026 · le Mode Nexus (prototype de la V6).** Prism a son logo, la Lentille Continua
+  (trois rubans sans fin entrelacés autour d'une lentille vide), et une porte d'entrée à deux portes : **Focus**, Prism
+  tel que vous le connaissez, et **Nexus**, un laboratoire où l'on relie à la main des contextes, des esprits
+  (Engrammes) et des écrans par des fils de lumière. Couper un fil fait oublier aussitôt ce qui en dépendait ; un
+  double-clic plonge dans un Engramme pour changer sa logique, son humeur et ses souvenirs ; entourer plusieurs
+  Engrammes les réunit dans une War Room où ils débattent. Prototype autonome : `frontend/nexus.html`, entièrement dans
+  le navigateur (section 6).
 - **5.0.0-alpha.5 — 27 septembre 2026 · l'écosystème devient sensitif.** Votre propre Engramme de créateur (Mode
   Miroir, après 50 Sparks, avec votre accord), une aura sonore et haptique facultative, un mode spatial (cartes en arc,
   réalité mixte si l'appareil le permet). En coulisses : une demande déjà servie revient sans appel au modèle ni Sparks
@@ -236,11 +243,77 @@ Le bouton de la barre du haut dispose les cartes en arc : inclinées vers vous s
 un mur de verre qui vous entoure. Si l'appareil sait faire de la réalité mixte (WebXR, par exemple un téléphone Android
 récent), Prism propose d'y entrer : l'interface Liquid Glass s'affiche par-dessus la pièce filmée.
 
-## 6. Architecture technique
+## 6. Le Mode Nexus (V6, prototype)
+
+La V6 fait de Prism un **système d'exploitation cognitif spatial**. Le prototype `frontend/nexus.html` (un seul
+fichier, sans dépendance ni requête réseau) en montre l'expérience.
+
+### 6.1 La porte d'entrée
+
+Fond d'obsidienne, logo animé (la Lentille Continua tourne lentement, son foyer respire) et deux portes de verre :
+**Mode Focus**, l'expérience directe (une intention, une interface : l'application Prism actuelle), et **Mode Nexus**,
+le laboratoire. Franchir la porte Nexus fait plonger la vue dans le canvas.
+
+### 6.2 Bulles et synapses
+
+| Bulle | Rôle |
+| --- | --- |
+| **Contexte** (verre cyan) | une donnée brute : un brief, une consigne, un texte ; titre et texte modifiables |
+| **Engramme** (orbe) | un esprit : il reçoit, raisonne selon son anatomie, transmet sa pensée |
+| **Rendu** (écran) | la sortie : titre, données clés, voix de chaque esprit, action principale |
+
+On tire une **synapse** depuis le port lumineux de droite d'une bulle jusqu'à une autre bulle ; le fil prend les
+couleurs des deux bulles, et une impulsion le parcourt quand l'information passe. Le flux va toujours
+**Contexte → Engramme → Rendu** (un Engramme peut aussi nourrir un autre Engramme) ; les fils impossibles (vers un
+Contexte, depuis un Rendu, en boucle) sont refusés.
+
+| Geste | Effet |
+| --- | --- |
+| Glisser une bulle, le fond | déplacer ; molette ou pincement : zoom ; « Tout voir » ou F |
+| Glisser depuis un port | tirer une synapse |
+| Clic sur un fil | le **couper** |
+| Double-clic sur un Engramme | plonger dans son **anatomie** |
+| Double-clic dans le vide | un nouveau Contexte |
+| Alt + glisser (ou l'outil Hub) | entourer des Engrammes : un **Hub** |
+
+### 6.3 Le flux, et le fil coupé
+
+Chaque bulle calcule sa **mémoire** à partir de ce qu'elle reçoit, dans l'ordre du graphe. Les données du brief (par
+exemple « CO₂, température, bruit ») voyagent le long des fils jusqu'à l'écran. **Couper un fil efface instantanément
+la mémoire du nœud suivant** et de tout ce qui en dépendait : l'Engramme privé d'entrée se tait, et l'écran perd sa
+voix sur-le-champ.
+
+### 6.4 L'anatomie d'un Engramme
+
+Double-cliquer sur un Engramme fait plonger la caméra dans l'orbe. Trois organes l'entourent :
+
+- **Core (logique)** : le mode de raisonnement : méthode scientifique stricte, simplicité radicale, empathie
+  utilisateur, science poétique, pensée systémique ;
+- **State (humeur)** : énergie, patience, créativité, qui donnent une humeur (fatiguée, créative, patiente, concentrée)
+  et modulent la pensée (plus brève, plus imagée, plus prudente) ;
+- **Memories** : les souvenirs et connaissances, qu'on ajoute ou qu'on oublie ; le plus pertinent est mobilisé.
+
+La pensée de l'Engramme s'affiche en direct pendant qu'on le modifie ; en remontant, le flux repart avec lui.
+
+### 6.5 Hubs : les War Rooms
+
+Entourer plusieurs Engrammes crée un **Hub** (un anneau qui les suit). Sa **War Room** les réunit : on pose une
+question, chacun prend position, puis répond à un autre, et le Hub livre une **synthèse** commune. Dans le prototype,
+le débat est simulé localement à partir de l'anatomie de chaque Engramme.
+
+### 6.6 Ce qui reste à brancher
+
+Le prototype raisonne sans modèle. Prochaines étapes : faire penser les bulles par les vrais Engrammes de Prism
+(Gemini, Sparks avec accord), générer de vrais widgets dans les bulles de Rendu, sauvegarder les scènes dans Mon Hub,
+et faire de la porte d'entrée la page d'accueil du site.
+
+## 7. Architecture technique
 
 ```
 frontend/  (site statique : GitHub Pages, ou servi par l'API)
-  index.html, style.css            interface « Liquid Glass » (CSS pur)
+  index.html, style.css            interface « Liquid Glass » (CSS pur) : le Mode Focus
+  nexus.html                        V6 : porte d'entrée et Mode Nexus (prototype autonome, un seul fichier)
+  assets/logo_prism.svg             le logo, la Lentille Continua
   js/                               modules : canvas, cartes, sandbox, bus, Hub, Spotlight, compte, Engramme,
                                     conversation (chat.js), voix (voice.js), paramètres (prefs.js), Web Worker ;
                                     V5 : confusion.js (pointeur), sediment.js (sédiments), ecosystem.js (réglages)
@@ -263,11 +336,11 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
   reste en mémoire, vérifié par la CI) ; bouclier API (une demande déjà servie au même compte revient sans appel au
   modèle).
 - **Qualité** : 157 tests Python (sur SQLite et PostgreSQL), 93 tests Node, parité Python ↔ navigateur sur des cas
-  partagés, six scénarios E2E dans Chrome (site statique, serveur de démo, faux Gemini, GitHub Pages → API, Engramme en
-  mode serveur et statique), contrôle de l'image Docker ; tout est rejoué par la CI GitHub à chaque envoi. Aucun test ne
+  partagés, sept scénarios E2E dans Chrome (site statique, serveur de démo, faux Gemini, GitHub Pages → API, Engramme en
+  mode serveur et statique, Mode Nexus), contrôle de l'image Docker ; tout est rejoué par la CI GitHub à chaque envoi. Aucun test ne
   touche la production.
 
-## 7. Historique
+## 8. Historique
 
 | Version | Apport |
 | --- | --- |
@@ -284,8 +357,9 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
 | alpha.3 | répartition de charge entre les clés Gemini, section « Nouveautés » de ce document |
 | alpha.4 | phase 1 : physique et dessin des Engrammes dans un Web Worker (OffscreenCanvas), physique v2, budget de calcul |
 | alpha.5 | phase 1 : nettoyage mémoire, bouclier API ; phase 2 : Mode Miroir, aura sonore et haptique, mode spatial |
+| 6.0.0-alpha.1 | V6 « Nexus » : logo (Lentille Continua), porte d'entrée Focus / Nexus, prototype du Mode Nexus (synapses, fil coupé, anatomie, War Rooms) |
 
-## 8. Limites connues
+## 9. Limites connues
 
 - Un Engramme créé avant la 5.0.0-alpha.4 garde le moteur inscrit dans sa carte (rendu sur le fil de la carte) ; les
   nouveaux Engrammes profitent du Worker.
@@ -295,4 +369,6 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
   répond en moteur navigateur pendant ce temps).
 - La reconnaissance vocale dépend du navigateur (Chrome, Edge, Safari) ; l'incantation demande que le focus ne soit pas
   dans un widget.
+- Le Mode Nexus est un prototype : ses Engrammes raisonnent par une simulation locale (pas encore par Gemini), et une
+  scène n'est pas sauvegardée quand on quitte la page.
 - Les Engrammes restent des interprétations : leur qualité dépend du dossier public de la personne et du modèle.

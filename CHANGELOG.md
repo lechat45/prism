@@ -1,5 +1,36 @@
 # Changelog
 
+## 6.0.0-alpha.1 — 2026-09-27 (V6 « Nexus » : logo, porte d'entrée et prototype du Mode Nexus)
+
+- **Logo `logo_prism`, la Lentille Continua** (`frontend/assets/logo_prism.svg`) : trois rubans sans fin entrelacés en
+  anneaux borroméens (chacun passe sur un voisin et sous l'autre : ôtez-en un, les deux autres se libèrent), dégradés
+  cyan, magenta et ambre ; leur triple intersection, laissée vide, forme la lentille centrale, avec un point de lumière
+  en son foyer. Le dessus-dessous est obtenu par masques, sans aucun trait sombre ajouté.
+- **`frontend/nexus.html`**, prototype autonome (un seul fichier : HTML, CSS et JS purs, aucune dépendance ni requête) :
+  - **Porte d'entrée** : logo animé (image `data:` isolée), deux portes de verre : Mode Focus (l'application actuelle,
+    `index.html`) et Mode Nexus.
+  - **Canvas Nexus** : bulles de **Contexte** (texte brut), d'**Engramme** (orbe vivant dont la respiration suit
+    l'énergie, avec trois satellites : Core, State, Memories) et de **Rendu** (écran). Glisser les bulles, déplacer le
+    fond, zoomer à la molette ou en pinçant à deux doigts, « Tout voir » (F) ; double-clic dans le vide : nouveau
+    contexte ; Suppr, Échap.
+  - **Synapses** : on tire un fil de lumière d'un port de sortie vers une bulle ; dégradé aux couleurs des deux bulles,
+    impulsions qui parcourent le fil quand l'information passe. Le flux va toujours Contexte → Engramme → Rendu (fils
+    vers un Contexte ou depuis un Rendu refusés, aucune boucle).
+  - **Flux** : chaque bulle calcule sa mémoire à partir de ce qu'elle reçoit (tri topologique) ; un Engramme pense
+    selon son anatomie, et les données du brief (une énumération explicite passe avant la fréquence des mots) voyagent
+    le long des fils ; l'écran compose titre, données, voix de chaque esprit et action. **Couper un fil (un clic)
+    efface à l'instant la mémoire en aval**, sans attendre d'impulsion.
+  - **Anatomie** (double-clic sur un Engramme) : la caméra plonge dans l'orbe ; **Core** (cinq modes de raisonnement),
+    **State** (énergie, patience, créativité → humeur et jauge), **Memories** (ajouter, oublier). Sa pensée se met à
+    jour en direct ; à la remontée, le flux repart.
+  - **Hubs (War Rooms)** : Alt + glisser, ou l'outil Hub, pour entourer plusieurs Engrammes ; l'anneau du Hub les suit,
+    et sa War Room (la caméra le cadre) les fait débattre en deux tours, positions puis confrontation, avant une
+    synthèse. Débat simulé localement.
+  - Personnalités publiques (Marie Curie, Steve Jobs, Ada Lovelace) : faits publics datés, voix paraphrasée, aucune
+    citation inventée.
+- **`tools/e2e_nexus.mjs`** (dans la CI) : porte, flux, pincement, glisser, synapses et sens du flux, anatomie, fil
+  coupé, Hub et débat, par de vrais évènements souris et tactiles dans Chrome.
+
 ## 5.0.0-alpha.5 — 2026-09-27 (V5 « Écosystème sensitif » : phases 1 et 2 terminées)
 
 - **Phase 1 · nettoyage mémoire** (`js/scope.js`) : chaque carte a une portée — écouteurs (AbortController), minuteurs,

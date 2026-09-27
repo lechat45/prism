@@ -1,0 +1,1706 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prism — Nexus</title>
+<meta name="description" content="Prism V6 : le système d'exploitation cognitif spatial. Mode Nexus : dessinez des chaînes de pensée entre contextes, Engrammes et rendus.">
+<meta name="color-scheme" content="dark">
+<style>
+/* ==========================================================================
+   Prism V6 · Nexus — prototype en un seul fichier (HTML, CSS, JS purs ; aucune dépendance, aucune requête).
+   Porte d'entrée (logo « Lentille Continua », Focus / Nexus), canvas spatial, bulles, synapses, anatomie
+   des Engrammes, Hubs (War Rooms).
+   ========================================================================== */
+:root {
+  --obsidian: #05060a;
+  --ink: #0a0c12;
+  --text: #f4f6fb;
+  --muted: #a3abbd;
+  --faint: #636b7c;
+  --line: rgba(255, 255, 255, 0.11);
+  --line-strong: rgba(255, 255, 255, 0.22);
+  --glass: rgba(255, 255, 255, 0.055);
+  --glass-top: rgba(255, 255, 255, 0.09);
+  --glass-deep: rgba(12, 14, 22, 0.66);
+  --context: #7fdcff;
+  --render: #ffe3b0;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --spring: cubic-bezier(0.2, 1.3, 0.3, 1);
+  --display: "Inter var", "Inter", "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+}
+@property --spin { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--obsidian); color: var(--text);
+  font-family: var(--display); -webkit-font-smoothing: antialiased; }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+::selection { background: rgba(127, 220, 255, 0.3); }
+
+/* ---- Fond : aurore d'obsidienne et grain ------------------------------------------------ */
+.aurora { position: fixed; inset: -25%; z-index: 0; pointer-events: none; filter: blur(90px) saturate(150%); opacity: 0.5; }
+.aurora span { position: absolute; width: 46vmax; height: 46vmax; border-radius: 50%; mix-blend-mode: screen;
+  animation: drift 40s ease-in-out infinite alternate; }
+.aurora span:nth-child(1) { left: 18%; top: 8%; background: radial-gradient(circle, rgba(47, 123, 255, 0.5), transparent 62%); }
+.aurora span:nth-child(2) { left: 48%; top: 28%; background: radial-gradient(circle, rgba(124, 77, 255, 0.42), transparent 62%); animation-duration: 52s; animation-delay: -12s; }
+.aurora span:nth-child(3) { left: 30%; top: 52%; background: radial-gradient(circle, rgba(255, 110, 70, 0.22), transparent 62%); animation-duration: 61s; animation-delay: -30s; }
+@keyframes drift { to { transform: translate(6vmax, -4vmax) scale(1.12); } }
+.grain { position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: 0.07; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+
+/* ---- Porte d'entrée ---------------------------------------------------------------------- */
+.gate { position: fixed; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: safe center;
+  gap: 0; padding: 24px 16px; overflow-y: auto; transition: opacity 0.9s var(--ease), transform 1.1s var(--ease), filter 0.9s var(--ease); }
+.gate.is-leaving { opacity: 0; transform: scale(1.6); filter: blur(12px); pointer-events: none; }
+.lens { width: min(300px, 56vw, 28vh); aspect-ratio: 1; position: relative; }
+.lens img { display: block; width: 100%; height: 100%; }
+.lens::after { content: ""; position: absolute; inset: 18%; border-radius: 50%; z-index: -1;
+  background: radial-gradient(circle, rgba(143, 243, 255, 0.16), transparent 65%); filter: blur(20px); }
+@keyframes rings { to { transform: rotate(360deg); } }
+.brand-title { margin: 18px 0 0; font-size: clamp(48px, 7vw, 76px); font-weight: 650; letter-spacing: -0.045em; line-height: 1;
+  background: linear-gradient(180deg, #ffffff 30%, #9fb0c9); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.brand-sub { margin: 14px 0 0; color: var(--muted); font-size: 15px; letter-spacing: 0.01em; }
+.micro { font-size: 10px; font-weight: 600; letter-spacing: 0.26em; text-transform: uppercase; color: var(--faint); }
+.doors { display: flex; gap: 18px; margin-top: 46px; flex-wrap: wrap; justify-content: center; }
+.door { position: relative; width: 290px; padding: 22px 24px 20px; border-radius: 24px; text-align: left; text-decoration: none;
+  color: var(--text); isolation: isolate; overflow: hidden;
+  background: linear-gradient(180deg, var(--glass-top), rgba(255, 255, 255, 0.025));
+  border: 1px solid var(--line); -webkit-backdrop-filter: blur(26px) saturate(160%); backdrop-filter: blur(26px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 34px 80px -34px rgba(0, 0, 0, 0.85);
+  transition: transform 0.45s var(--ease), border-color 0.3s, box-shadow 0.3s; }
+.door::before { content: ""; position: absolute; inset: 0; z-index: -1; opacity: 0; transition: opacity 0.35s;
+  background: radial-gradient(280px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.13), transparent 62%); }
+.door:hover, .door:focus-visible { transform: translateY(-4px); border-color: var(--line-strong); outline: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 44px 90px -30px rgba(0, 0, 0, 0.9); }
+.door:hover::before, .door:focus-visible::before { opacity: 1; }
+.door strong { display: block; margin-top: 8px; font-size: 26px; font-weight: 620; letter-spacing: -0.03em; }
+.door span.desc { display: block; margin-top: 6px; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.door .arrow { position: absolute; right: 22px; top: 22px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+  border: 1px solid var(--line); color: var(--muted); transition: transform 0.45s var(--ease), color 0.3s, border-color 0.3s; }
+.door:hover .arrow { transform: translateX(3px) rotate(-45deg); color: var(--text); border-color: var(--line-strong); }
+.door-nexus::after { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: conic-gradient(from var(--spin), #6ae4ff, #7c4dff, #ff6fd8, #ffc46b, #6ae4ff);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); animation: spin 7s linear infinite; opacity: 0.75; }
+@keyframes spin { to { --spin: 360deg; } }
+.gate-foot { margin: 40px 0 0; }
+@media (min-height: 860px) { .gate-foot { position: absolute; bottom: 22px; margin: 0; } }
+
+/* ---- Nexus : canvas --------------------------------------------------------------------- */
+.nexus { position: fixed; inset: 0; z-index: 4; opacity: 0; transition: opacity 0.9s var(--ease) 0.25s; }
+.nexus.is-on { opacity: 1; }
+.viewport { position: absolute; inset: 0; overflow: hidden; cursor: grab; touch-action: none;
+  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.085) 1px, transparent 0);
+  background-size: var(--grid, 32px) var(--grid, 32px); background-position: var(--gx, 0) var(--gy, 0); }
+.viewport::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(0, 0, 0, 0.55)); }
+.viewport.is-panning { cursor: grabbing; }
+.viewport.is-lasso { cursor: crosshair; }
+.world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.world.is-diving { transition: transform 0.85s cubic-bezier(0.7, 0, 0.3, 1), opacity 0.85s ease; }
+.wires { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
+.hubs { position: absolute; left: 0; top: 0; }
+
+/* Synapses : fil de lumière, lueur, flux, zone de clic (couper). */
+.link .glow { fill: none; stroke-width: 9; opacity: 0.16; filter: blur(3px); }
+.link .core { fill: none; stroke-width: 2; }
+.link .flow { fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-dasharray: 1 22; opacity: 0.6;
+  animation: flow 1.3s linear infinite; }
+.link .hit { fill: none; stroke: transparent; stroke-width: 18; pointer-events: stroke; cursor: pointer; }
+.link:hover .core { stroke-width: 3; }
+.link:hover .glow { opacity: 0.32; }
+.link.is-cut { transition: opacity 0.45s ease; opacity: 0; }
+@keyframes flow { to { stroke-dashoffset: -23; } }
+.pulse { fill: #fff; filter: drop-shadow(0 0 6px #fff); }
+.draft { fill: none; stroke: rgba(255, 255, 255, 0.85); stroke-width: 2; stroke-dasharray: 6 6; animation: flow 0.8s linear infinite; }
+.spark { fill: none; stroke: #fff; stroke-width: 2; }
+
+/* ---- Bulles ------------------------------------------------------------------------------ */
+.node { position: absolute; user-select: none; --c: #fff; transition: filter 0.3s; }
+.node.is-entering { animation: enter 0.9s var(--spring) both; }
+@keyframes enter { from { opacity: 0; transform: scale(0.6) translateY(18px); filter: blur(8px); } }
+.node.is-selected .shell { border-color: color-mix(in srgb, var(--c) 60%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 40%, transparent), 0 30px 80px -30px rgba(0, 0, 0, 0.9), 0 0 60px -20px var(--c); }
+.shell { position: relative; border-radius: 22px; border: 1px solid var(--line); cursor: grab;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025)), var(--glass-deep);
+  -webkit-backdrop-filter: blur(22px) saturate(150%); backdrop-filter: blur(22px) saturate(150%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 30px 80px -34px rgba(0, 0, 0, 0.9);
+  transition: border-color 0.3s, box-shadow 0.3s; }
+.node.is-dragging .shell { cursor: grabbing; }
+.head { display: flex; align-items: center; gap: 8px; padding: 13px 16px 0; }
+.head .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c); box-shadow: 0 0 12px var(--c); flex: none; }
+.head .kind { font-size: 9.5px; font-weight: 650; letter-spacing: 0.24em; text-transform: uppercase; color: color-mix(in srgb, var(--c) 75%, #fff); }
+.head .close { margin-left: auto; width: 22px; height: 22px; border: 0; border-radius: 50%; background: transparent; color: var(--faint);
+  display: grid; place-items: center; opacity: 0; transition: opacity 0.2s, background 0.2s, color 0.2s; }
+.node:hover .head .close { opacity: 1; }
+.head .close:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+
+.port { position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; z-index: 3;
+  background: var(--obsidian); border: 1.5px solid color-mix(in srgb, var(--c) 80%, transparent);
+  box-shadow: 0 0 0 4px rgba(5, 6, 10, 0.6), 0 0 14px -2px var(--c); transition: transform 0.25s var(--spring), background 0.2s; }
+.port::after { content: ""; position: absolute; inset: 3.5px; border-radius: 50%; background: var(--c); opacity: 0.85; }
+.port.out { cursor: crosshair; }
+.port:hover, .port.is-target { transform: scale(1.45); }
+.port.is-target { background: var(--c); animation: beckon 0.9s ease-in-out infinite; }
+@keyframes beckon { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--c) 25%, transparent), 0 0 22px var(--c); } }
+
+/* Contexte */
+.node.context { --c: var(--context); width: 272px; }
+.node.context .title { margin: 10px 16px 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; outline: none; }
+.node.context textarea { display: block; width: calc(100% - 32px); margin: 8px 16px 16px; min-height: 86px; resize: none; border: 0;
+  border-radius: 12px; padding: 10px 12px; background: rgba(0, 0, 0, 0.28); color: #dfe7f5; font-size: 13px; line-height: 1.55;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); outline: none; cursor: text; }
+.node.context textarea:focus { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent); }
+.node.context .port.out { left: 100%; top: 50%; }
+
+/* Engramme : un micro-univers en orbe */
+.node.engram { width: 190px; text-align: center; }
+.orb { position: relative; width: 150px; height: 150px; margin: 0 auto; border-radius: 50%; cursor: grab; }
+.orb .body { position: absolute; inset: 14px; border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, #fff 0 4%, color-mix(in srgb, var(--c) 70%, #fff) 14%, var(--c) 38%, color-mix(in srgb, var(--c) 35%, #05060a) 72%, #05060a 100%);
+  box-shadow: 0 0 60px -6px color-mix(in srgb, var(--c) 70%, transparent), inset 0 0 30px rgba(0, 0, 0, 0.55);
+  animation: breathe var(--breath, 5s) ease-in-out infinite; }
+.orb .veil { position: absolute; inset: 14px; border-radius: 50%; mix-blend-mode: screen; opacity: 0.55;
+  background: conic-gradient(from var(--spin), transparent, rgba(255, 255, 255, 0.35), transparent 30%, transparent 60%, rgba(255, 255, 255, 0.18), transparent 80%);
+  animation: spin 9s linear infinite; }
+.orb .ring { position: absolute; inset: 0; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); }
+.orb .ring.r2 { inset: -9px; border-style: dashed; opacity: 0.35; animation: rings 40s linear infinite; }
+.orb .sat { position: absolute; left: 50%; top: 50%; width: 9px; height: 9px; margin: -4.5px; border-radius: 50%;
+  background: #fff; box-shadow: 0 0 10px #fff; animation: orbit var(--t, 9s) linear infinite; }
+.orb .sat.s2 { --t: 13s; --r: 88px; width: 7px; height: 7px; animation-delay: -4s; background: var(--c); box-shadow: 0 0 10px var(--c); }
+.orb .sat.s3 { --t: 17s; --r: 80px; width: 6px; height: 6px; animation-delay: -9s; opacity: 0.8; }
+@keyframes orbit { from { transform: rotate(0deg) translateX(var(--r, 82px)); } to { transform: rotate(360deg) translateX(var(--r, 82px)); } }
+@keyframes breathe { 50% { transform: scale(1.035); filter: brightness(1.12); } }
+.node.engram.is-thinking .orb .body { animation-duration: 0.9s; }
+.node.engram.is-thinking .orb .ring { border-color: var(--c); box-shadow: 0 0 24px -4px var(--c); }
+.node.engram .name { margin-top: 12px; font-size: 16px; font-weight: 620; letter-spacing: -0.02em; }
+.node.engram .meta { display: flex; justify-content: center; gap: 6px; margin-top: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 10.5px; color: #dfe5f0;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.05); white-space: nowrap; }
+.chip i { width: 6px; height: 6px; border-radius: 50%; background: var(--mood, var(--c)); box-shadow: 0 0 8px var(--mood, var(--c)); }
+.node.engram .thought { margin: 10px auto 0; max-width: 220px; font-size: 11.5px; line-height: 1.5; color: var(--muted);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; min-height: 0; transition: opacity 0.4s; }
+.node.engram .thought:empty { opacity: 0; }
+.node.engram .port.in { left: 20px; top: 75px; }
+.node.engram .port.out { left: 170px; top: 75px; }
+.node.engram .dive { position: absolute; left: 50%; top: 118px; transform: translateX(-50%); opacity: 0; font-size: 10px;
+  letter-spacing: 0.18em; text-transform: uppercase; color: #fff; pointer-events: none; transition: opacity 0.3s; text-shadow: 0 0 8px #000; }
+.node.engram:hover .dive { opacity: 0.85; }
+
+/* Rendu : un écran de sortie */
+.node.render { --c: var(--render); width: 360px; }
+.node.render .screen { margin: 10px 12px 12px; min-height: 196px; border-radius: 14px; overflow: hidden; position: relative;
+  background: linear-gradient(180deg, rgba(10, 12, 20, 0.92), rgba(6, 7, 12, 0.96)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); }
+.node.render .empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--faint); font-size: 12.5px; }
+.node.render .empty b { display: block; color: var(--muted); font-weight: 500; margin-bottom: 6px; }
+.skeleton { width: 70%; height: 8px; border-radius: 6px; margin: 8px auto 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)); background-size: 200% 100%;
+  animation: shimmer 2.2s linear infinite; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+.node.render .port.in { left: 0; top: 50%; }
+.out-ui { padding: 14px 14px 12px; animation: materialize 0.7s var(--ease) both; }
+@keyframes materialize { from { opacity: 0; filter: blur(6px); transform: translateY(6px); } }
+.out-ui h3 { margin: 0; font-size: 14.5px; font-weight: 640; letter-spacing: -0.015em; }
+.out-ui .by { margin-top: 3px; font-size: 10.5px; color: var(--faint); }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 11px; }
+.tile { border-radius: 10px; padding: 8px 9px; background: rgba(255, 255, 255, 0.04); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05); }
+.tile small { display: block; font-size: 9.5px; color: var(--muted); text-transform: capitalize; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile .bar { height: 5px; margin-top: 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.tile .bar i { display: block; height: 100%; border-radius: inherit; background: var(--c); box-shadow: 0 0 10px var(--c); }
+.voices { margin-top: 11px; display: grid; gap: 7px; }
+.voice { border-left: 2px solid var(--vc); padding: 1px 0 1px 9px; font-size: 11.5px; line-height: 1.5; color: #d3dae8; }
+.voice b { display: block; font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--vc); margin-bottom: 1px; }
+.cta { margin-top: 12px; display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 999px; padding: 8px 14px;
+  font-size: 12px; font-weight: 600; color: #05060a; background: linear-gradient(90deg, #fff, var(--c)); box-shadow: 0 8px 30px -10px var(--c); }
+.node.render.is-erased .screen { animation: erase 0.5s ease; }
+@keyframes erase { 30% { filter: brightness(2.2) blur(2px); } }
+
+/* Hubs : cercle de War Room autour de plusieurs Engrammes */
+.hub { position: absolute; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.035), transparent 70%);
+  border: 1px solid rgba(255, 255, 255, 0.14); box-shadow: inset 0 0 80px -30px rgba(160, 140, 255, 0.5), 0 0 80px -40px rgba(160, 140, 255, 0.7);
+  animation: hubIn 0.9s var(--spring) both; }
+.hub::before { content: ""; position: absolute; inset: -1px; border-radius: 50%; padding: 1px;
+  background: conic-gradient(from var(--spin), transparent, rgba(255, 255, 255, 0.7), transparent 25%, transparent 55%, rgba(170, 140, 255, 0.8), transparent 80%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); animation: spin 8s linear infinite; }
+.hub .label { position: absolute; left: 50%; top: -14px; transform: translateX(-50%); pointer-events: auto; display: flex; gap: 8px;
+  align-items: center; padding: 6px 8px 6px 14px; border-radius: 999px; border: 1px solid var(--line-strong); white-space: nowrap;
+  background: rgba(12, 14, 22, 0.8); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); font-size: 12px; }
+.hub .label b { font-weight: 620; }
+.hub .label button { border: 0; border-radius: 999px; padding: 5px 11px; font-size: 11.5px; font-weight: 600; color: #05060a;
+  background: linear-gradient(90deg, #fff, #c9b8ff); }
+@keyframes hubIn { from { opacity: 0; transform: scale(0.85); } }
+.lasso { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.lasso path { fill: rgba(170, 140, 255, 0.07); stroke: rgba(210, 195, 255, 0.9); stroke-width: 1.5; stroke-dasharray: 5 6; animation: flow 0.9s linear infinite; }
+
+/* ---- HUD --------------------------------------------------------------------------------- */
+.hud { position: absolute; left: 16px; right: 16px; top: 14px; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; pointer-events: none;
+  transition: opacity 0.4s var(--ease); }
+.nexus.is-diving .hud, .nexus.is-diving .hint { opacity: 0; pointer-events: none; }
+.nexus.is-diving .hud .pill { pointer-events: none; }
+.pill { pointer-events: auto; display: flex; align-items: center; gap: 4px; padding: 5px; border-radius: 18px; border: 1px solid var(--line);
+  background: rgba(12, 14, 22, 0.62); -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 20px 60px -30px rgba(0, 0, 0, 0.9); }
+.brandlet { display: flex; align-items: center; gap: 10px; padding: 3px 12px 3px 6px; border: 0; background: none; }
+.brandlet img { width: 30px; height: 30px; }
+.brandlet b { font-size: 15px; font-weight: 640; letter-spacing: -0.02em; }
+.brandlet span { font-size: 10px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--faint); }
+.tool { border: 0; border-radius: 13px; padding: 8px 12px; background: transparent; color: var(--muted); font-size: 12.5px;
+  display: inline-flex; align-items: center; gap: 7px; transition: background 0.2s, color 0.2s; white-space: nowrap; }
+.tool:hover, .tool[aria-pressed="true"], .tool[aria-expanded="true"] { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+.tool i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 10px var(--c); }
+.tool kbd { font-family: var(--mono); font-size: 10px; color: var(--faint); border: 1px solid var(--line); border-radius: 5px; padding: 0 4px; }
+.spacer { flex: 1; }
+.zoomlabel { min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; }
+.menu { position: absolute; top: calc(100% + 8px); left: 0; min-width: 250px; padding: 6px; border-radius: 18px; border: 1px solid var(--line);
+  background: rgba(12, 14, 22, 0.86); -webkit-backdrop-filter: blur(28px) saturate(160%); backdrop-filter: blur(28px) saturate(160%);
+  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.95); pointer-events: auto; animation: pop 0.35s var(--spring); }
+@keyframes pop { from { opacity: 0; transform: translateY(-6px) scale(0.97); } }
+.menu button { width: 100%; display: flex; align-items: center; gap: 12px; padding: 9px 10px; border: 0; border-radius: 12px; background: none; text-align: left; }
+.menu button:hover, .menu button:focus-visible { background: rgba(255, 255, 255, 0.07); outline: none; }
+.menu .mini-orb { width: 26px; height: 26px; border-radius: 50%; flex: none;
+  background: radial-gradient(circle at 35% 30%, #fff 0 6%, var(--c) 40%, #05060a 100%); box-shadow: 0 0 16px -2px var(--c); }
+.menu b { display: block; font-size: 13px; font-weight: 600; }
+.menu small { display: block; font-size: 11px; color: var(--faint); margin-top: 1px; }
+.anchor { position: relative; }
+.hint { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 20; display: flex; gap: 16px; padding: 9px 16px;
+  border-radius: 999px; border: 1px solid var(--line); background: rgba(12, 14, 22, 0.55); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  color: var(--faint); font-size: 11.5px; white-space: nowrap; transition: opacity 0.6s; }
+.hint b { color: var(--muted); font-weight: 600; }
+.toast { position: absolute; left: 50%; bottom: 66px; transform: translateX(-50%); z-index: 40; padding: 10px 16px; border-radius: 999px;
+  border: 1px solid var(--line-strong); background: rgba(14, 16, 26, 0.88); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  font-size: 12.5px; animation: pop 0.4s var(--spring); }
+
+/* ---- Anatomie d'un Engramme (plongée à l'intérieur) --------------------------------------- */
+.anatomy { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; opacity: 0; transition: opacity 0.6s var(--ease);
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--c) 16%, transparent), rgba(5, 6, 10, 0.94) 62%); }
+.anatomy.is-on { opacity: 1; }
+.anatomy::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.5;
+  background-image: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--c) 30%, transparent) 1px, transparent 0); background-size: 26px 26px;
+  -webkit-mask: radial-gradient(circle at 50% 50%, #000, transparent 70%); mask: radial-gradient(circle at 50% 50%, #000, transparent 70%); }
+.anat-top { position: absolute; top: 20px; left: 24px; right: 24px; display: flex; align-items: center; gap: 12px; }
+.anat-top h2 { margin: 0; font-size: 22px; font-weight: 640; letter-spacing: -0.03em; }
+.anat-stage { position: relative; width: min(1060px, 94vw); height: min(640px, 80vh); }
+.anat-links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.anat-links path { fill: none; stroke: var(--c); stroke-width: 1.4; opacity: 0.45; stroke-dasharray: 2 10; animation: flow 1.6s linear infinite; }
+.anat-core { position: absolute; left: 50%; top: 50%; width: 230px; height: 230px; margin: -115px; border-radius: 50%; }
+.anat-core .body { inset: 0; animation-duration: var(--breath, 5s); }
+.anat-core .orbits { position: absolute; inset: -40px; border-radius: 50%; border: 1px dashed color-mix(in srgb, var(--c) 30%, transparent); animation: rings 60s linear infinite; }
+.organ .mood-chip { margin-top: 9px; }
+.organ { position: absolute; width: 300px; padding: 16px 18px 16px; border-radius: 24px; border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025)), rgba(10, 12, 20, 0.72);
+  -webkit-backdrop-filter: blur(24px) saturate(150%); backdrop-filter: blur(24px) saturate(150%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 40px 90px -40px rgba(0, 0, 0, 0.95); animation: enter 0.8s var(--spring) both; }
+.organ::after { content: ""; position: absolute; width: 12px; height: 12px; border-radius: 50%; background: var(--c); box-shadow: 0 0 16px var(--c); }
+.organ.core { left: 0; top: 4%; animation-delay: 0.08s; }
+.organ.core::after { right: -6px; top: 50%; }
+.organ.state { right: 0; top: 10%; animation-delay: 0.16s; }
+.organ.state::after { left: -6px; top: 50%; }
+.organ.memories { left: 50%; bottom: 0; transform: translateX(-50%); width: 420px; animation-delay: 0.24s; }
+.organ.memories::after { left: 50%; top: -6px; margin-left: -6px; }
+.organ h4 { margin: 0; font-size: 9.5px; font-weight: 650; letter-spacing: 0.26em; text-transform: uppercase; color: color-mix(in srgb, var(--c) 70%, #fff); }
+.organ .big { margin-top: 6px; font-size: 18px; font-weight: 620; letter-spacing: -0.02em; }
+.organ p { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.modes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
+.modes button { border: 1px solid var(--line); border-radius: 999px; padding: 5px 10px; background: rgba(255, 255, 255, 0.04); font-size: 11.5px; color: var(--muted); }
+.modes button[aria-pressed="true"] { color: #05060a; background: linear-gradient(90deg, #fff, var(--c)); border-color: transparent; font-weight: 600; }
+.gauge { display: flex; align-items: center; gap: 14px; margin-top: 8px; }
+.gauge svg { width: 78px; height: 78px; flex: none; }
+.gauge .track { fill: none; stroke: rgba(255, 255, 255, 0.08); stroke-width: 7; }
+.gauge .fill { fill: none; stroke: var(--mood, var(--c)); stroke-width: 7; stroke-linecap: round; transition: stroke-dashoffset 0.5s var(--ease), stroke 0.5s;
+  filter: drop-shadow(0 0 6px var(--mood, var(--c))); }
+.sliders { display: grid; gap: 9px; flex: 1; }
+.sliders label { display: grid; gap: 3px; font-size: 11px; color: var(--muted); }
+.sliders label span { display: flex; justify-content: space-between; }
+input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.1); outline: none; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px var(--c); cursor: pointer; }
+input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0 10px var(--c); }
+.memories-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; max-height: 96px; overflow: auto; }
+.memories-list .chip { padding: 5px 6px 5px 10px; font-size: 11.5px; white-space: normal; text-align: left; }
+.memories-list .chip button { border: 0; background: none; color: var(--faint); padding: 0 4px; font-size: 13px; line-height: 1; }
+.memories-list .chip button:hover { color: var(--text); }
+.memadd { display: flex; gap: 6px; margin-top: 10px; }
+.memadd input { flex: 1; border: 1px solid var(--line); border-radius: 999px; background: rgba(0, 0, 0, 0.3); padding: 7px 12px; font-size: 12px; outline: none; }
+.memadd input:focus { border-color: color-mix(in srgb, var(--c) 50%, transparent); }
+.preview { position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: 360px; text-align: center; }
+.preview .micro { color: color-mix(in srgb, var(--c) 60%, #fff); }
+.preview p { margin: 8px 0 0; font-size: 13px; line-height: 1.55; color: #dfe5f0; min-height: 60px; }
+.glass-btn { border: 1px solid var(--line-strong); border-radius: 999px; padding: 8px 14px; background: rgba(255, 255, 255, 0.06); font-size: 12.5px;
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); display: inline-flex; gap: 8px; align-items: center; }
+.glass-btn:hover { background: rgba(255, 255, 255, 0.12); }
+
+/* ---- War Room (chat du Hub) ---------------------------------------------------------------- */
+.room { position: absolute; right: 16px; top: 76px; bottom: 16px; z-index: 25; width: min(420px, calc(100vw - 32px)); display: flex; flex-direction: column;
+  border-radius: 26px; border: 1px solid var(--line); overflow: hidden;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)), rgba(10, 12, 20, 0.8);
+  -webkit-backdrop-filter: blur(30px) saturate(160%); backdrop-filter: blur(30px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 40px 100px -40px rgba(0, 0, 0, 0.95); animation: slide 0.6s var(--ease); }
+@keyframes slide { from { opacity: 0; transform: translateX(30px); } }
+.room header { padding: 16px 18px 12px; border-bottom: 1px solid var(--line); }
+.room header .row { display: flex; align-items: center; gap: 10px; }
+.room header h3 { margin: 0; font-size: 16px; font-weight: 640; letter-spacing: -0.02em; }
+.avatars { display: flex; margin-top: 10px; }
+.avatars span { width: 28px; height: 28px; border-radius: 50%; margin-right: -6px; border: 2px solid #0b0d15;
+  background: radial-gradient(circle at 35% 30%, #fff 0 6%, var(--c) 42%, #05060a 100%); box-shadow: 0 0 14px -2px var(--c); }
+.log { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; }
+.msg { max-width: 92%; padding: 9px 12px; border-radius: 16px; font-size: 12.8px; line-height: 1.55; animation: materialize 0.45s var(--ease) both; }
+.msg b { display: block; font-size: 9.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--c); margin-bottom: 2px; }
+.msg.user { align-self: flex-end; background: rgba(255, 255, 255, 0.1); border-bottom-right-radius: 5px; }
+.msg.mind { align-self: flex-start; background: color-mix(in srgb, var(--c) 9%, rgba(255, 255, 255, 0.03)); border: 1px solid color-mix(in srgb, var(--c) 22%, transparent); border-bottom-left-radius: 5px; }
+.msg.typing i { display: inline-block; width: 5px; height: 5px; margin-right: 3px; border-radius: 50%; background: var(--c); animation: blink 1s infinite; }
+.msg.typing i:nth-child(2) { animation-delay: 0.15s; } .msg.typing i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes blink { 50% { opacity: 0.25; transform: translateY(-2px); } }
+.msg.synth { align-self: stretch; max-width: none; position: relative; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.16); }
+.msg.synth b { color: #e9ddff; }
+.msg.synth ul { margin: 6px 0 0; padding-left: 16px; }
+.round { align-self: center; font-size: 9.5px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--faint); }
+.ask { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--line); }
+.ask input { flex: 1; border: 1px solid var(--line); border-radius: 999px; background: rgba(0, 0, 0, 0.3); padding: 10px 14px; font-size: 13px; outline: none; }
+.ask input:focus { border-color: rgba(200, 185, 255, 0.5); }
+.ask button { border: 0; border-radius: 999px; padding: 0 16px; font-weight: 600; font-size: 12.5px; color: #05060a; background: linear-gradient(90deg, #fff, #c9b8ff); }
+.ask button:disabled { opacity: 0.5; cursor: default; }
+.room .note { padding: 0 16px 10px; font-size: 10.5px; color: var(--faint); }
+
+@media (max-width: 760px) {
+  .hint { display: none; }
+  .tool .label { display: none; }
+  .brandlet span { display: none; }
+  .hud { gap: 8px; }
+  .hud .spacer { display: none; }
+  .tool { padding: 8px 10px; }
+  .door { width: min(290px, 100%); }
+  .anat-stage { margin-top: 64px; max-height: calc(100vh - 84px); }
+  .organ { position: relative; left: auto !important; right: auto !important; top: auto !important; bottom: auto !important; transform: none !important; width: auto !important; margin: 10px; }
+  .anat-stage { height: auto; overflow: auto; max-height: 86vh; }
+  .anat-core, .anat-links, .preview { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001s !important; animation-iteration-count: 1 !important; transition-duration: 0.001s !important; }
+}
+</style>
+</head>
+<body>
+<div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
+<div class="grain" aria-hidden="true"></div>
+
+<!-- ============================ Porte d'entrée ============================ -->
+<main class="gate" id="gate">
+  <div class="lens" aria-hidden="true"><img alt="" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNDAgMjQwIiB3aWR0aD0iMjQwIiBoZWlnaHQ9IjI0MCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsbGVkYnk9ImxvZ28tcHJpc20tdGl0bGUiPjx0aXRsZSBpZD0ibG9nby1wcmlzbS10aXRsZSI+UHJpc20g4oCUIGxhIExlbnRpbGxlIENvbnRpbnVhPC90aXRsZT48c3R5bGU+LmxwLXJpbmdze3RyYW5zZm9ybS1vcmlnaW46MTIwcHggMTIwcHg7YW5pbWF0aW9uOnIgOTBzIGxpbmVhciBpbmZpbml0ZX0ubHAtZm9jdXN7dHJhbnNmb3JtLW9yaWdpbjoxMjBweCAxMjBweDthbmltYXRpb246ZiA0LjVzIGVhc2UtaW4tb3V0IGluZmluaXRlfUBrZXlmcmFtZXMgcnt0b3t0cmFuc2Zvcm06cm90YXRlKDM2MGRlZyl9fUBrZXlmcmFtZXMgZns1MCV7dHJhbnNmb3JtOnNjYWxlKDEuNDUpO29wYWNpdHk6Ljc1fX1AbWVkaWEgKHByZWZlcnMtcmVkdWNlZC1tb3Rpb246cmVkdWNlKXsubHAtcmluZ3MsLmxwLWZvY3Vze2FuaW1hdGlvbjpub25lfX08L3N0eWxlPjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0ibHAtYSIgeDE9IjAuNTAwIiB5MT0iMS4wMDAiIHgyPSIwLjUwMCIgeTI9IjAuMDAwIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiM4ZmYzZmYiLz48c3RvcCBvZmZzZXQ9IjAuNTUiIHN0b3AtY29sb3I9IiMyZjdiZmYiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiM2YWU0ZmYiLz48L2xpbmVhckdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBpZD0ibHAtYiIgeDE9IjAuMDY3IiB5MT0iMC4yNTAiIHgyPSIwLjkzMyIgeTI9IjAuNzUwIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmZjhmZTAiLz48c3RvcCBvZmZzZXQ9IjAuNTUiIHN0b3AtY29sb3I9IiM3YzRkZmYiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmZjZmZDgiLz48L2xpbmVhckdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBpZD0ibHAtYyIgeDE9IjAuOTMzIiB5MT0iMC4yNTAiIHgyPSIwLjA2NyIgeTI9IjAuNzUwIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmZmUwOGEiLz48c3RvcCBvZmZzZXQ9IjAuNTUiIHN0b3AtY29sb3I9IiNmZjVhM2MiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmZmM0NmIiLz48L2xpbmVhckdyYWRpZW50PjxyYWRpYWxHcmFkaWVudCBpZD0ibHAtZm9jdXMiPjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iI2ZmZmZmZiIvPjxzdG9wIG9mZnNldD0iMC4zNSIgc3RvcC1jb2xvcj0iI2RmZjZmZiIgc3RvcC1vcGFjaXR5PSIwLjc1Ii8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjOWZkY2ZmIiBzdG9wLW9wYWNpdHk9IjAiLz48L3JhZGlhbEdyYWRpZW50PjxmaWx0ZXIgaWQ9ImxwLWdsb3ciIHg9Ii0yNSUiIHk9Ii0yNSUiIHdpZHRoPSIxNTAlIiBoZWlnaHQ9IjE1MCUiPjxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjUiIHJlc3VsdD0iYiIvPjxmZU1lcmdlPjxmZU1lcmdlTm9kZSBpbj0iYiIvPjxmZU1lcmdlTm9kZSBpbj0iU291cmNlR3JhcGhpYyIvPjwvZmVNZXJnZT48L2ZpbHRlcj48cGF0aCBpZD0ibHAtcmluZy1hIiBkPSJNIDYzLjAwIDg3LjAwIGEgNTcuMCA1Ny4wIDAgMSAwIDExNC4wIDAgYSA1Ny4wIDU3LjAgMCAxIDAgLTExNC4wIDAiLz48cGF0aCBpZD0ibHAtcmluZy1iIiBkPSJNIDkxLjU4IDEzNi41MCBhIDU3LjAgNTcuMCAwIDEgMCAxMTQuMCAwIGEgNTcuMCA1Ny4wIDAgMSAwIC0xMTQuMCAwIi8+PHBhdGggaWQ9ImxwLXJpbmctYyIgZD0iTSAzNC40MiAxMzYuNTAgYSA1Ny4wIDU3LjAgMCAxIDAgMTE0LjAgMCBhIDU3LjAgNTcuMCAwIDEgMCAtMTE0LjAgMCIvPjxjbGlwUGF0aCBpZD0ibHAteC1hYiI+PGNpcmNsZSBjeD0iOTEuNTgiIGN5PSIxMzYuNDEiIHI9IjE4LjEiLz48Y2lyY2xlIGN4PSIxNzcuMDAiIGN5PSI4Ny4wOSIgcj0iMTguMSIvPjwvY2xpcFBhdGg+PGNsaXBQYXRoIGlkPSJscC14LWJjIj48Y2lyY2xlIGN4PSIxMjAuMDAiIGN5PSI4Ny4xOCIgcj0iMTguMSIvPjxjaXJjbGUgY3g9IjEyMC4wMCIgY3k9IjE4NS44MiIgcj0iMTguMSIvPjwvY2xpcFBhdGg+PGNsaXBQYXRoIGlkPSJscC14LWNhIj48Y2lyY2xlIGN4PSIxNDguNDIiIGN5PSIxMzYuNDEiIHI9IjE4LjEiLz48Y2lyY2xlIGN4PSI2My4wMCIgY3k9Ijg3LjA5IiByPSIxOC4xIi8+PC9jbGlwUGF0aD48bWFzayBpZD0ibHAtbS1hIiBtYXNrVW5pdHM9InVzZXJTcGFjZU9uVXNlIiB4PSIwIiB5PSIwIiB3aWR0aD0iMjQwIiBoZWlnaHQ9IjI0MCI+PHJlY3Qgd2lkdGg9IjI0MCIgaGVpZ2h0PSIyNDAiIGZpbGw9IiNmZmYiLz48ZyBjbGlwLXBhdGg9InVybCgjbHAteC1jYSkiPjx1c2UgaHJlZj0iI2xwLXJpbmctYyIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjE5LjAiLz48L2c+PC9tYXNrPjxtYXNrIGlkPSJscC1tLWIiIG1hc2tVbml0cz0idXNlclNwYWNlT25Vc2UiIHg9IjAiIHk9IjAiIHdpZHRoPSIyNDAiIGhlaWdodD0iMjQwIj48cmVjdCB3aWR0aD0iMjQwIiBoZWlnaHQ9IjI0MCIgZmlsbD0iI2ZmZiIvPjxnIGNsaXAtcGF0aD0idXJsKCNscC14LWFiKSI+PHVzZSBocmVmPSIjbHAtcmluZy1hIiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMTkuMCIvPjwvZz48L21hc2s+PG1hc2sgaWQ9ImxwLW0tYyIgbWFza1VuaXRzPSJ1c2VyU3BhY2VPblVzZSIgeD0iMCIgeT0iMCIgd2lkdGg9IjI0MCIgaGVpZ2h0PSIyNDAiPjxyZWN0IHdpZHRoPSIyNDAiIGhlaWdodD0iMjQwIiBmaWxsPSIjZmZmIi8+PGcgY2xpcC1wYXRoPSJ1cmwoI2xwLXgtYmMpIj48dXNlIGhyZWY9IiNscC1yaW5nLWIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLXdpZHRoPSIxOS4wIi8+PC9nPjwvbWFzaz48L2RlZnM+PGcgY2xhc3M9ImxwLXJpbmdzIiBmaWx0ZXI9InVybCgjbHAtZ2xvdykiPjxnIG1hc2s9InVybCgjbHAtbS1hKSI+PHVzZSBocmVmPSIjbHAtcmluZy1hIiBmaWxsPSJub25lIiBzdHJva2U9InVybCgjbHAtYSkiIHN0cm9rZS13aWR0aD0iMTMuMCIvPjx1c2UgaHJlZj0iI2xwLXJpbmctYSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utb3BhY2l0eT0iMC41IiBzdHJva2Utd2lkdGg9IjEuMSIvPjwvZz48ZyBtYXNrPSJ1cmwoI2xwLW0tYikiPjx1c2UgaHJlZj0iI2xwLXJpbmctYiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI2xwLWIpIiBzdHJva2Utd2lkdGg9IjEzLjAiLz48dXNlIGhyZWY9IiNscC1yaW5nLWIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLW9wYWNpdHk9IjAuNSIgc3Ryb2tlLXdpZHRoPSIxLjEiLz48L2c+PGcgbWFzaz0idXJsKCNscC1tLWMpIj48dXNlIGhyZWY9IiNscC1yaW5nLWMiIGZpbGw9Im5vbmUiIHN0cm9rZT0idXJsKCNscC1jKSIgc3Ryb2tlLXdpZHRoPSIxMy4wIi8+PHVzZSBocmVmPSIjbHAtcmluZy1jIiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS1vcGFjaXR5PSIwLjUiIHN0cm9rZS13aWR0aD0iMS4xIi8+PC9nPjwvZz48Y2lyY2xlIGNsYXNzPSJscC1mb2N1cyIgY3g9IjEyMC4wIiBjeT0iMTIwLjAiIHI9IjkiIGZpbGw9InVybCgjbHAtZm9jdXMpIi8+PC9zdmc+"></div>
+  <h1 class="brand-title">Prism</h1>
+  <p class="brand-sub">Le système d'exploitation cognitif spatial</p>
+  <div class="doors">
+    <a class="door" id="door-focus" href="index.html">
+      <span class="micro">Mode</span>
+      <strong>Focus</strong>
+      <span class="desc">Une intention, une interface. L'expérience Prism directe : vous décrivez, le widget apparaît.</span>
+      <span class="arrow" aria-hidden="true">→</span>
+    </a>
+    <button class="door door-nexus" id="door-nexus" type="button">
+      <span class="micro">Mode · Sandbox</span>
+      <strong>Nexus</strong>
+      <span class="desc">Le laboratoire spatial : reliez des contextes, des esprits et des rendus en chaînes de pensée.</span>
+      <span class="arrow" aria-hidden="true">→</span>
+    </button>
+  </div>
+  <p class="gate-foot micro">Prism V6 · prototype Nexus</p>
+</main>
+
+<!-- ============================ Nexus ============================ -->
+<section class="nexus" id="nexus" hidden aria-label="Mode Nexus">
+  <div class="viewport" id="viewport">
+    <div class="world" id="world">
+      <div class="hubs" id="hubs"></div>
+      <svg class="wires" id="wires" aria-hidden="true">
+        <defs id="wire-defs"></defs>
+        <g id="links"></g>
+        <g id="pulses"></g>
+        <path class="draft" id="draft" d="" hidden></path>
+      </svg>
+      <div id="nodes"></div>
+    </div>
+    <svg class="lasso" id="lasso-layer" aria-hidden="true"><path id="lasso" d=""></path></svg>
+  </div>
+
+  <header class="hud">
+    <div class="pill">
+      <button class="brandlet" id="to-gate" type="button" title="Revenir à la porte d'entrée">
+        <img alt="" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNDAgMjQwIiB3aWR0aD0iMjQwIiBoZWlnaHQ9IjI0MCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsbGVkYnk9ImxvZ28tcHJpc20tdGl0bGUiPjx0aXRsZSBpZD0ibG9nby1wcmlzbS10aXRsZSI+UHJpc20g4oCUIGxhIExlbnRpbGxlIENvbnRpbnVhPC90aXRsZT48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImxwLWEiIHgxPSIwLjUwMCIgeTE9IjEuMDAwIiB4Mj0iMC41MDAiIHkyPSIwLjAwMCI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjOGZmM2ZmIi8+PHN0b3Agb2Zmc2V0PSIwLjU1IiBzdG9wLWNvbG9yPSIjMmY3YmZmIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjNmFlNGZmIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImxwLWIiIHgxPSIwLjA2NyIgeTE9IjAuMjUwIiB4Mj0iMC45MzMiIHkyPSIwLjc1MCI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZmY4ZmUwIi8+PHN0b3Agb2Zmc2V0PSIwLjU1IiBzdG9wLWNvbG9yPSIjN2M0ZGZmIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjZmY2ZmQ4Ii8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImxwLWMiIHgxPSIwLjkzMyIgeTE9IjAuMjUwIiB4Mj0iMC4wNjciIHkyPSIwLjc1MCI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZmZlMDhhIi8+PHN0b3Agb2Zmc2V0PSIwLjU1IiBzdG9wLWNvbG9yPSIjZmY1YTNjIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjZmZjNDZiIi8+PC9saW5lYXJHcmFkaWVudD48cmFkaWFsR3JhZGllbnQgaWQ9ImxwLWZvY3VzIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmZmZmZmYiLz48c3RvcCBvZmZzZXQ9IjAuMzUiIHN0b3AtY29sb3I9IiNkZmY2ZmYiIHN0b3Atb3BhY2l0eT0iMC43NSIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzlmZGNmZiIgc3RvcC1vcGFjaXR5PSIwIi8+PC9yYWRpYWxHcmFkaWVudD48ZmlsdGVyIGlkPSJscC1nbG93IiB4PSItMjUlIiB5PSItMjUlIiB3aWR0aD0iMTUwJSIgaGVpZ2h0PSIxNTAlIj48ZmVHYXVzc2lhbkJsdXIgc3RkRGV2aWF0aW9uPSI1IiByZXN1bHQ9ImIiLz48ZmVNZXJnZT48ZmVNZXJnZU5vZGUgaW49ImIiLz48ZmVNZXJnZU5vZGUgaW49IlNvdXJjZUdyYXBoaWMiLz48L2ZlTWVyZ2U+PC9maWx0ZXI+PHBhdGggaWQ9ImxwLXJpbmctYSIgZD0iTSA2My4wMCA4Ny4wMCBhIDU3LjAgNTcuMCAwIDEgMCAxMTQuMCAwIGEgNTcuMCA1Ny4wIDAgMSAwIC0xMTQuMCAwIi8+PHBhdGggaWQ9ImxwLXJpbmctYiIgZD0iTSA5MS41OCAxMzYuNTAgYSA1Ny4wIDU3LjAgMCAxIDAgMTE0LjAgMCBhIDU3LjAgNTcuMCAwIDEgMCAtMTE0LjAgMCIvPjxwYXRoIGlkPSJscC1yaW5nLWMiIGQ9Ik0gMzQuNDIgMTM2LjUwIGEgNTcuMCA1Ny4wIDAgMSAwIDExNC4wIDAgYSA1Ny4wIDU3LjAgMCAxIDAgLTExNC4wIDAiLz48Y2xpcFBhdGggaWQ9ImxwLXgtYWIiPjxjaXJjbGUgY3g9IjkxLjU4IiBjeT0iMTM2LjQxIiByPSIxOC4xIi8+PGNpcmNsZSBjeD0iMTc3LjAwIiBjeT0iODcuMDkiIHI9IjE4LjEiLz48L2NsaXBQYXRoPjxjbGlwUGF0aCBpZD0ibHAteC1iYyI+PGNpcmNsZSBjeD0iMTIwLjAwIiBjeT0iODcuMTgiIHI9IjE4LjEiLz48Y2lyY2xlIGN4PSIxMjAuMDAiIGN5PSIxODUuODIiIHI9IjE4LjEiLz48L2NsaXBQYXRoPjxjbGlwUGF0aCBpZD0ibHAteC1jYSI+PGNpcmNsZSBjeD0iMTQ4LjQyIiBjeT0iMTM2LjQxIiByPSIxOC4xIi8+PGNpcmNsZSBjeD0iNjMuMDAiIGN5PSI4Ny4wOSIgcj0iMTguMSIvPjwvY2xpcFBhdGg+PG1hc2sgaWQ9ImxwLW0tYSIgbWFza1VuaXRzPSJ1c2VyU3BhY2VPblVzZSIgeD0iMCIgeT0iMCIgd2lkdGg9IjI0MCIgaGVpZ2h0PSIyNDAiPjxyZWN0IHdpZHRoPSIyNDAiIGhlaWdodD0iMjQwIiBmaWxsPSIjZmZmIi8+PGcgY2xpcC1wYXRoPSJ1cmwoI2xwLXgtY2EpIj48dXNlIGhyZWY9IiNscC1yaW5nLWMiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLXdpZHRoPSIxOS4wIi8+PC9nPjwvbWFzaz48bWFzayBpZD0ibHAtbS1iIiBtYXNrVW5pdHM9InVzZXJTcGFjZU9uVXNlIiB4PSIwIiB5PSIwIiB3aWR0aD0iMjQwIiBoZWlnaHQ9IjI0MCI+PHJlY3Qgd2lkdGg9IjI0MCIgaGVpZ2h0PSIyNDAiIGZpbGw9IiNmZmYiLz48ZyBjbGlwLXBhdGg9InVybCgjbHAteC1hYikiPjx1c2UgaHJlZj0iI2xwLXJpbmctYSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjE5LjAiLz48L2c+PC9tYXNrPjxtYXNrIGlkPSJscC1tLWMiIG1hc2tVbml0cz0idXNlclNwYWNlT25Vc2UiIHg9IjAiIHk9IjAiIHdpZHRoPSIyNDAiIGhlaWdodD0iMjQwIj48cmVjdCB3aWR0aD0iMjQwIiBoZWlnaHQ9IjI0MCIgZmlsbD0iI2ZmZiIvPjxnIGNsaXAtcGF0aD0idXJsKCNscC14LWJjKSI+PHVzZSBocmVmPSIjbHAtcmluZy1iIiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMTkuMCIvPjwvZz48L21hc2s+PC9kZWZzPjxnIGNsYXNzPSJscC1yaW5ncyIgZmlsdGVyPSJ1cmwoI2xwLWdsb3cpIj48ZyBtYXNrPSJ1cmwoI2xwLW0tYSkiPjx1c2UgaHJlZj0iI2xwLXJpbmctYSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI2xwLWEpIiBzdHJva2Utd2lkdGg9IjEzLjAiLz48dXNlIGhyZWY9IiNscC1yaW5nLWEiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLW9wYWNpdHk9IjAuNSIgc3Ryb2tlLXdpZHRoPSIxLjEiLz48L2c+PGcgbWFzaz0idXJsKCNscC1tLWIpIj48dXNlIGhyZWY9IiNscC1yaW5nLWIiIGZpbGw9Im5vbmUiIHN0cm9rZT0idXJsKCNscC1iKSIgc3Ryb2tlLXdpZHRoPSIxMy4wIi8+PHVzZSBocmVmPSIjbHAtcmluZy1iIiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS1vcGFjaXR5PSIwLjUiIHN0cm9rZS13aWR0aD0iMS4xIi8+PC9nPjxnIG1hc2s9InVybCgjbHAtbS1jKSI+PHVzZSBocmVmPSIjbHAtcmluZy1jIiBmaWxsPSJub25lIiBzdHJva2U9InVybCgjbHAtYykiIHN0cm9rZS13aWR0aD0iMTMuMCIvPjx1c2UgaHJlZj0iI2xwLXJpbmctYyIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utb3BhY2l0eT0iMC41IiBzdHJva2Utd2lkdGg9IjEuMSIvPjwvZz48L2c+PGNpcmNsZSBjbGFzcz0ibHAtZm9jdXMiIGN4PSIxMjAuMCIgY3k9IjEyMC4wIiByPSI5IiBmaWxsPSJ1cmwoI2xwLWZvY3VzKSIvPjwvc3ZnPg==">
+        <b>Prism</b><span>Nexus</span>
+      </button>
+    </div>
+    <div class="pill" role="toolbar" aria-label="Créer">
+      <button class="tool" id="add-context" type="button" style="--c: var(--context)"><i></i><span class="label">Contexte</span></button>
+      <span class="anchor">
+        <button class="tool" id="add-engram" type="button" aria-haspopup="menu" aria-expanded="false" style="--c: #b99bff"><i></i><span class="label">Engramme</span></button>
+        <div class="menu" id="engram-menu" role="menu" hidden></div>
+      </span>
+      <button class="tool" id="add-render" type="button" style="--c: var(--render)"><i></i><span class="label">Rendu</span></button>
+      <button class="tool" id="hub-tool" type="button" aria-pressed="false" title="Dessinez un cercle autour de plusieurs Engrammes (ou Alt + glisser)"
+        style="--c: #d6c8ff"><i></i><span class="label">Hub</span> <kbd>Alt</kbd></button>
+    </div>
+    <span class="spacer"></span>
+    <div class="pill" role="toolbar" aria-label="Vue">
+      <button class="tool" id="zoom-out" type="button" aria-label="Dézoomer">−</button>
+      <button class="tool zoomlabel" id="zoom-reset" type="button" title="100 %">100 %</button>
+      <button class="tool" id="zoom-in" type="button" aria-label="Zoomer">+</button>
+      <button class="tool" id="fit" type="button" title="Tout voir (F)" aria-label="Tout voir"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"
+        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9"/></svg><span class="label">Tout voir</span></button>
+    </div>
+  </header>
+
+  <div class="hint" id="hint">
+    <span><b>Glisser</b> un port lumineux → une synapse</span>
+    <span><b>Clic</b> sur un fil → le couper</span>
+    <span><b>Double-clic</b> sur un Engramme → son anatomie</span>
+    <span><b>Alt + glisser</b> → un Hub</span>
+  </div>
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <!-- Anatomie d'un Engramme -->
+  <div class="anatomy" id="anatomy" hidden aria-modal="true" role="dialog" aria-labelledby="anat-name">
+    <div class="anat-top">
+      <button class="glass-btn" id="anat-back" type="button">← Remonter</button>
+      <div>
+        <div class="micro">Anatomie de l'Engramme</div>
+        <h2 id="anat-name"></h2>
+      </div>
+    </div>
+    <div class="anat-stage" id="anat-stage">
+      <svg class="anat-links" id="anat-links" aria-hidden="true"></svg>
+      <div class="preview">
+        <div class="micro">Sa pensée, en direct</div>
+        <p id="anat-preview"></p>
+      </div>
+      <div class="anat-core orb" id="anat-core">
+        <div class="orbits"></div>
+        <div class="body"></div>
+        <div class="veil"></div>
+      </div>
+      <section class="organ core" aria-labelledby="h-core">
+        <h4 id="h-core">Core · logique</h4>
+        <div class="big" id="core-label"></div>
+        <p id="core-desc"></p>
+        <div class="modes" id="core-modes" role="group" aria-label="Mode de raisonnement"></div>
+      </section>
+      <section class="organ state" aria-labelledby="h-state">
+        <h4 id="h-state">State · humeur</h4>
+        <div class="chip mood-chip" id="anat-mood"><i></i><span></span></div>
+        <div class="gauge">
+          <svg viewBox="0 0 80 80" aria-hidden="true"><circle class="track" cx="40" cy="40" r="32"/><circle class="fill" id="mood-arc" cx="40" cy="40" r="32"
+            stroke-dasharray="201" stroke-dashoffset="100" transform="rotate(-90 40 40)"/></svg>
+          <div class="sliders" id="sliders"></div>
+        </div>
+      </section>
+      <section class="organ memories" aria-labelledby="h-mem">
+        <h4 id="h-mem">Memories · vie et connaissances</h4>
+        <div class="memories-list" id="memories"></div>
+        <form class="memadd" id="mem-form"><input id="mem-input" maxlength="120" placeholder="Ajouter un souvenir ou une connaissance…" aria-label="Nouveau souvenir"><button class="glass-btn" type="submit">Ajouter</button></form>
+      </section>
+    </div>
+  </div>
+
+  <!-- War Room d'un Hub -->
+  <aside class="room" id="room" hidden aria-labelledby="room-title">
+    <header>
+      <div class="row"><div><div class="micro">Hub · War Room</div><h3 id="room-title"></h3></div><span class="spacer"></span>
+        <button class="glass-btn" id="room-close" type="button" aria-label="Fermer la War Room">×</button></div>
+      <div class="avatars" id="room-avatars"></div>
+    </header>
+    <div class="log" id="log" aria-live="polite"></div>
+    <form class="ask" id="ask"><input id="question" maxlength="300" placeholder="Posez une question au Hub…" aria-label="Question au Hub"><button id="ask-send" type="submit">Débattre</button></form>
+    <div class="note">Débat simulé localement à partir de l'anatomie de chaque Engramme — prêt à se brancher sur les Engrammes de Prism.</div>
+  </aside>
+</section>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var reduced = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var SVGNS = "http://www.w3.org/2000/svg";
+
+  // ======================================================================================
+  // Esprits disponibles (Engrammes) : anatomie par défaut. Personnalités publiques : faits publics, voix paraphrasée,
+  // aucune citation ; simulation locale.
+  // ======================================================================================
+  var PERSONAS = {
+    curie: { name: "Marie Curie", role: "Physique et chimie", color: "#7dffb2", core: "science",
+      state: { energy: 70, patience: 85, creativity: 55 },
+      memories: ["1898 : découverte du polonium et du radium", "1903 : prix Nobel de physique", "1911 : prix Nobel de chimie",
+        "1914 : unités de radiologie mobiles au front"],
+      metaphor: "Comme le radium dans l'obscurité : une seule donnée juste éclaire tout le reste." },
+    jobs: { name: "Steve Jobs", role: "Produit et design", color: "#e9eef8", core: "simplicity",
+      state: { energy: 90, patience: 25, creativity: 80 },
+      memories: ["1984 : le Macintosh", "2001 : l'iPod", "2007 : l'iPhone", "Cours de calligraphie au Reed College"],
+      metaphor: "Imaginons l'écran comme un objet fini jusque dans ses bords, qu'on tient en main." },
+    ux: { name: "Expert UX", role: "Recherche utilisateur", color: "#ff8fc8", core: "empathy",
+      state: { energy: 75, patience: 80, creativity: 60 },
+      memories: ["Cinq tests utilisateurs révèlent l'essentiel des problèmes", "Loi de Fitts : grandes cibles, proches du geste",
+        "Accessibilité : contraste AA au minimum"],
+      metaphor: "Un bon parcours se remarque à peine : il ressemble à une évidence." },
+    ada: { name: "Ada Lovelace", role: "Mathématiques poétiques", color: "#ffc46b", core: "poetry",
+      state: { energy: 65, patience: 70, creativity: 90 },
+      memories: ["1843 : les Notes sur la machine analytique", "Le métier Jacquard et ses cartes perforées", "Correspondance avec Charles Babbage"],
+      metaphor: "Les nombres ont leur poésie : faisons-la entendre." }
+  };
+
+  // Modes de raisonnement (Core) : ce que l'Engramme fait d'un contexte.
+  var CORES = {
+    science: { short: "Science", label: "Méthode scientifique stricte", desc: "Mesurer avant de conclure ; ne retenir que ce qui se vérifie.", action: "Lancer une mesure",
+      lines: function (s, k) { return [
+        "Commençons par mesurer. " + cap(s) + " : quelles grandeurs relever — " + list(k) + " ?",
+        "Protocole : un relevé régulier, des conditions notées, chaque écart vérifié deux fois.",
+        "Je n'afficherais que ce que les mesures confirment : le reste reste une hypothèse."]; },
+      check: "Refaisons la mesure une seconde fois avant de trancher.",
+      react: function (o, k) { return "Je rejoins " + o + " sur l'essentiel, mais sans mesure fiable de « " + k + " », l'écran le plus clair peut mentir."; } },
+    simplicity: { short: "Simplicité", label: "Simplicité radicale", desc: "Retirer jusqu'à l'évidence ; une seule action, un seul écran.", action: "Voir l'essentiel",
+      lines: function (s, k) { return [
+        "Trop de choses. " + cap(s) + " doit tenir en un seul écran.",
+        "Une seule donnée compte vraiment : « " + (k[0] || "l'essentiel") + " ». Tout le reste disparaît.",
+        "Le geste principal doit être évident, sans mode d'emploi."]; },
+      check: "Si quelqu'un hésite plus d'une seconde, on enlève encore.",
+      react: function (o, k) { return o + " a raison de vouloir du solide. Mais pour « " + k + " », un seul geste doit suffire : cachons tout le reste."; } },
+    empathy: { short: "Empathie", label: "Empathie utilisateur", desc: "Partir des personnes, de leur moment, de leurs mots.", action: "Comprendre en 3 secondes",
+      lines: function (s, k) { return [
+        "Qui ouvre cet écran, et à quel moment ? " + cap(s) + " doit répondre en trois secondes.",
+        "Friction probable : comprendre « " + (k[0] || "la donnée") + " » sans connaître le jargon.",
+        "Parcours : un statut en couleur, le détail au toucher, une action suggérée."]; },
+      check: "Testons avec cinq personnes avant de figer quoi que ce soit.",
+      react: function (o, k) { return "Ce que propose " + o + " marchera si « " + k + " » se comprend du premier coup : testons-le avec cinq personnes."; } },
+    poetry: { short: "Poésie", label: "Science poétique", desc: "Voir les données comme des motifs ; imaginer ce que la machine peut composer.", action: "Composer le motif",
+      lines: function (s, k) { return [
+        "Voyons " + s + " comme un motif à tisser, carte après carte.",
+        "La machine peut composer avec " + list(k) + ", comme avec des notes.",
+        "Imaginons ce que ces données diront quand elles se répondront entre elles."]; },
+      check: "Posons chaque règle par écrit, comme une note de traduction, avant de tisser.",
+      react: function (o, k) { return "J'entends " + o + ". Et si « " + k + " » devenait un motif qui se lit d'un regard, plutôt qu'un chiffre ?"; } },
+    systems: { short: "Systèmes", label: "Pensée systémique", desc: "Chercher les boucles, les causes et les effets retard.", action: "Voir les tendances",
+      lines: function (s, k) { return [
+        cap(s) + " est un système : repérons les boucles entre " + list(k) + ".",
+        "Chaque action modifie l'état suivant : montrons les causes, pas seulement les effets.",
+        "Une tendance sur une semaine vaut mieux qu'une valeur isolée."]; },
+      check: "Observons le système sur plusieurs cycles avant d'agir.",
+      react: function (o, k) { return o + " voit juste, mais « " + k + " » n'est qu'un maillon : regardons toute la boucle."; } }
+  };
+
+  // ======================================================================================
+  // Langue : mots-clés, sujet d'une demande
+  // ======================================================================================
+  var STOP = new Set(("le la les un une des de du d l et ou en au aux pour par sur dans avec sans ce cet cette ces qui que quoi dont est sont " +
+    "etre avoir a il elle ils elles on nous vous je tu se sa son ses leur leurs plus moins tres tout tous toute toutes bien comme mais donc car " +
+    "pas ne ni y faire fait creer concevoir imaginer proposer realiser construire veux voudrais doit peut quel quelle quels quelles comment pourquoi " +
+    "rendre suivre afficher montrer gerer permettre aider utiliser tableau bord outil application page ecran donnee donnees " +
+    "the and for with from that this into your you are was can will make create show build our une").split(" "));
+  var plain = function (s) { return s.normalize("NFKD").replace(/[\u0300-\u036f]/g, ""); };
+  function keywords(text, n) {
+    n = n || 5;
+    var found = [];
+    var add = function (w) {
+      w = w.trim().replace(/^(les?|la|l'|des|du|de|d'|un|une)\s+/i, "").replace(/[\s.!?]+$/, "");
+      if (w && w.length <= 28 && !found.some(function (f) { return plain(f.toLowerCase()) === plain(w.toLowerCase()); })) found.push(w);
+    };
+    // Une énumération explicite dit exactement quelles données compter.
+    (String(text || "").match(/:\s*[^.!?\n:]+/g) || []).forEach(function (m) {
+      var items = m.slice(1).split(/,|\bet\b|\bou\b/);
+      if (items.length >= 2) items.forEach(add);
+    });
+    var counts = new Map();
+    var order = [];
+    (String(text || "").toLowerCase().match(/[\p{L}\p{N}'’-]+/gu) || []).forEach(function (raw) {
+      var word = raw.split(/['’]/).pop().replace(/^-+|-+$/g, "");
+      if (word.length < 4 || STOP.has(plain(word))) return;
+      if (!counts.has(word)) order.push(word);
+      counts.set(word, (counts.get(word) || 0) + 1);
+    });
+    order.sort(function (a, b) { return counts.get(b) - counts.get(a) || order.indexOf(a) - order.indexOf(b); }).forEach(add);
+    return found.slice(0, n);
+  }
+  function subjectOf(text) {
+    var first = String(text || "").split(/[.!?\n:;]/)[0].trim().replace(/\s+/g, " ");
+    first = first.replace(/^(je (veux|voudrais)|il faut|nous devons|on doit)\s+/i, "")
+      .replace(/^(concevoir|créer|imaginer|proposer|réaliser|construire|faire|dessiner|inventer)\s+/i, "");
+    if (!first) return "ce sujet";
+    return first.length > 90 ? first.slice(0, 89).replace(/\s+\S*$/, "") + "…" : first;
+  }
+  var cap = function (s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; };
+  var list = function (k) { return k.length ? k.slice(0, 3).join(", ") : "les données"; };
+
+  function moodOf(st) {
+    if (st.energy < 30) return { label: "Fatiguée", color: "#8b93a8" };
+    if (st.creativity >= 70) return { label: "Créative", color: "#ffb3f0" };
+    if (st.patience >= 70) return { label: "Patiente", color: "#8ff3ff" };
+    return { label: "Concentrée", color: "#fff1b8" };
+  }
+
+  // ======================================================================================
+  // Pensée d'un Engramme : ce qu'il fait des mémoires reçues (contexte ou autres esprits), selon son anatomie.
+  // ======================================================================================
+  function think(e, inputs) {
+    var contexts = inputs.filter(function (m) { return m.kind === "context"; });
+    var upstream = inputs.filter(function (m) { return m.kind === "thought"; });
+    var subject = contexts.length ? subjectOf(contexts[0].text) : upstream.length ? upstream[0].subject : "ce sujet";
+    var keys = mergeKeys(upstream.map(function (m) { return m.keys; })
+      .concat([keywords(contexts.map(function (m) { return m.text; }).join(" "), 5)]), 5);
+    var core = CORES[e.core] || CORES.science;
+    var lines = core.lines(subject, keys);
+    var mood = moodOf(e.state);
+    if (upstream.length) lines[0] = "Sur la piste de " + upstream.map(function (m) { return m.author; }).join(" et ") + " : " + lines[0].charAt(0).toLowerCase() + lines[0].slice(1);
+    if (mood.label === "Fatiguée") { lines = lines.slice(0, 2); lines.push("Je fatigue : l'essentiel, pas davantage."); }
+    else if (mood.label === "Créative") lines.push(e.metaphor);
+    else if (mood.label === "Patiente") lines.push(core.check);
+    var memory = pickMemory(e.memories, keys);
+    if (memory) lines.push("Souvenir mobilisé : " + memory + ".");
+    return { kind: "thought", author: e.name, color: e.color, core: e.core, mood: mood.label, keys: keys, subject: subject,
+      lines: lines, text: lines.join(" "), action: core.action };
+  }
+  function mergeKeys(groups, n) {
+    var out = [];
+    groups.forEach(function (g) { g.forEach(function (k) { if (out.indexOf(k) < 0) out.push(k); }); });
+    return out.slice(0, n);
+  }
+  function pickMemory(memories, keys) {
+    if (!memories.length) return "";
+    var best = memories[0];
+    var score = -1;
+    memories.forEach(function (m) {
+      var p = plain(m.toLowerCase());
+      var s = keys.reduce(function (acc, k) { return acc + (p.indexOf(plain(k)) >= 0 ? 1 : 0); }, 0);
+      if (s > score) { score = s; best = m; }
+    });
+    return best;
+  }
+
+  // Rendu : l'écran qui naît des flux reçus.
+  function compose(inputs) {
+    var thoughts = inputs.filter(function (m) { return m.kind === "thought"; });
+    var contexts = inputs.filter(function (m) { return m.kind === "context"; });
+    var subject = thoughts.length ? thoughts[0].subject : subjectOf(contexts.map(function (c) { return c.text; }).join(" "));
+    var keys = mergeKeys(thoughts.map(function (t) { return t.keys; })
+      .concat([keywords(contexts.map(function (c) { return c.text; }).join(" "), 3)]), 3);
+    return { kind: "render", title: cap(subject), keys: keys, thoughts: thoughts, contexts: contexts,
+      action: thoughts.length ? thoughts[0].action : "Explorer", text: inputs.map(function (m) { return m.text; }).join(" ") };
+  }
+
+  // ======================================================================================
+  // État du Nexus
+  // ======================================================================================
+  var nodes = new Map();  // id -> nœud
+  var links = new Map();  // id -> { id, from, to, el }
+  var hubs = new Map();   // id -> { id, members: [ids], el }
+  var view = { x: 0, y: 0, z: 1 };
+  var seq = 0;
+  var uid = function (p) { seq += 1; return p + seq; };
+  var selected = null;
+  var generation = 0; // annule les animations de flux périmées
+
+  var viewport = $("viewport");
+  var world = $("world");
+  var nodesLayer = $("nodes");
+  var linksLayer = $("links");
+  var pulsesLayer = $("pulses");
+  var defs = $("wire-defs");
+
+  function applyView() {
+    world.style.transform = "translate(" + view.x + "px," + view.y + "px) scale(" + view.z + ")";
+    viewport.style.setProperty("--grid", 32 * view.z + "px");
+    viewport.style.setProperty("--gx", view.x + "px");
+    viewport.style.setProperty("--gy", view.y + "px");
+    $("zoom-reset").textContent = Math.round(view.z * 100) + " %";
+  }
+  function toWorld(sx, sy) { return { x: (sx - view.x) / view.z, y: (sy - view.y) / view.z }; }
+  function zoomAt(sx, sy, z) {
+    z = Math.max(0.25, Math.min(2.5, z));
+    var p = toWorld(sx, sy);
+    view.z = z;
+    view.x = sx - p.x * z;
+    view.y = sy - p.y * z;
+    applyView();
+  }
+  function animateView(target, ms, done) {
+    var from = { x: view.x, y: view.y, z: view.z };
+    var t0 = performance.now();
+    var d = reduced ? 1 : ms;
+    (function step(now) {
+      var t = Math.min(1, (now - t0) / d);
+      var e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      view.x = from.x + (target.x - from.x) * e;
+      view.y = from.y + (target.y - from.y) * e;
+      view.z = from.z + (target.z - from.z) * e;
+      applyView();
+      if (t < 1) requestAnimationFrame(step);
+      else if (done) done();
+    })(t0);
+  }
+  function fit(animated) {
+    if (!nodes.size) return;
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    nodes.forEach(function (n) {
+      minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
+      maxX = Math.max(maxX, n.x + n.el.offsetWidth); maxY = Math.max(maxY, n.y + n.el.offsetHeight);
+    });
+    var W = innerWidth, H = innerHeight - 90;
+    var z = Math.max(0.3, Math.min(1.15, Math.min(W / (maxX - minX + 180), H / (maxY - minY + 160))));
+    var target = { z: z, x: W / 2 - ((minX + maxX) / 2) * z, y: 70 + H / 2 - ((minY + maxY) / 2) * z };
+    if (animated) animateView(target, 700); else { Object.assign(view, target); applyView(); }
+  }
+
+  // ======================================================================================
+  // Bulles
+  // ======================================================================================
+  function el(tag, cls, html) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (html !== undefined) e.innerHTML = html;
+    return e;
+  }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+
+  function addNode(type, x, y, opts) {
+    opts = opts || {};
+    var n = { id: opts.id || uid(type[0]), type: type, x: x, y: y, memory: null };
+    var node = el("div", "node " + type + " is-entering");
+    node.dataset.id = n.id;
+    n.el = node;
+    if (type === "context") {
+      n.title = opts.title || "Contexte";
+      n.text = opts.text || "";
+      node.innerHTML = '<div class="shell"><div class="head"><span class="dot"></span><span class="kind">Contexte</span>' +
+        '<button class="close" type="button" aria-label="Supprimer la bulle">×</button></div>' +
+        '<div class="title" contenteditable="true" spellcheck="false"></div><textarea spellcheck="false" placeholder="Une donnée brute, une consigne…"></textarea></div>' +
+        '<span class="port out" data-port="out" title="Tirer une synapse"></span>';
+      node.querySelector(".title").textContent = n.title;
+      var area = node.querySelector("textarea");
+      area.value = n.text;
+      var timer = 0;
+      area.addEventListener("input", function () {
+        n.text = area.value;
+        autosize(area);
+        clearTimeout(timer);
+        timer = setTimeout(function () { propagate(); }, 650); // le flux repart quand la saisie se pose
+      });
+      node.querySelector(".title").addEventListener("input", function (e) { n.title = e.target.textContent.trim() || "Contexte"; });
+      requestAnimationFrame(function () { autosize(area); });
+    } else if (type === "engram") {
+      var p = PERSONAS[opts.persona] || PERSONAS.curie;
+      n.persona = opts.persona || "curie";
+      n.name = p.name; n.role = p.role; n.color = p.color; n.metaphor = p.metaphor;
+      n.core = p.core; n.state = Object.assign({}, p.state); n.memories = p.memories.slice();
+      node.style.setProperty("--c", n.color);
+      node.innerHTML = '<div class="orb" title="Double-clic : plonger dans son anatomie"><div class="ring r2"></div><div class="ring"></div><div class="body"></div><div class="veil"></div>' +
+        '<span class="sat"></span><span class="sat s2"></span><span class="sat s3"></span></div>' +
+        '<span class="dive">Plonger</span>' +
+        '<div class="name"></div><div class="meta"><span class="chip mood"><i></i><span></span></span><span class="chip core-chip"></span></div>' +
+        '<div class="thought"></div>' +
+        '<span class="port in" data-port="in" title="Entrée"></span><span class="port out" data-port="out" title="Tirer une synapse"></span>' +
+        '<button class="close" type="button" aria-label="Supprimer la bulle" style="position:absolute;right:-4px;top:-4px;opacity:0"></button>';
+      node.querySelector(".name").textContent = n.name;
+      paintEngram(n);
+    } else {
+      node.innerHTML = '<div class="shell"><div class="head"><span class="dot"></span><span class="kind">Rendu</span>' +
+        '<button class="close" type="button" aria-label="Supprimer la bulle">×</button></div>' +
+        '<div class="screen"><div class="empty"><div><b>En attente d\'un flux</b>Reliez un Engramme à cet écran.<div class="skeleton"></div><div class="skeleton" style="width:50%"></div></div></div></div></div>' +
+        '<span class="port in" data-port="in" title="Entrée"></span>';
+    }
+    node.style.left = x + "px";
+    node.style.top = y + "px";
+    nodesLayer.append(node);
+    nodes.set(n.id, n);
+    node.addEventListener("animationend", function () { node.classList.remove("is-entering"); }, { once: true });
+    return n;
+  }
+  function autosize(area) { area.style.height = "auto"; area.style.height = Math.min(220, area.scrollHeight + 2) + "px"; }
+
+  function paintEngram(n) {
+    var mood = moodOf(n.state);
+    var e = n.el;
+    e.style.setProperty("--mood", mood.color);
+    e.style.setProperty("--breath", (6.5 - n.state.energy / 25).toFixed(2) + "s");
+    e.querySelector(".mood span").textContent = mood.label;
+    e.querySelector(".core-chip").textContent = CORES[n.core].short;
+    e.querySelector(".core-chip").title = CORES[n.core].label;
+    e.querySelector(".thought").textContent = n.memory ? n.memory.lines[0] : "";
+  }
+
+  function paintRender(n) {
+    var screen = n.el.querySelector(".screen");
+    var m = n.memory;
+    if (!m) {
+      screen.innerHTML = '<div class="empty"><div><b>En attente d\'un flux</b>Reliez un Engramme à cet écran.<div class="skeleton"></div><div class="skeleton" style="width:50%"></div></div></div>';
+      return;
+    }
+    var c = m.thoughts.length ? m.thoughts[0].color : "var(--render)";
+    var tiles = (m.keys.length ? m.keys : ["signal", "tendance", "état"]).slice(0, 3).map(function (k, i) {
+      var v = [72, 48, 86][i];
+      return '<div class="tile"><small>' + esc(k) + '</small><div class="bar"><i style="width:' + v + '%"></i></div></div>';
+    }).join("");
+    var voices = m.thoughts.map(function (t) {
+      return '<div class="voice" style="--vc:' + t.color + '"><b>' + esc(t.author) + " · " + esc(t.mood) + "</b>" + esc(t.lines[1] || t.lines[0]) + "</div>";
+    }).join("") + m.contexts.map(function (ctx) {
+      return '<div class="voice" style="--vc:var(--context)"><b>Contexte brut</b>' + esc(ctx.text.slice(0, 160)) + "</div>";
+    }).join("");
+    var by = m.thoughts.length ? "Pensé par " + m.thoughts.map(function (t) { return t.author; }).join(" × ") : "Contexte seul (aucun esprit)";
+    screen.innerHTML = '<div class="out-ui" style="--c:' + c + '"><h3>' + esc(m.title) + '</h3><div class="by">' + esc(by) + '</div>' +
+      '<div class="tiles">' + tiles + '</div><div class="voices">' + voices + '</div>' +
+      '<button class="cta" type="button">' + esc(m.action) + ' →</button></div>';
+  }
+
+  function removeNode(id) {
+    var n = nodes.get(id);
+    if (!n) return;
+    links.forEach(function (l) { if (l.from === id || l.to === id) removeLink(l.id, true); });
+    hubs.forEach(function (h) {
+      h.members = h.members.filter(function (m) { return m !== id; });
+      if (h.members.length < 2) removeHub(h.id); else placeHub(h);
+    });
+    n.el.style.transition = "opacity .35s, transform .35s";
+    n.el.style.opacity = "0";
+    n.el.style.transform = "scale(.85)";
+    setTimeout(function () { n.el.remove(); }, 360);
+    nodes.delete(id);
+    if (selected === id) selected = null;
+    propagate();
+  }
+
+  function select(id) {
+    if (selected && nodes.get(selected)) nodes.get(selected).el.classList.remove("is-selected");
+    selected = id;
+    if (id && nodes.get(id)) nodes.get(id).el.classList.add("is-selected");
+  }
+
+  // ======================================================================================
+  // Synapses
+  // ======================================================================================
+  function portCenter(n, kind) {
+    var port = n.el.querySelector(".port." + kind);
+    if (!port) return { x: n.x, y: n.y };
+    var r = port.getBoundingClientRect();
+    return toWorld(r.left + r.width / 2, r.top + r.height / 2);
+  }
+  function curve(a, b) {
+    var dx = Math.max(60, Math.abs(b.x - a.x) * 0.5);
+    return "M" + a.x.toFixed(1) + " " + a.y.toFixed(1) + " C" + (a.x + dx).toFixed(1) + " " + a.y.toFixed(1) + " " +
+      (b.x - dx).toFixed(1) + " " + b.y.toFixed(1) + " " + b.x.toFixed(1) + " " + b.y.toFixed(1);
+  }
+  function colorOf(n) { return n.type === "engram" ? n.color : n.type === "context" ? "#7fdcff" : "#ffe3b0"; }
+  function svg(tag, attrs) {
+    var e = document.createElementNS(SVGNS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  function canLink(from, to) {
+    if (!from || !to || from === to) return false;
+    var a = nodes.get(from), b = nodes.get(to);
+    if (!a || !b || a.type === "render" || b.type === "context") return false;
+    var exists = false;
+    links.forEach(function (l) { if (l.from === from && l.to === to) exists = true; });
+    if (exists) return false;
+    // Pas de boucle : la pensée coule dans un sens.
+    var seen = new Set();
+    var stack = [to];
+    while (stack.length) {
+      var cur = stack.pop();
+      if (cur === from) return false;
+      if (seen.has(cur)) continue;
+      seen.add(cur);
+      links.forEach(function (l) { if (l.from === cur) stack.push(l.to); });
+    }
+    return true;
+  }
+
+  function addLink(from, to, quiet) {
+    if (!canLink(from, to)) return null;
+    var id = uid("l");
+    var grad = svg("linearGradient", { id: "g-" + id, gradientUnits: "userSpaceOnUse" });
+    grad.append(svg("stop", { offset: "0", "stop-color": colorOf(nodes.get(from)) }), svg("stop", { offset: "1", "stop-color": colorOf(nodes.get(to)) }));
+    defs.append(grad);
+    var g = svg("g", { class: "link", "data-id": id });
+    var glow = svg("path", { class: "glow", stroke: "url(#g-" + id + ")" });
+    var core = svg("path", { class: "core", stroke: "url(#g-" + id + ")" });
+    var flow = svg("path", { class: "flow" });
+    var hit = svg("path", { class: "hit" });
+    var title = svg("title", {});
+    title.textContent = "Clic : couper cette synapse";
+    hit.append(title);
+    g.append(glow, core, flow, hit);
+    linksLayer.append(g);
+    var l = { id: id, from: from, to: to, el: g, grad: grad, paths: [glow, core, flow, hit] };
+    links.set(id, l);
+    hit.addEventListener("click", function (e) { e.stopPropagation(); cutLink(id, e.clientX, e.clientY); });
+    placeLink(l);
+    if (!quiet) propagate();
+    return l;
+  }
+  function placeLink(l) {
+    var a = portCenter(nodes.get(l.from), "out");
+    var b = portCenter(nodes.get(l.to), "in");
+    var d = curve(a, b);
+    l.paths.forEach(function (p) { p.setAttribute("d", d); });
+    l.grad.setAttribute("x1", a.x); l.grad.setAttribute("y1", a.y); l.grad.setAttribute("x2", b.x); l.grad.setAttribute("y2", b.y);
+    l.a = a; l.b = b;
+  }
+  function placeLinksOf(id) { links.forEach(function (l) { if (l.from === id || l.to === id) placeLink(l); }); }
+
+  /** Couper un fil : la mémoire du nœud suivant s'efface aussitôt (et tout ce qui en dépendait). */
+  function cutLink(id, sx, sy) {
+    var l = links.get(id);
+    if (!l) return;
+    if (sx !== undefined) spark(toWorld(sx, sy));
+    removeLink(id, false);
+    toast("Synapse coupée : la mémoire en aval s'efface.");
+  }
+  function removeLink(id, silent) {
+    var l = links.get(id);
+    if (!l) return;
+    links.delete(id);
+    l.el.classList.add("is-cut");
+    setTimeout(function () { l.el.remove(); l.grad.remove(); }, 460);
+    if (!silent) propagate({ instant: true });
+  }
+  function spark(p) {
+    var g = svg("g", {});
+    for (var i = 0; i < 6; i++) {
+      var a = (i / 6) * Math.PI * 2;
+      var line = svg("path", { class: "spark", d: "M" + p.x + " " + p.y + " l" + Math.cos(a) * 4 + " " + Math.sin(a) * 4, opacity: "1" });
+      line.animate([{ transform: "translate(0,0)", opacity: 1 }, { transform: "translate(" + Math.cos(a) * 16 + "px," + Math.sin(a) * 16 + "px)", opacity: 0 }],
+        { duration: 450, easing: "ease-out", fill: "forwards" });
+      g.append(line);
+    }
+    pulsesLayer.append(g);
+    setTimeout(function () { g.remove(); }, 480);
+  }
+
+  /** Une impulsion lumineuse parcourt la synapse (le flux d'information). */
+  function pulse(l, ms) {
+    return new Promise(function (resolve) {
+      if (reduced || !l.el.isConnected) return resolve();
+      var path = l.paths[1];
+      var len = path.getTotalLength();
+      var dot = svg("circle", { class: "pulse", r: "4" });
+      var halo = svg("circle", { r: "11", fill: colorOf(nodes.get(l.to)) || "#fff", opacity: "0.25" });
+      pulsesLayer.append(halo, dot);
+      var t0 = performance.now();
+      (function step(now) {
+        var t = Math.min(1, (now - t0) / ms);
+        var e = 1 - Math.pow(1 - t, 2);
+        if (!l.el.isConnected) { dot.remove(); halo.remove(); return resolve(); }
+        var pt = path.getPointAtLength(len * e);
+        dot.setAttribute("cx", pt.x); dot.setAttribute("cy", pt.y);
+        halo.setAttribute("cx", pt.x); halo.setAttribute("cy", pt.y);
+        if (t < 1) requestAnimationFrame(step);
+        else { dot.remove(); halo.remove(); resolve(); }
+      })(t0);
+    });
+  }
+
+  // ======================================================================================
+  // Flux : Contexte → Engramme → Rendu. Chaque nœud calcule sa mémoire à partir de ce qu'il reçoit ; un nœud sans entrée
+  // n'a pas de mémoire. Les changements parcourent les fils (impulsions), les effacements sont instantanés.
+  // ======================================================================================
+  function order() {
+    var indeg = new Map();
+    nodes.forEach(function (n, id) { indeg.set(id, 0); });
+    links.forEach(function (l) { indeg.set(l.to, (indeg.get(l.to) || 0) + 1); });
+    var queue = [];
+    indeg.forEach(function (d, id) { if (!d) queue.push(id); });
+    var out = [];
+    var depth = new Map(queue.map(function (id) { return [id, 0]; }));
+    while (queue.length) {
+      var id = queue.shift();
+      out.push(id);
+      links.forEach(function (l) {
+        if (l.from !== id) return;
+        depth.set(l.to, Math.max(depth.get(l.to) || 0, depth.get(id) + 1));
+        indeg.set(l.to, indeg.get(l.to) - 1);
+        if (!indeg.get(l.to)) queue.push(l.to);
+      });
+    }
+    return { ids: out, depth: depth };
+  }
+  function incoming(id) {
+    var ins = [];
+    links.forEach(function (l) { if (l.to === id) ins.push(l); });
+    return ins;
+  }
+
+  function propagate(opts) {
+    opts = opts || {};
+    generation += 1;
+    var gen = generation;
+    var o = order();
+    var changes = [];
+    o.ids.forEach(function (id) {
+      var n = nodes.get(id);
+      var before = n.memory ? JSON.stringify(n.memory) : "";
+      var ins = incoming(id).map(function (l) { return nodes.get(l.from).memory; }).filter(Boolean);
+      var mem = null;
+      if (n.type === "context") mem = n.text.trim() ? { kind: "context", text: n.text.trim(), title: n.title } : null;
+      else if (n.type === "engram") mem = ins.length ? think(n, ins) : null;
+      else mem = ins.length ? compose(ins) : null;
+      n.memory = mem;
+      var after = mem ? JSON.stringify(mem) : "";
+      if (before !== after) changes.push({ n: n, erased: !mem, depth: o.depth.get(id) || 0 });
+    });
+    changes.forEach(function (c) {
+      if (c.n.type === "context") return;
+      if (c.erased || opts.instant) {
+        // Effacement : immédiat, sans attendre d'impulsion.
+        repaint(c.n, true);
+        return;
+      }
+      var delay = reduced ? 0 : Math.max(0, c.depth - 1) * 820;
+      setTimeout(function () {
+        if (gen !== generation) { repaint(c.n); return; }
+        if (c.n.type === "engram") c.n.el.classList.add("is-thinking");
+        Promise.all(incoming(c.n.id).map(function (l) { return pulse(l, 760); })).then(function () {
+          c.n.el.classList.remove("is-thinking");
+          repaint(c.n);
+        });
+      }, delay);
+    });
+  }
+  function repaint(n, erased) {
+    if (n.type === "engram") paintEngram(n);
+    if (n.type === "render") {
+      paintRender(n);
+      if (erased) { n.el.classList.remove("is-erased"); void n.el.offsetWidth; n.el.classList.add("is-erased"); }
+    }
+    if (anatomyOf === n.id) renderPreview();
+  }
+
+  // ======================================================================================
+  // Gestes : déplacer le canvas, les bulles, tirer une synapse, lasso de Hub, zoom
+  // ======================================================================================
+  var gesture = null;
+  var hubMode = false;
+  var touches = new Map(); // doigts posés sur le canvas (pincer pour zoomer)
+  function pinchState() {
+    var pts = Array.from(touches.values());
+    return { d: Math.hypot(pts[0][0] - pts[1][0], pts[0][1] - pts[1][1]) || 1, x: (pts[0][0] + pts[1][0]) / 2, y: (pts[0][1] + pts[1][1]) / 2 };
+  }
+  var zTop = 1;
+
+  viewport.addEventListener("pointerdown", function (e) {
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    if (e.pointerType === "touch") {
+      touches.set(e.pointerId, [e.clientX, e.clientY]);
+      if (touches.size === 2 && (!gesture || gesture.kind === "pan")) {
+        var st = pinchState();
+        gesture = { kind: "pinch", d0: st.d, z0: view.z, x0: st.x, y0: st.y, vx: view.x, vy: view.y };
+        viewport.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
+    var port = e.target.closest(".port.out");
+    var nodeEl = e.target.closest(".node");
+    closeMenus();
+    if (e.target.closest(".link")) return; // un clic sur un fil le coupe (voir addLink)
+    // La capture se fait sur la bulle elle-même : clics et double-clics gardent leur cible.
+    if (port && nodeEl) {
+      // Tirer une synapse depuis un port de sortie.
+      e.preventDefault();
+      var from = nodeEl.dataset.id;
+      gesture = { kind: "wire", from: from, start: portCenter(nodes.get(from), "out") };
+      $("draft").hidden = false;
+      nodeEl.setPointerCapture(e.pointerId);
+      markTargets(from, true);
+      return;
+    }
+    if (nodeEl && !e.target.closest("textarea, [contenteditable], button, .port")) {
+      var n = nodes.get(nodeEl.dataset.id);
+      select(n.id);
+      var p = toWorld(e.clientX, e.clientY);
+      gesture = { kind: "node", n: n, dx: p.x - n.x, dy: p.y - n.y, moved: false };
+      nodeEl.classList.add("is-dragging");
+      zTop += 1;
+      nodeEl.style.zIndex = zTop; // au premier plan
+      nodeEl.setPointerCapture(e.pointerId);
+      return;
+    }
+    if (nodeEl) return;
+    select(null);
+    if (hubMode || e.altKey) {
+      gesture = { kind: "lasso", points: [[e.clientX, e.clientY]] };
+      viewport.classList.add("is-lasso");
+    } else {
+      gesture = { kind: "pan", sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y };
+      viewport.classList.add("is-panning");
+    }
+    viewport.setPointerCapture(e.pointerId);
+  });
+
+  viewport.addEventListener("pointermove", function (e) {
+    if (e.pointerType === "touch" && touches.has(e.pointerId)) touches.set(e.pointerId, [e.clientX, e.clientY]);
+    if (!gesture) return;
+    if (gesture.kind === "pinch") {
+      if (touches.size < 2) return;
+      var ps = pinchState();
+      // Le monde sous le milieu des doigts reste sous les doigts, à l'échelle du pincement.
+      var z = Math.max(0.25, Math.min(2.5, gesture.z0 * ps.d / gesture.d0));
+      var wx = (gesture.x0 - gesture.vx) / gesture.z0, wy = (gesture.y0 - gesture.vy) / gesture.z0;
+      view.z = z;
+      view.x = ps.x - wx * z;
+      view.y = ps.y - wy * z;
+      applyView();
+    } else if (gesture.kind === "pan") {
+      view.x = gesture.vx + e.clientX - gesture.sx;
+      view.y = gesture.vy + e.clientY - gesture.sy;
+      applyView();
+    } else if (gesture.kind === "node") {
+      var p = toWorld(e.clientX, e.clientY);
+      var n = gesture.n;
+      n.x = Math.round(p.x - gesture.dx);
+      n.y = Math.round(p.y - gesture.dy);
+      n.el.style.left = n.x + "px";
+      n.el.style.top = n.y + "px";
+      gesture.moved = true;
+      placeLinksOf(n.id);
+      hubs.forEach(function (h) { if (h.members.indexOf(n.id) >= 0) placeHub(h); });
+    } else if (gesture.kind === "wire") {
+      var q = toWorld(e.clientX, e.clientY);
+      var target = targetAt(e.clientX, e.clientY, gesture.from);
+      var end = target ? portCenter(nodes.get(target), "in") : q;
+      $("draft").setAttribute("d", curve(gesture.start, end));
+    } else if (gesture.kind === "lasso") {
+      gesture.points.push([e.clientX, e.clientY]);
+      $("lasso").setAttribute("d", "M" + gesture.points.map(function (pt) { return pt.join(" "); }).join(" L") + " Z");
+    }
+  });
+
+  function endGesture(e) {
+    if (e && e.pointerType === "touch") touches.delete(e.pointerId);
+    if (!gesture) return;
+    if (gesture.kind === "pinch" && touches.size >= 2) return;
+    var g = gesture;
+    gesture = null;
+    viewport.classList.remove("is-panning", "is-lasso");
+    if (g.kind === "node") g.n.el.classList.remove("is-dragging");
+    if (g.kind === "wire") {
+      $("draft").hidden = true;
+      $("draft").setAttribute("d", "");
+      markTargets(g.from, false);
+      var target = e && e.type === "pointerup" ? targetAt(e.clientX, e.clientY, g.from) : null;
+      if (target) {
+        addLink(g.from, target);
+        hideHint();
+      } else if (e && e.type === "pointerup") toast("Lâchez le fil sur une bulle qui peut recevoir ce flux.");
+    }
+    if (g.kind === "lasso") {
+      $("lasso").setAttribute("d", "");
+      makeHubFromLasso(g.points);
+      setHubMode(false);
+    }
+  }
+  viewport.addEventListener("pointerup", endGesture);
+  viewport.addEventListener("pointercancel", endGesture);
+
+  /** Nœud qui peut recevoir un fil sous le pointeur (son port d'entrée ou la bulle entière). */
+  function targetAt(sx, sy, from) {
+    var hit = document.elementsFromPoint(sx, sy).find(function (x) { return x.closest && x.closest(".node"); });
+    var nodeEl = hit && hit.closest(".node");
+    var id = nodeEl && nodeEl.dataset.id;
+    return id && canLink(from, id) ? id : null;
+  }
+  function markTargets(from, on) {
+    nodes.forEach(function (n) {
+      var port = n.el.querySelector(".port.in");
+      if (port) port.classList.toggle("is-target", on && canLink(from, n.id));
+    });
+  }
+
+  viewport.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    if (e.ctrlKey || Math.abs(e.deltaY) >= Math.abs(e.deltaX)) zoomAt(e.clientX, e.clientY, view.z * Math.exp(-e.deltaY * 0.0016));
+    else { view.x -= e.deltaX; applyView(); }
+  }, { passive: false });
+
+  viewport.addEventListener("dblclick", function (e) {
+    var nodeEl = e.target.closest(".node.engram");
+    if (nodeEl && !e.target.closest(".port")) { openAnatomy(nodeEl.dataset.id); return; }
+    if (!e.target.closest(".node")) {
+      // Double-clic dans le vide : un contexte naît sous le pointeur.
+      var p = toWorld(e.clientX, e.clientY);
+      var n = addNode("context", Math.round(p.x - 136), Math.round(p.y - 60), { title: "Nouveau contexte" });
+      select(n.id);
+      setTimeout(function () { n.el.querySelector("textarea").focus(); }, 60);
+    }
+  });
+
+  nodesLayer.addEventListener("click", function (e) {
+    var close = e.target.closest(".close");
+    if (close) removeNode(close.closest(".node").dataset.id);
+  });
+
+  addEventListener("keydown", function (e) {
+    var typing = e.target.closest && e.target.closest("input, textarea, [contenteditable]");
+    if (e.key === "Escape") {
+      if (!$("anatomy").hidden) closeAnatomy();
+      else if (!$("room").hidden) closeRoom();
+      else { closeMenus(); setHubMode(false); }
+      return;
+    }
+    if (typing || $("nexus").hidden) return;
+    if ((e.key === "Delete" || e.key === "Backspace") && selected) removeNode(selected);
+    if (e.key === "f") fit(true);
+  });
+
+  // ======================================================================================
+  // Création depuis le HUD
+  // ======================================================================================
+  function centerSpot(offset) {
+    var p = toWorld(innerWidth / 2, innerHeight / 2);
+    var k = (seq % 5) * 24;
+    return { x: Math.round(p.x - 120 + k + (offset || 0)), y: Math.round(p.y - 90 + k) };
+  }
+  $("add-context").addEventListener("click", function () {
+    var s = centerSpot(-260);
+    var n = addNode("context", s.x, s.y, { title: "Nouveau contexte" });
+    select(n.id);
+    setTimeout(function () { n.el.querySelector("textarea").focus(); }, 60);
+  });
+  $("add-render").addEventListener("click", function () { var s = centerSpot(260); select(addNode("render", s.x, s.y).id); });
+  var menu = $("engram-menu");
+  Object.keys(PERSONAS).forEach(function (key) {
+    var p = PERSONAS[key];
+    var b = el("button", "", '<span class="mini-orb" style="--c:' + p.color + '"></span><span><b>' + esc(p.name) + "</b><small>" + esc(p.role) + " · " + esc(CORES[p.core].label) + "</small></span>");
+    b.type = "button";
+    b.setAttribute("role", "menuitem");
+    b.addEventListener("click", function () {
+      closeMenus();
+      var s = centerSpot(0);
+      select(addNode("engram", s.x, s.y, { persona: key }).id);
+    });
+    menu.append(b);
+  });
+  $("add-engram").addEventListener("click", function (e) {
+    e.stopPropagation();
+    var open = menu.hidden;
+    closeMenus();
+    menu.hidden = !open;
+    $("add-engram").setAttribute("aria-expanded", String(open));
+  });
+  function closeMenus() { menu.hidden = true; $("add-engram").setAttribute("aria-expanded", "false"); }
+  document.addEventListener("click", function (e) { if (!e.target.closest(".anchor")) closeMenus(); });
+
+  $("zoom-in").addEventListener("click", function () { zoomAt(innerWidth / 2, innerHeight / 2, view.z * 1.2); });
+  $("zoom-out").addEventListener("click", function () { zoomAt(innerWidth / 2, innerHeight / 2, view.z / 1.2); });
+  $("zoom-reset").addEventListener("click", function () { zoomAt(innerWidth / 2, innerHeight / 2, 1); });
+  $("fit").addEventListener("click", function () { fit(true); });
+  function setHubMode(on) {
+    hubMode = on;
+    $("hub-tool").setAttribute("aria-pressed", String(on));
+    viewport.classList.toggle("is-lasso", on);
+    if (on) toast("Dessinez un cercle autour de plusieurs Engrammes.");
+  }
+  $("hub-tool").addEventListener("click", function () { setHubMode(!hubMode); });
+
+  var toastTimer = 0;
+  function toast(text) {
+    var t = $("toast");
+    t.textContent = text;
+    t.hidden = false;
+    t.style.animation = "none"; void t.offsetWidth; t.style.animation = "";
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.hidden = true; }, 2600);
+  }
+  var hintHidden = false;
+  function hideHint() {
+    if (hintHidden) return;
+    hintHidden = true;
+    setTimeout(function () { $("hint").style.opacity = "0"; }, 2500);
+  }
+
+  // ======================================================================================
+  // Anatomie : plonger dans un Engramme, altérer son Core, son State, ses Memories
+  // ======================================================================================
+  var anatomyOf = null;
+  var beforeDive = null;
+  function openAnatomy(id) {
+    var n = nodes.get(id);
+    if (!n || anatomyOf) return;
+    anatomyOf = id;
+    $("nexus").classList.add("is-diving");
+    beforeDive = { x: view.x, y: view.y, z: view.z };
+    // La caméra plonge dans l'orbe.
+    var orb = n.el.querySelector(".orb").getBoundingClientRect();
+    var c = toWorld(orb.left + orb.width / 2, orb.top + orb.height / 2);
+    var z = 7;
+    world.classList.add("is-diving");
+    Object.assign(view, { z: z, x: innerWidth / 2 - c.x * z, y: innerHeight / 2 - c.y * z });
+    applyView();
+    world.style.opacity = "0.15";
+    var a = $("anatomy");
+    a.style.setProperty("--c", n.color);
+    a.hidden = false;
+    fillAnatomy(n);
+    setTimeout(function () { a.classList.add("is-on"); drawOrgans(); }, reduced ? 0 : 420);
+  }
+  function closeAnatomy() {
+    if (!anatomyOf) return;
+    var n = nodes.get(anatomyOf);
+    var a = $("anatomy");
+    a.classList.remove("is-on");
+    setTimeout(function () {
+      a.hidden = true;
+      Object.assign(view, beforeDive);
+      applyView();
+      world.style.opacity = "1";
+      setTimeout(function () { world.classList.remove("is-diving"); }, 900);
+    }, reduced ? 0 : 300);
+    anatomyOf = null;
+    $("nexus").classList.remove("is-diving");
+    if (n) { paintEngram(n); propagate(); toast(n.name + " : anatomie mise à jour, le flux repart."); }
+  }
+  $("anat-back").addEventListener("click", closeAnatomy);
+
+  function fillAnatomy(n) {
+    $("anat-name").textContent = n.name;
+    var core = $("anat-core");
+    core.style.setProperty("--breath", (6.5 - n.state.energy / 25).toFixed(2) + "s");
+    // Core
+    var modes = $("core-modes");
+    modes.replaceChildren();
+    Object.keys(CORES).forEach(function (key) {
+      var b = el("button");
+      b.type = "button";
+      b.textContent = CORES[key].label;
+      b.setAttribute("aria-pressed", String(key === n.core));
+      b.addEventListener("click", function () {
+        n.core = key;
+        modes.querySelectorAll("button").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+        refreshAnatomy(n);
+      });
+      modes.append(b);
+    });
+    // State
+    var sliders = $("sliders");
+    sliders.replaceChildren();
+    [["energy", "Énergie"], ["patience", "Patience"], ["creativity", "Créativité"]].forEach(function (pair) {
+      var label = el("label", "", "<span>" + pair[1] + "<b></b></span>");
+      var input = el("input");
+      input.type = "range"; input.min = 0; input.max = 100; input.value = n.state[pair[0]];
+      input.setAttribute("aria-label", pair[1]);
+      input.addEventListener("input", function () { n.state[pair[0]] = +input.value; refreshAnatomy(n); });
+      label.append(input);
+      sliders.append(label);
+    });
+    renderMemories(n);
+    refreshAnatomy(n);
+  }
+  function renderMemories(n) {
+    var box = $("memories");
+    box.replaceChildren();
+    n.memories.forEach(function (m, i) {
+      var chip = el("span", "chip");
+      chip.append(document.createTextNode(m));
+      var x = el("button", "", "×");
+      x.type = "button";
+      x.setAttribute("aria-label", "Oublier ce souvenir");
+      x.addEventListener("click", function () { n.memories.splice(i, 1); renderMemories(n); refreshAnatomy(n); });
+      chip.append(x);
+      box.append(chip);
+    });
+    if (!n.memories.length) box.append(el("span", "chip", "Mémoire vide : l'Engramme ne raisonne plus qu'avec son Core."));
+  }
+  $("mem-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var n = nodes.get(anatomyOf);
+    var v = $("mem-input").value.trim();
+    if (!n || !v) return;
+    n.memories.unshift(v);
+    $("mem-input").value = "";
+    renderMemories(n);
+    refreshAnatomy(n);
+  });
+  function refreshAnatomy(n) {
+    var mood = moodOf(n.state);
+    $("core-label").textContent = CORES[n.core].label;
+    $("core-desc").textContent = CORES[n.core].desc;
+    var a = $("anatomy");
+    a.style.setProperty("--mood", mood.color);
+    $("anat-mood").querySelector("span").textContent = mood.label + " · " + CORES[n.core].label;
+    var score = (n.state.energy + n.state.patience + n.state.creativity) / 300;
+    $("mood-arc").setAttribute("stroke-dashoffset", String(201 - 201 * score));
+    $("sliders").querySelectorAll("label").forEach(function (label, i) {
+      label.querySelector("b").textContent = n.state[["energy", "patience", "creativity"][i]];
+    });
+    $("anat-core").style.setProperty("--breath", (6.5 - n.state.energy / 25).toFixed(2) + "s");
+    renderPreview();
+  }
+  function renderPreview() {
+    var n = nodes.get(anatomyOf);
+    if (!n) return;
+    var ins = incoming(n.id).map(function (l) { return nodes.get(l.from).memory; }).filter(Boolean);
+    if (!ins.length) ins = [{ kind: "context", text: "Concevoir un écran d'accueil pour une bibliothèque de quartier." }];
+    var t = think(n, ins);
+    $("anat-preview").textContent = t.lines.slice(0, 3).join(" ");
+  }
+  function drawOrgans() {
+    var stage = $("anat-stage").getBoundingClientRect();
+    var core = $("anat-core").getBoundingClientRect();
+    var cx = core.left + core.width / 2 - stage.left, cy = core.top + core.height / 2 - stage.top;
+    var linksSvg = $("anat-links");
+    linksSvg.replaceChildren();
+    document.querySelectorAll(".organ").forEach(function (o) {
+      var r = o.getBoundingClientRect();
+      var tx = r.left + r.width / 2 - stage.left, ty = r.top + r.height / 2 - stage.top;
+      if (o.classList.contains("core")) tx = r.right - stage.left;
+      if (o.classList.contains("state")) tx = r.left - stage.left;
+      if (o.classList.contains("memories")) ty = r.top - stage.top;
+      var mx = (cx + tx) / 2;
+      linksSvg.append(svg("path", { d: "M" + cx + " " + cy + " Q" + mx + " " + (cy + ty) / 2 + " " + tx + " " + ty }));
+    });
+  }
+  addEventListener("resize", function () { if (anatomyOf) drawOrgans(); });
+
+  // ======================================================================================
+  // Hubs : un cercle autour de plusieurs Engrammes → une War Room où ils débattent
+  // ======================================================================================
+  function inside(poly, x, y) {
+    var c = false;
+    for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      var xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  }
+  function makeHubFromLasso(points) {
+    if (points.length < 6) return;
+    var members = [];
+    nodes.forEach(function (n) {
+      if (n.type !== "engram") return;
+      var r = n.el.querySelector(".orb").getBoundingClientRect();
+      if (inside(points, r.left + r.width / 2, r.top + r.height / 2)) members.push(n.id);
+    });
+    if (members.length < 2) { toast("Un Hub réunit au moins deux Engrammes."); return; }
+    var h = createHub(members);
+    openRoom(h.id);
+  }
+  function createHub(members) {
+    var id = uid("h");
+    var e = el("div", "hub");
+    e.innerHTML = '<div class="label"><span class="micro" style="letter-spacing:.2em">Hub</span><b></b><button type="button">War Room</button></div>';
+    $("hubs").append(e);
+    var h = { id: id, members: members, el: e };
+    hubs.set(id, h);
+    e.querySelector("button").addEventListener("click", function () { openRoom(id); });
+    placeHub(h);
+    return h;
+  }
+  function placeHub(h) {
+    var pts = h.members.map(function (id) {
+      var n = nodes.get(id);
+      return { x: n.x + n.el.offsetWidth / 2, y: n.y + 75 };
+    });
+    var cx = pts.reduce(function (a, p) { return a + p.x; }, 0) / pts.length;
+    var cy = pts.reduce(function (a, p) { return a + p.y; }, 0) / pts.length;
+    var r = Math.max.apply(null, pts.map(function (p) { return Math.hypot(p.x - cx, p.y - cy); })) + 150;
+    h.el.style.left = cx - r + "px";
+    h.el.style.top = cy - r + "px";
+    h.el.style.width = h.el.style.height = r * 2 + "px";
+    h.el.querySelector(".label b").textContent = h.members.map(function (id) { return nodes.get(id).name.split(" ").pop(); }).join(" × ");
+  }
+  function removeHub(id) {
+    var h = hubs.get(id);
+    if (!h) return;
+    hubs.delete(id);
+    h.el.remove();
+    if (roomOf === id) closeRoom();
+  }
+
+  var roomOf = null;
+  var debating = false;
+  function openRoom(id) {
+    var h = hubs.get(id);
+    if (!h) return;
+    roomOf = id;
+    $("room").hidden = false;
+    focusHub(h);
+    $("room-title").textContent = h.members.map(function (m) { return nodes.get(m).name; }).join(" × ");
+    var av = $("room-avatars");
+    av.replaceChildren();
+    h.members.forEach(function (m) { var s = el("span"); s.style.setProperty("--c", nodes.get(m).color); s.title = nodes.get(m).name; av.append(s); });
+    if (!$("log").children.length) {
+      var ctx = firstContext();
+      $("question").value = ctx ? "Comment aborder : " + subjectOf(ctx.text) + " ?" : "Comment rendre un tableau de bord vraiment utile ?";
+    }
+    setTimeout(function () { $("question").focus(); }, 50);
+  }
+  function focusHub(h) {
+    var r = h.el.offsetWidth / 2;
+    var cx = h.el.offsetLeft + r, cy = h.el.offsetTop + r;
+    var room = $("room").getBoundingClientRect();
+    var free = Math.max(320, (room.left || innerWidth) - 32);
+    var z = Math.max(0.3, Math.min(1, Math.min(free / (2 * r + 60), (innerHeight - 120) / (2 * r + 60))));
+    animateView({ z: z, x: 16 + free / 2 - cx * z, y: 70 + (innerHeight - 70) / 2 - cy * z }, 700);
+  }
+  function closeRoom() { $("room").hidden = true; roomOf = null; }
+  $("room-close").addEventListener("click", closeRoom);
+  function firstContext() {
+    var c = null;
+    nodes.forEach(function (n) { if (!c && n.type === "context" && n.text.trim()) c = n; });
+    return c;
+  }
+
+  function addMsg(kind, color, who, text) {
+    var m = el("div", "msg " + kind);
+    if (color) m.style.setProperty("--c", color);
+    if (who) { var b = el("b"); b.textContent = who; m.append(b); }
+    var body = el("span");
+    m.append(body);
+    $("log").append(m);
+    return { m: m, body: body, text: text };
+  }
+  function type(entry) {
+    return new Promise(function (resolve) {
+      if (reduced) { entry.body.textContent = entry.text; return resolve(); }
+      var i = 0;
+      var timer = setInterval(function () {
+        i = Math.min(entry.text.length, i + 3);
+        entry.body.textContent = entry.text.slice(0, i);
+        $("log").scrollTop = $("log").scrollHeight;
+        if (i >= entry.text.length) { clearInterval(timer); resolve(); }
+      }, 16);
+    });
+  }
+  function typing(color, who) {
+    var m = el("div", "msg mind typing", "<b></b><i></i><i></i><i></i>");
+    m.style.setProperty("--c", color);
+    m.querySelector("b").textContent = who;
+    $("log").append(m);
+    $("log").scrollTop = $("log").scrollHeight;
+    return m;
+  }
+  var wait = function (ms) { return new Promise(function (r) { setTimeout(r, reduced ? 0 : ms); }); };
+
+  /** Débat : chaque esprit prend position, puis répond à un autre, puis le Hub fait sa synthèse. */
+  function debate(question) {
+    var h = hubs.get(roomOf);
+    if (!h || debating) return Promise.resolve();
+    debating = true;
+    $("ask-send").disabled = true;
+    var minds = h.members.map(function (id) { return nodes.get(id); });
+    var ctx = firstContext();
+    var input = [{ kind: "context", text: question + (ctx ? " " + ctx.text : "") }];
+    var positions = minds.map(function (n) { return think(n, input); });
+    var keys = positions[0].keys.length ? positions[0].keys : ["l'essentiel"];
+    var log = $("log");
+    var u = addMsg("user", null, "Vous", question);
+    u.body.textContent = question;
+    var chain = wait(300).then(function () { var r = el("div", "round", "Tour 1 · positions"); log.append(r); });
+    minds.forEach(function (n, i) {
+      chain = chain.then(function () {
+        var t = typing(n.color, n.name);
+        return wait(650).then(function () {
+          t.remove();
+          return type(addMsg("mind", n.color, n.name + " · " + positions[i].mood, positions[i].lines.slice(0, 2).join(" ")));
+        });
+      });
+    });
+    chain = chain.then(function () { log.append(el("div", "round", "Tour 2 · confrontation")); });
+    minds.forEach(function (n, i) {
+      chain = chain.then(function () {
+        var other = minds[(i + 1) % minds.length];
+        var t = typing(n.color, n.name);
+        return wait(600).then(function () {
+          t.remove();
+          var reply = CORES[n.core].react(other.name.split(" ").pop(), keys[i % keys.length]);
+          return type(addMsg("mind", n.color, n.name + " → " + other.name.split(" ").pop(), reply));
+        });
+      });
+    });
+    return chain.then(function () {
+      return wait(500).then(function () {
+        var s = el("div", "msg synth");
+        s.innerHTML = "<b>Synthèse du Hub</b><span></span><ul></ul>";
+        s.querySelector("span").textContent = "Solution commune pour « " + subjectOf(question) + " » :";
+        var ul = s.querySelector("ul");
+        minds.forEach(function (n) {
+          var li = el("li");
+          li.textContent = n.name.split(" ").pop() + " — " + CORES[n.core].desc;
+          ul.append(li);
+        });
+        var li = el("li");
+        li.textContent = "Premier geste : « " + CORES[minds[0].core].action + " », validé par " + minds.slice(1).map(function (n) { return n.name.split(" ").pop(); }).join(" et ") + ".";
+        ul.append(li);
+        log.append(s);
+        log.scrollTop = log.scrollHeight;
+        debating = false;
+        $("ask-send").disabled = false;
+      });
+    });
+  }
+  $("ask").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var q = $("question").value.trim();
+    if (!q) return;
+    $("question").value = "";
+    debate(q);
+  });
+
+  // ======================================================================================
+  // Porte d'entrée → Nexus
+  // ======================================================================================
+  document.querySelectorAll(".door").forEach(function (d) {
+    d.addEventListener("pointermove", function (e) {
+      var r = d.getBoundingClientRect();
+      d.style.setProperty("--mx", e.clientX - r.left + "px");
+      d.style.setProperty("--my", e.clientY - r.top + "px");
+    });
+  });
+  var seeded = false;
+  function enterNexus() {
+    $("gate").classList.add("is-leaving");
+    $("nexus").hidden = false;
+    requestAnimationFrame(function () { $("nexus").classList.add("is-on"); });
+    if (!seeded) seed();
+    setTimeout(function () { $("gate").hidden = true; }, reduced ? 0 : 1000);
+    if (location.hash !== "#nexus") history.replaceState(null, "", "#nexus");
+  }
+  function leaveNexus() {
+    $("gate").hidden = false;
+    requestAnimationFrame(function () { $("gate").classList.remove("is-leaving"); });
+    $("nexus").classList.remove("is-on");
+    setTimeout(function () { $("nexus").hidden = true; }, reduced ? 0 : 900);
+    history.replaceState(null, "", location.pathname + location.search);
+  }
+  $("door-nexus").addEventListener("click", enterNexus);
+  $("to-gate").addEventListener("click", leaveNexus);
+
+  /** Scène de départ : un brief, deux esprits, un écran — reliés ; le flux se met en marche. */
+  function seed() {
+    seeded = true;
+    var ctx = addNode("context", -540, -120, { title: "Brief",
+      text: "Concevoir un tableau de bord pour suivre la qualité de l'air dans une école primaire : CO₂, température, bruit." });
+    var curie = addNode("engram", -120, -300, { persona: "curie" });
+    var jobs = addNode("engram", -120, 90, { persona: "jobs" });
+    var screen = addNode("render", 300, -150);
+    [ctx, curie, jobs, screen].forEach(function (n, i) { n.el.style.animationDelay = i * 0.12 + "s"; });
+    fit(false);
+    setTimeout(function () {
+      addLink(ctx.id, curie.id, true);
+      addLink(ctx.id, jobs.id, true);
+      addLink(curie.id, screen.id, true);
+      addLink(jobs.id, screen.id, true);
+      propagate();
+    }, reduced ? 0 : 900);
+  }
+
+  // Accès pour les tests et démonstrations (lecture et commandes).
+  window.__nexus = {
+    nodes: nodes, links: links, hubs: hubs, view: view,
+    memory: function (id) { var n = nodes.get(id); return n && n.memory; },
+    connect: addLink, cut: cutLink, open: openAnatomy, close: closeAnatomy, hub: createHub, room: openRoom, debate: debate,
+    enter: enterNexus, find: function (name) { var f = null; nodes.forEach(function (n) { if (!f && (n.name === name || n.title === name || n.type === name)) f = n; }); return f; }
+  };
+
+  applyView();
+  if (location.hash === "#nexus") { $("gate").classList.add("is-leaving"); enterNexus(); }
+})();
+</script>
+</body>
+</html>

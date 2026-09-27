@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img" aria-labelledby="logo-prism-title">
+  <title id="logo-prism-title">Prism — la Lentille Continua</title>
+  <!-- logo_prism : trois rubans sans fin, entrelacés en anneaux borroméens (chacun passe sur un voisin et sous l'autre :
+       ôtez-en un, les deux autres se libèrent). Leur triple intersection, laissée vide, forme la lentille centrale ;
+       en son foyer, un point de lumière. -->
+  <defs>
+    <linearGradient id="lp-a" x1="0.500" y1="1.000" x2="0.500" y2="0.000">
+      <stop offset="0" stop-color="#8ff3ff"/><stop offset="0.55" stop-color="#2f7bff"/><stop offset="1" stop-color="#6ae4ff"/>
+    </linearGradient>
+    <linearGradient id="lp-b" x1="0.067" y1="0.250" x2="0.933" y2="0.750">
+      <stop offset="0" stop-color="#ff8fe0"/><stop offset="0.55" stop-color="#7c4dff"/><stop offset="1" stop-color="#ff6fd8"/>
+    </linearGradient>
+    <linearGradient id="lp-c" x1="0.933" y1="0.250" x2="0.067" y2="0.750">
+      <stop offset="0" stop-color="#ffe08a"/><stop offset="0.55" stop-color="#ff5a3c"/><stop offset="1" stop-color="#ffc46b"/>
+    </linearGradient>
+    <radialGradient id="lp-focus"><stop offset="0" stop-color="#ffffff"/><stop offset="0.35" stop-color="#dff6ff" stop-opacity="0.75"/><stop offset="1" stop-color="#9fdcff" stop-opacity="0"/></radialGradient>
+    <filter id="lp-glow" x="-25%" y="-25%" width="150%" height="150%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <path id="lp-ring-a" d="M 63.00 87.00 a 57.0 57.0 0 1 0 114.0 0 a 57.0 57.0 0 1 0 -114.0 0"/>
+    <path id="lp-ring-b" d="M 91.58 136.50 a 57.0 57.0 0 1 0 114.0 0 a 57.0 57.0 0 1 0 -114.0 0"/>
+    <path id="lp-ring-c" d="M 34.42 136.50 a 57.0 57.0 0 1 0 114.0 0 a 57.0 57.0 0 1 0 -114.0 0"/>
+    <clipPath id="lp-x-ab"><circle cx="91.58" cy="136.41" r="18.1"/><circle cx="177.00" cy="87.09" r="18.1"/></clipPath>
+    <clipPath id="lp-x-bc"><circle cx="120.00" cy="87.18" r="18.1"/><circle cx="120.00" cy="185.82" r="18.1"/></clipPath>
+    <clipPath id="lp-x-ca"><circle cx="148.42" cy="136.41" r="18.1"/><circle cx="63.00" cy="87.09" r="18.1"/></clipPath>
+  <mask id="lp-m-a" maskUnits="userSpaceOnUse" x="0" y="0" width="240" height="240"><rect width="240" height="240" fill="#fff"/><g clip-path="url(#lp-x-ca)"><use href="#lp-ring-c" fill="none" stroke="#000" stroke-width="19.0"/></g></mask>
+  <mask id="lp-m-b" maskUnits="userSpaceOnUse" x="0" y="0" width="240" height="240"><rect width="240" height="240" fill="#fff"/><g clip-path="url(#lp-x-ab)"><use href="#lp-ring-a" fill="none" stroke="#000" stroke-width="19.0"/></g></mask>
+  <mask id="lp-m-c" maskUnits="userSpaceOnUse" x="0" y="0" width="240" height="240"><rect width="240" height="240" fill="#fff"/><g clip-path="url(#lp-x-bc)"><use href="#lp-ring-b" fill="none" stroke="#000" stroke-width="19.0"/></g></mask>
+  </defs>
+  <g class="lp-rings" filter="url(#lp-glow)">
+    <g mask="url(#lp-m-a)"><use href="#lp-ring-a" fill="none" stroke="url(#lp-a)" stroke-width="13.0"/><use href="#lp-ring-a" fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="1.1"/></g>
+    <g mask="url(#lp-m-b)"><use href="#lp-ring-b" fill="none" stroke="url(#lp-b)" stroke-width="13.0"/><use href="#lp-ring-b" fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="1.1"/></g>
+    <g mask="url(#lp-m-c)"><use href="#lp-ring-c" fill="none" stroke="url(#lp-c)" stroke-width="13.0"/><use href="#lp-ring-c" fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="1.1"/></g>
+  </g>
+  <circle class="lp-focus" cx="120.0" cy="120.0" r="9" fill="url(#lp-focus)"/>
+</svg>

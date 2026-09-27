@@ -60,7 +60,7 @@ from sanitize import (
     validate_document,
 )
 
-__version__ = "5.0.0a5"
+__version__ = "6.0.0a1"
 
 BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
