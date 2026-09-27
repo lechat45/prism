@@ -252,6 +252,7 @@ async function main() {
       throw new Error(`${err.message} — cartes : ${state} — requêtes en attente : ${[...inflight.values()].join(", ") || "aucune"}`);
     });
     let [counterCard] = await cards();
+    const firstCounterId = counterCard.id; // diagnostic des miniatures (le bouclier remplace ce compteur par un autre)
     check("widget 1 généré (saisie clavier + bouton Générer)", counterCard.state === "ready", counterCard.title);
     if (serverMode) {
       const expected = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(health.signup_sparks - health.pricing.generate);
@@ -552,7 +553,8 @@ async function main() {
         meta: el.querySelector(".hub-meta").textContent, onCanvas: !!el.querySelector(".hub-badge"), thumb: !!el.querySelector(".hub-thumb img") }))`);
       check("Mon Hub : 2 widgets avec miniatures fabriquées dans la sandbox, carte fermée hors canvas",
         hub.every((h) => h.thumb) && hub.filter((h) => h.onCanvas).length === 1,
-        hub.map((h) => `${h.title} [${h.id.slice(0, 8)}]${h.onCanvas ? " (canvas)" : ""}${h.thumb ? " 🖼" : ""}`).join(", ") + ` · miniatures envoyées : ${thumbsSent.join(", ") || "aucune"} · réponses des widgets : ${thumbLogs.join(" | ") || "aucune"}`);
+        hub.map((h) => `${h.title} [${h.id.slice(0, 8)}]${h.onCanvas ? " (canvas)" : ""}${h.thumb ? " 🖼" : ""}`).join(", ") + ` · miniatures envoyées : ${thumbsSent.join(", ") || "aucune"} · réponses des widgets : ${thumbLogs.join(" | ") || "aucune"}`
+          + ` · cartes : 1er compteur ${firstCounterId.slice(0, 8)}, compteur ${counterCard.id.slice(0, 8)}, CSV ${c2.id.slice(0, 8)}`);
 
       // Réouverture de la carte fermée : code et état du widget repris du serveur.
       const closedItem = hub.find((h) => !h.onCanvas);
