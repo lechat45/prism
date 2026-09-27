@@ -254,7 +254,9 @@ try {
     await waitFor("document.getElementById('think-all').hidden && [...__nexus.nodes.values()].every(n=>!n.el.classList.contains('is-thinking'))", "pensées reçues", 90000);
     await check("Jobs et Ada ont pensé par l'API (2 × 0,25 Spark)",
       "[['Steve Jobs','Ada Lovelace'].every(n=>__nexus.find(n).memory && __nexus.find(n).memory.source==='api'), __prismLink.account.user.sparks]", [true, start - 0.5]);
-    await waitFor(`__nexus.find('render').memory && __nexus.find('render').memory.thoughts.every(t=>t.source==='api') && ${flowSettled}`, "écran nourri par l'API", 20000);
+    // L'écran se redessine quand l'impulsion arrive au bout du fil (≈ 0,8 s après la pensée) : on attend l'écran lui-même.
+    await waitFor(`__nexus.find('render').memory && __nexus.find('render').memory.thoughts.every(t=>t.source==='api') && ${flowSettled}
+      && / · /.test((document.querySelector('#nodes .render .by') || {}).textContent || '')`, "écran nourri par l'API", 20000);
     await check("l'écran dit d'où vient la pensée", "/ · (Gemini|serveur \\(mode démo\\))$/.test(document.querySelector('#nodes .render .by').textContent)", true);
     await click(center("document.getElementById('fit')")); // « Tout voir » cadre aussi l'anneau du Hub et son étiquette
     await sleep(1100);
