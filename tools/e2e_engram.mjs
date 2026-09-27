@@ -720,6 +720,48 @@ async function main() {
     check("génération au même endroit : contexte fantôme envoyé et visible dans l'inspecteur", sediment.s.words.every((w) => ghostLine.includes(w)) && uses === 1
       && (!serverMode || JSON.stringify(ghostReq?.body.ghost) === JSON.stringify(sediment.s.words)), ghostLine);
     await evaluate(`document.getElementById("insp-close").click()`);
+
+    // ------------------------------------------------------------------ 14. V5 · Mode spatial (aperçu en arc)
+    await clickSel("#spatial");
+    const arc = await waitFor(() => evaluate(`(() => { const c = [...document.querySelectorAll(".card")].map((e) => e.style.getPropertyValue("--arc")).filter(Boolean);
+      return document.body.classList.contains("is-spatial") && c.length ? { arcs: c.length, first: c[0] } : null; })()`), "cartes en arc", 5000).catch(() => null);
+    const xrToast = await waitFor(() => evaluate(`(() => { const t = document.getElementById("toast").textContent; return /réalité mixte/.test(t) ? t : null; })()`),
+      "message du mode spatial", 5000).catch(() => "");
+    check("mode spatial : cartes en arc (perspective, inclinaison, profondeur), réalité mixte détectée ou non", Boolean(arc) && /réalité mixte/.test(xrToast),
+      arc ? `${arc.arcs} cartes · ${arc.first} · ${xrToast.slice(0, 70)}` : "aucun arc");
+    await clickSel("#spatial");
+    check("mode spatial quitté : cartes remises à plat", await evaluate(`!document.body.classList.contains("is-spatial") && [...document.querySelectorAll(".card")].every((e) => !e.style.getPropertyValue("--arc"))`));
+
+    // ------------------------------------------------------------------ 15. V5 · Aura sonore (réglage) et Mode Miroir (serveur)
+    await clickSel("#btn-prefs");
+    await waitFor(() => evaluate(`document.getElementById("prefs").open`), "paramètres", 5000);
+    await evaluate(`document.querySelector('#prefs [data-tab="ecosystem"]').click()`);
+    const auraBox = await waitFor(() => evaluate(`(() => { const l = [...document.querySelectorAll("#prefs-body label")].find((x) => x.textContent.includes("aura sonore"));
+      if (!l) return null; l.querySelector("input").click(); return { on: l.querySelector("input").checked, stored: localStorage.getItem("prism:aura") }; })()`), "réglage de l'aura", 5000);
+    check("aura sonore et haptique : désactivée par défaut, activée sur demande (mémorisé)", auraBox.on && auraBox.stored === "true", JSON.stringify(auraBox));
+    if (serverMode) {
+      const sparksMirror = await sparksNow();
+      const mirrorButton = await waitFor(() => evaluate(`[...document.querySelectorAll("#prefs-body button")].some((b) => b.textContent === "Créer mon Engramme")`), "Mode Miroir débloqué", 8000).catch(() => false);
+      const mirrorText = await evaluate(`document.querySelector("#prefs-body .prefs-mirror")?.textContent || ""`);
+      check("Mode Miroir : débloqué après les Sparks dépensés, données utilisées expliquées", mirrorButton && mirrorText.includes("Jamais votre adresse"), mirrorText.slice(0, 120));
+      const before = await cardCount();
+      await evaluate(`[...document.querySelectorAll("#prefs-body button")].find((b) => b.textContent === "Créer mon Engramme").click()`);
+      await waitFor(async () => (await cardCount()) === before + 1 && allReady(), "Engramme miroir prêt", 30000);
+      const MF = await findFrame(`Boolean(window.__engram) && window.__engram.data.mirror === true`, "document du miroir");
+      const mirrorDoc = await evaluate(`(() => { const d = window.__engram.data; return { person: d.person, kicker: document.querySelector('[data-t="kicker"]').textContent,
+        chat: document.getElementById("chat-btn").hidden, events: d.nodes.filter((n) => n.category === "artifact").length, total: d.nodes.length,
+        first: d.nodes.find((n) => n.category === "artifact").title }; })()`, MF);
+      check("Mode Miroir : « Miroir · Vous », dix jalons réels, pas de conversation, gratuit", mirrorDoc.person === "Vous" && mirrorDoc.kicker.startsWith("Miroir")
+        && mirrorDoc.chat && mirrorDoc.events === 10 && mirrorDoc.total >= 36 && (await sparksNow()) === sparksMirror, JSON.stringify(mirrorDoc));
+      const heart = await evaluate(`window.__engram.sim.nodes.find((n) => n.category === "heart").id`, MF);
+      await evaluate(`window.__engram.pin(${JSON.stringify(heart)})`, MF);
+      const dnaMeta = await waitFor(() => evaluate(`(() => { const d = document.getElementById("dna"); return !d.hidden ? document.getElementById("dna-meta").textContent : null; })()`), "filtre ADN du miroir", 5000).catch(() => "");
+      check("votre Engramme devient un filtre ADN pour vos créations", dnaMeta.includes("Vous") && !dnaMeta.includes("undefined"), dnaMeta);
+      await evaluate(`window.__engram.pin(null)`, MF);
+    } else {
+      await evaluate(`document.getElementById("prefs-close").click()`);
+    }
+    await evaluate(`document.getElementById("prefs").open && document.getElementById("prefs-close").click()`);
     if (serverMode) {
       // Bouton « Tester » : compte d'essai immédiat, sans e-mail, utilisable comme un vrai compte.
       await evaluate(`document.getElementById("btn-logout").click()`);
@@ -727,7 +769,10 @@ async function main() {
       await clickSel("#btn-try");
       const trial = await waitFor(() => evaluate(`(() => { const s = document.getElementById("sparks"); return !s.hidden
         ? { sparks: document.getElementById("sparks-count").textContent, email: document.getElementById("account-email").textContent,
-            tryHidden: document.getElementById("btn-try").hidden } : null; })()`), "compte d'essai", 10000);
+            tryHidden: document.getElementById("btn-try").hidden } : null; })()`), "compte d'essai", 10000)
+        .catch(async (err) => { throw new Error(`${err.message} — ${await evaluate(`JSON.stringify({ sparksHidden: document.getElementById("sparks").hidden,
+          tryHidden: document.getElementById("btn-try").hidden, email: document.getElementById("account-email").textContent, toast: document.getElementById("toast").textContent,
+          dialogs: [...document.querySelectorAll("dialog[open]")].map((d) => d.id), toasts: (window.__toasts || []).slice(-4) })`)}`); });
       check("bouton « Tester » : connecté aussitôt avec un compte d'essai (10 Sparks)", trial.sparks === "10" && trial.email.startsWith("Compte d'essai") && trial.tryHidden,
         JSON.stringify(trial));
     }

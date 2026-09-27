@@ -1,0 +1,6 @@
+PERSON LABEL: {{person}}
+USAGE DATA (the person's own activity in Prism, JSON):
+{{usage}}
+DATED MILESTONES (real, already chosen; do not add others):
+{{events}}
+Language for every text: {{language}}.

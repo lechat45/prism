@@ -98,7 +98,8 @@ class GeminiTests(DbTestCase):
         super().tearDown()
 
     def generate(self, prompt: str = "un compteur"):
-        return self.client.post("/api/generate", json={"prompt": prompt}, headers=self.auth)
+        # fresh : ces tests portent sur les fournisseurs, pas sur le bouclier API (cf. test_cache.py).
+        return self.client.post("/api/generate", json={"prompt": prompt, "fresh": True}, headers=self.auth)
 
     def test_canvas_context_reaches_the_model(self):
         canvas = [{"title": "Filtre des régions", "emits": ["sales.region.selected"], "listens": ["filters.reset"],

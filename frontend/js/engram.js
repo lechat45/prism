@@ -49,4 +49,4 @@ export const dnaFrom = (card, nodeId) => E.dnaOf(engramOf(card), nodeId);
 /** « Engramme : Marie Curie », « engramme de Marie Curie » → « Marie Curie » (sinon null). */
 export const engramRequest = (text) => E.engramRequest(text);
 
-export const CATEGORY_LABELS = { core: "Noyau", engine: "Moteur", shadow: "Ombre", artifact: "Artefact" };
+export const CATEGORY_LABELS = { core: "Noyau", heart: "Caractère", engine: "Moteur", shadow: "Ombre", artifact: "Artefact" };

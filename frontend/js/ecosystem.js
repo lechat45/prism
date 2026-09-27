@@ -1,11 +1,12 @@
 // V5 · réglages de l'« Écosystème vivant », propres à cet appareil (localStorage) :
 //  - watch    : repérer la confusion du pointeur et proposer une simplification (oui par défaut ; rien n'est dépensé) ;
 //  - auto     : simplifier sans demander — à activer soi-même, au plus AUTO_PER_DAY fois par 24 h, annulable ;
-//  - sediment : contexte fantôme des zones où des cartes ont été dissoutes (oui par défaut, visible dans l'inspecteur).
+//  - sediment : contexte fantôme des zones où des cartes ont été dissoutes (oui par défaut, visible dans l'inspecteur) ;
+//  - aura     : sons discrets et vibrations (non par défaut).
 
 export const AUTO_PER_DAY = 3;
 const DAY = 24 * 60 * 60 * 1000;
-const KEYS = { watch: "prism:confusion", auto: "prism:auto-mutation", log: "prism:auto-mutation-log", sediment: "prism:sediment" };
+const KEYS = { watch: "prism:confusion", auto: "prism:auto-mutation", log: "prism:auto-mutation-log", sediment: "prism:sediment", aura: "prism:aura" };
 
 function read(key, fallback) {
   try {
@@ -30,6 +31,8 @@ export const eco = {
   set auto(on) { write(KEYS.auto, on ? { on: true, since: new Date().toISOString() } : { on: false }); },
   get sediment() { return read(KEYS.sediment, true) !== false; },
   set sediment(on) { write(KEYS.sediment, Boolean(on)); },
+  get aura() { return read(KEYS.aura, false) === true; },
+  set aura(on) { write(KEYS.aura, Boolean(on)); },
   autoToday: (now = Date.now()) => recent(now).length,
   canAuto: (now = Date.now()) => eco.watch && eco.auto && recent(now).length < AUTO_PER_DAY,
   recordAuto: (now = Date.now()) => write(KEYS.log, [...recent(now), now]),

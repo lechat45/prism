@@ -131,3 +131,18 @@ test("cadence : pleine vitesse quand la carte est manipulée, part d'un cœur au
   pacer.reset();
   assert.equal(pacer.due(t + 500, false), true);
 });
+
+test("halos pré-rendus (Worker) : une image par couleur, posée à chaque bulle", () => {
+  const sim = P.createSimulation(demo, { width: W, height: H, seed: 5 });
+  const { canvas, ctx, calls } = fakeCanvas();
+  let sprites = 0;
+  const makeCanvas = () => { sprites += 1; return fakeCanvas().canvas; };
+  const r = R.createRenderer({ canvas, ctx, sim, data: demo, reduced: false, makeCanvas, rng: P.rng, seed: 5, sprites: true });
+  r.resize(W, H, 1);
+  r.tick(0);
+  const afterFirst = sprites;
+  for (let t = 16; t < 400; t += 16) r.tick(t);
+  assert.ok(calls.drawImage > demo.nodes.length, "halos posés en images");
+  assert.ok(afterFirst <= 24, `une image par couleur (${afterFirst})`);
+  assert.equal(sprites, afterFirst, "réutilisées d'une image à l'autre (aucune nouvelle toile)");
+});

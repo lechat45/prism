@@ -1024,8 +1024,8 @@ body.is-dropping .dock { scale: 1.02; }
 .pro-perks span { font-size: 12.5px; color: var(--muted); }
 
 /* --- Responsive ------------------------------------------------------------------------------ */
-@media (max-width: 980px) {
-  .tagline { display: none; }
+@media (max-width: 1600px) {
+  .tagline { display: none; } /* décoratif : la place va aux commandes (compte, mode spatial…) */
 }
 @media (max-width: 720px) {
   :root { --gutter: 8px; --topbar-h: 52px; }
@@ -1332,3 +1332,17 @@ body.is-incanting .glass {
 .prefs-toggle { align-items: flex-start; line-height: 1.4; }
 .prefs-toggle input { margin-top: 2px; flex: none; }
 @media (prefers-reduced-motion: reduce) { .sediment.is-fresh, .card-evolve { animation: none; } }
+
+/* V5 · Mode spatial : perspective sur le canvas, cartes disposées en arc (inclinées vers vous, en profondeur).
+   L'arc de chaque carte (--arc) est calculé selon sa place à l'écran (js/spatial.js). */
+body.is-spatial .workspace { perspective: 1800px; perspective-origin: 50% 42%; }
+body.is-spatial .world { transform-style: preserve-3d; }
+body.is-spatial .card { transform: var(--arc, none); transition: transform 0.5s var(--ease), box-shadow 0.3s var(--ease), border-color 0.3s; }
+body.is-spatial .card:hover { transform: var(--arc, none) translateZ(24px); }
+body.is-spatial .links { opacity: 0.55; }
+.tool.is-on { color: var(--text); border-color: var(--line-strong); background: var(--glass-hover); }
+/* Réalité mixte (WebXR, superposition DOM) : la pièce apparaît derrière le verre. */
+body.is-xr, body.is-xr .workspace { background: transparent !important; }
+body.is-xr .aurora, body.is-xr .topbar-glow { display: none; }
+@media (prefers-reduced-motion: reduce) { body.is-spatial .card { transition: none; } }
+#spatial svg { width: 17px; height: 17px; vertical-align: middle; }

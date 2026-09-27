@@ -39,6 +39,8 @@ os.environ.update(
     # Avec modèle, 5 Sparks : quatre générations + une refactorisation (4,5) laissent 0,5 → l'E2E
     # atteint « Prism Pro ». En démo : le cadeau habituel.
     PRISM_SIGNUP_SPARKS=os.getenv("PRISM_SIGNUP_SPARKS", "50" if DEMO else "5"),
+    # V5, Mode Miroir : ouvert dès 5 Sparks dépensés (50 en production), pour que l'E2E l'atteigne.
+    PRISM_MIRROR_SPARKS=os.getenv("PRISM_MIRROR_SPARKS", "5"),
 )
 
 

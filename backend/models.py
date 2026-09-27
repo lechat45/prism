@@ -99,6 +99,27 @@ class Widget(Base):
         self.layout_json = json.dumps(value) if value is not None else None
 
 
+class PromptCache(Base):
+    """Bouclier API (V5) : demandes déjà servies par le modèle, par compte, pour resservir une demande équivalente
+    sans nouvel appel (cf. cache.py). Vecteur creux, mots porteurs et nombres de la demande, contexte, widget."""
+
+    __tablename__ = "prompt_cache"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    context: Mapped[str] = mapped_column(String(64), index=True)  # empreinte : ADN, contexte fantôme, voisins
+    prompt: Mapped[str] = mapped_column(Text)
+    vector_json: Mapped[str] = mapped_column(Text)
+    words_json: Mapped[str] = mapped_column(Text)
+    numbers_json: Mapped[str] = mapped_column(Text, default="[]")
+    html: Mapped[str] = mapped_column(Text)
+    mode: Mapped[str] = mapped_column(String(20))
+    model: Mapped[str] = mapped_column(String(100), default="")
+    hits: Mapped[int] = mapped_column(Integer, default=0)
+    last_hit_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
 class SparkLedger(Base):
     """Chaque mouvement de Sparks (bonus, génération, refactorisation, remboursement) : solde auditable."""
 

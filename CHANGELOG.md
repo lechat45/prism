@@ -1,5 +1,37 @@
 # Changelog
 
+## 5.0.0-alpha.5 — 2026-09-27 (V5 « Écosystème sensitif » : phases 1 et 2 terminées)
+
+- **Phase 1 · nettoyage mémoire** (`js/scope.js`) : chaque carte a une portée — écouteurs (AbortController), minuteurs,
+  images d'animation, observateurs, URL de Blob et nettoyages particuliers y sont rattachés, et `dispose()` défait tout
+  d'un coup à la fermeture ; les iframes sont détruites explicitement ; le toast « Rétablir » ne retient plus la carte
+  fermée (code, données, fichier) une fois caché. Mesuré (`tools/bench_memory.mjs`) : après trois cycles de 12 widgets
+  ouverts puis fermés, nœuds DOM et écouteurs reviennent exactement à leur valeur de départ, plus aucune iframe ni
+  document isolé, mémoire JS stable ; garde-fou ajouté à la CI (`--assert`).
+- **Phase 1 · bouclier API** (`backend/cache.py`, table `prompt_cache`) : une demande presque identique (cosinus ≥ 0,90
+  sur des trigrammes hachés, en pur Python) à une demande déjà servie au même compte, dans le même contexte, reçoit le
+  même widget sans appel au modèle et sans Sparks. Garde-fous : mêmes nombres, mêmes mots porteurs, même contexte (ADN,
+  contexte fantôme, widgets voisins) ; jamais entre comptes, jamais avec un fichier, jamais en refactorisation ni pour une
+  démo. La page le dit (« repris de votre demande du …, 0 Spark ») et propose « Générer à nouveau » (`fresh`).
+- **Halos pré-rendus** dans le fil de rendu des Engrammes (ImageBitmap par couleur) : 1,6 fois plus rapides que des
+  dégradés dans le Worker (mesuré) ; sur le fil de la page, où ils seraient plus lents, les dégradés restent.
+- **Phase 2 · Mode Miroir** (`backend/mirror.py`, `POST/GET /api/engram/mirror`) : après 50 Sparks dépensés
+  (`PRISM_MIRROR_SPARKS`), Paramètres → Écosystème propose « Créer mon Engramme » : un portrait de créateur tiré de vos
+  usages (demandes, couleurs, refactorisations, Engrammes explorés, fusions), jamais de votre adresse ni de vos fichiers,
+  sans aucune inférence sensible ; dix jalons réels et datés (premier widget, première refactorisation, première
+  fusion…). Accord explicite, gratuit, une fois par 24 h. La carte « Miroir · Vous » sert de filtre ADN (pas de
+  conversation). Mode démo : portrait mécanique mais valide.
+- **Phase 2 · aura sonore et haptique** (`js/aura.js`, désactivée par défaut) : sons synthétisés (Web Audio) — tintement
+  quand deux idées se lient (nouvelle liaison du bus, injection d'ADN), son grave quand une ombre fuit le pointeur, montée
+  pour une fusion, souffle pour une dissolution, « clic » pour un filtre ADN — et vibrations brèves sur mobile.
+- **Phase 2 · mode spatial** (`js/spatial.js`, bouton de la barre du haut, Spotlight) : aperçu en arc (perspective,
+  cartes inclinées vers vous et en profondeur) ; si l'appareil le permet, « Entrer en réalité mixte » ouvre une session
+  WebXR `immersive-ar` avec superposition DOM (l'interface Prism par-dessus la pièce). `Permissions-Policy` :
+  `xr-spatial-tracking=(self)`.
+- Corrigé : le filtre ADN tiré d'une bulle de caractère affichait « undefined » (libellé manquant depuis la 4.0.0-alpha.3).
+- Tests : 157 Python (bouclier, miroir), 93 Node (portée, aura, arc, halos) ; E2E : bouclier API (faux Gemini), Mode
+  Miroir, mode spatial, aura ; mémoire sans fuite.
+
 ## 5.0.0-alpha.4 — 2026-09-27 (Phase 1 · moteur physique asynchrone)
 
 - **Rendu des Engrammes dans un Web Worker** (OffscreenCanvas) : physique et dessin tournent sur un fil séparé ; le fil

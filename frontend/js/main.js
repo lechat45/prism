@@ -4,9 +4,10 @@ import { account, api, canAfford, onAccountChange, setSparks, signOut } from "./
 import { initAccountUi, openAuth, openPro, requireAccount } from "./account-ui.js";
 import { Bus } from "./bus.js";
 import { Canvas, CARD_MIN_H, CARD_MIN_W } from "./canvas.js";
+import { Aura } from "./aura.js";
 import { ConfusionWatcher } from "./confusion.js";
 import { AUTO_PER_DAY, eco } from "./ecosystem.js";
-import { chatWithEngram, createEngram, engine, engineReady, fuseEngrams, generate, hasModel, initSettings, onEngineChange, openSettings } from "./engine.js";
+import { chatWithEngram, createEngram, createMirror, engine, engineReady, fuseEngrams, generate, hasModel, initSettings, mirrorStatus, onEngineChange, openSettings } from "./engine.js";
 import { CATEGORY_LABELS, dnaFrom, engramHtml, engramOf, engramRequest, isEngram } from "./engram.js";
 import { EngramChat } from "./chat.js";
 import { initPrefs, openPrefs } from "./prefs.js";
@@ -19,6 +20,7 @@ import { Reflections } from "./reflections.js";
 import { Spotlight } from "./spotlight.js";
 import { acceptStorage, acceptThumbnail, bootSrcdoc, buildSrcdoc, exportHtml, FRAME_SANDBOX, isAccent, needsBoot } from "./sandbox.js";
 import { drawSediments, keywordsOf, SedimentStore, sedimentDot, shatter } from "./sediment.js";
+import { Spatial } from "./spatial.js";
 import { cardStore, loadView, saveView } from "./store.js";
 import { fetchWidget, flushAll, importCard, isLinked, listWidgets, markSynced, pushThumbnail, queueSync, removeFromCanvas, unlink, uploadFile } from "./sync.js";
 import { Incantation } from "./voice.js";
@@ -70,6 +72,13 @@ function metaLabel(card) {
 // Toast (avec action facultative, ex. « Annuler »)
 // ============================================================================
 let toastTimer = null;
+/** Toast caché et vidé : son action (ex. « Rétablir ») ne retient plus rien en mémoire. */
+function hideToast() {
+  clearTimeout(toastTimer);
+  const box = $("toast");
+  box.hidden = true;
+  box.replaceChildren();
+}
 function toast(message, { action = null, timeout = 3200, tone = "info" } = {}) {
   const box = $("toast");
   clearTimeout(toastTimer);
@@ -83,13 +92,13 @@ function toast(message, { action = null, timeout = 3200, tone = "info" } = {}) {
     btn.type = "button";
     btn.textContent = action.label;
     btn.addEventListener("click", () => {
-      box.hidden = true;
+      hideToast();
       action.onClick();
     });
     box.append(btn);
   }
   box.hidden = false;
-  toastTimer = setTimeout(() => { box.hidden = true; }, timeout);
+  toastTimer = setTimeout(hideToast, timeout);
 }
 
 let storageWarned = false;
@@ -143,6 +152,7 @@ const canvas = new Canvas({
   world: $("world"),
   onViewChange: (view) => {
     $("zoom-reset").textContent = `${Math.round(view.z * 100)} %`;
+    spatialLayout();
     clearTimeout(viewTimer);
     viewTimer = setTimeout(() => saveView(canvas.view), 250);
   },
@@ -159,14 +169,17 @@ const canvas = new Canvas({
     if (!card) return;
     if (action === "close") closeCard(card);
     else if (action === "cancel") card.controller?.abort();
-    else if (action === "retry") (card.fusionOf ? runFusion(card) : card.engramPerson ? runEngram(card) : runGeneration(card));
+    else if (action === "retry") (card.mirrorOf ? runMirror(card) : card.fusionOf ? runFusion(card) : card.engramPerson ? runEngram(card) : runGeneration(card));
   },
   onBackground: () => {
     canvas.deselect();
     inspector.close();
     hideFractal();
   },
-  onPlace: () => redrawLinks(),
+  onPlace: () => {
+    redrawLinks();
+    spatialLayout();
+  },
   onDrag: (card, sx, sy) => dragFusion(card, sx, sy),
   onDrop: (card, sx, sy) => dropFusion(card, sx, sy),
   onAdd: (card, el) => reflections.observe(card, el),
@@ -186,6 +199,9 @@ const reflections = new Reflections({
 
 // Bus d'évènements entre widgets (cf. bus.js) et ses liaisons dessinées sur le canvas.
 const links = new Links($("world"));
+// V5 · aura sonore : un tintement quand deux idées se lient (pas au chargement du canvas).
+const auraQuietUntil = performance.now() + 4000;
+links.onNew = () => { if (performance.now() > auraQuietUntil) aura.play("link"); };
 const bus = new Bus({
   cards: () => cards.values(),
   post: (card, message) => canvas.frame(card.id)?.contentWindow?.postMessage(message, "*"),
@@ -260,14 +276,14 @@ function startTimer(card) {
   const el = canvas.element(card.id);
   const started = performance.now();
   const out = el?.querySelector(".card-elapsed");
-  clearInterval(card.timer);
-  card.timer = setInterval(() => {
+  card.scope.clearInterval(card.timer);
+  card.timer = card.scope.interval(() => {
     if (out) out.textContent = `${((performance.now() - started) / 1000).toFixed(1).replace(".", ",")} s`;
   }, 100);
 }
 
 function stopTimer(card) {
-  clearInterval(card.timer);
+  card.scope?.clearInterval(card.timer);
   card.timer = null;
 }
 
@@ -336,12 +352,12 @@ function injectFrame(card) {
     card.boot = null;
     frame.srcdoc = buildSrcdoc(card, engine.libs);
   }
-  clearTimeout(card.revealTimer);
-  card.revealTimer = setTimeout(() => revealFrame(card), REVEAL_TIMEOUT_MS);
+  card.scope.clearTimeout(card.revealTimer);
+  card.revealTimer = card.scope.timeout(() => revealFrame(card), REVEAL_TIMEOUT_MS);
 }
 
 function revealFrame(card) {
-  clearTimeout(card.revealTimer);
+  card.scope?.clearTimeout(card.revealTimer);
   card.revealTimer = null;
   const body = canvas.element(card.id)?.querySelector(".card-body");
   if (body) body.dataset.frame = "live";
@@ -352,9 +368,9 @@ function unmount(card) {
   card.boot = null;
   mountQueue.delete(card.id);
   parked.delete(card.id);
-  clearTimeout(card.revealTimer);
+  card.scope?.clearTimeout(card.revealTimer);
   card.revealTimer = null;
-  clearTimeout(card.thumbTimer);
+  card.scope?.clearTimeout(card.thumbTimer);
 }
 
 // ----------------------------------------------------------------------------
@@ -362,8 +378,8 @@ function unmount(card) {
 // ----------------------------------------------------------------------------
 function scheduleThumbnail(card, delay) {
   if (!isLinked(card)) return;
-  clearTimeout(card.thumbTimer);
-  card.thumbTimer = setTimeout(() => {
+  card.scope.clearTimeout(card.thumbTimer);
+  card.thumbTimer = card.scope.timeout(() => {
     const body = canvas.element(card.id)?.querySelector(".card-body");
     if (!cards.has(card.id) || body?.dataset.frame !== "live" || card.showCode) return;
     canvas.frame(card.id)?.contentWindow?.postMessage({ prism: "snapshot", width: 360 }, "*");
@@ -437,10 +453,22 @@ async function runGeneration(card) {
   setStatus(card, "loading", { text: ghostText + (card.dna ? `ADN « ${card.dna.title} » · ${text}` : text) });
   startTimer(card);
   try {
-    const request = { prompt: card.prompt, file: forRequest(card.file), canvas: bus.context(card), dna: card.dna || null, ghost: card.ghost || null };
+    const request = {
+      prompt: card.prompt, file: forRequest(card.file), canvas: bus.context(card), dna: card.dna || null, ghost: card.ghost || null,
+      fresh: Boolean(card.fresh),
+    };
+    card.fresh = false;
     const payload = await generate(request, controller.signal);
     if (!cards.has(card.id)) return;
     applyPayload(card, payload);
+    if (payload.cached) {
+      // Bouclier API : même demande déjà servie à ce compte → même widget, sans appel au modèle ni Sparks.
+      const when = new Date(payload.cached.at);
+      const date = Number.isNaN(when.getTime()) ? "" : ` du ${when.toLocaleDateString("fr-FR")}`;
+      toast(`« ${card.title} » : repris de votre demande${date}, sans appel au modèle (0 Spark).`, {
+        action: { label: "Générer à nouveau", onClick: () => regenerate(card) }, timeout: 9000,
+      });
+    }
     if (card.ghostFrom) {
       sediments.consume(card.ghostFrom); // la zone s'use : trois générations, puis ses sédiments s'effacent
       delete card.ghostFrom;
@@ -466,6 +494,15 @@ async function runGeneration(card) {
     stopTimer(card);
     card.controller = null;
   }
+}
+
+/** « Générer à nouveau » : vraie génération de la même demande (le bouclier API est contourné). */
+function regenerate(card) {
+  if (!cards.has(card.id) || card.status === "loading" || card.status === "busy") return;
+  if (!canLaunch("generate", () => regenerate(card), "Connectez-vous pour générer.")) return;
+  card.fresh = true;
+  card.history = [card.html, ...(card.history || [])].slice(0, 5);
+  runGeneration(card);
 }
 
 async function refactorCard(card, instruction, { done = "Carte refactorisée" } = {}) {
@@ -714,6 +751,7 @@ async function injectDna(source, nodeId, { file = null, text = "" }) {
     file: att, dna: trait, dnaSource: { cardId: source.id, nodeId }, near: source,
   });
   toast(`ADN « ${trait.title} » injecté`);
+  aura.play("link");
 }
 
 // ============================================================================
@@ -761,6 +799,64 @@ function dropFusion(card, sx, sy) {
   return true;
 }
 
+// ============================================================================
+// V5 · Mode Miroir : votre propre Engramme de créateur (accord explicite, depuis les Paramètres)
+// ============================================================================
+function startMirror() {
+  if (engine.kind !== "server" || !account.user) {
+    toast("Le Mode Miroir demande un compte : il se fonde sur vos créations dans Prism.", { tone: "error" });
+    return;
+  }
+  const { w, h } = newCardSize(SIZES.engram);
+  const card = {
+    id: uid(), title: "Miroir · Vous", prompt: "Mode Miroir : mon Engramme de créateur", html: "", file: null, storage: {}, accent: null,
+    ...canvas.findSpot(w, h), w, h, createdAt: Date.now(), history: [], status: "loading", mirrorOf: true,
+  };
+  cards.set(card.id, card);
+  canvas.add(card);
+  canvas.select(card.id);
+  canvas.ensureVisible(card);
+  runMirror(card);
+}
+
+async function runMirror(card) {
+  const controller = new AbortController();
+  card.controller = controller;
+  setStatus(card, "loading", { text: "Prism dresse votre Engramme de créateur à partir de vos créations…" });
+  startTimer(card);
+  const started = performance.now();
+  try {
+    const payload = await createMirror(controller.signal);
+    const html = await engramHtml(payload.engram, engine.libs);
+    if (!cards.has(card.id)) return;
+    Object.assign(card, {
+      html, mode: payload.mode, model: payload.model, warnings: [], thumbStale: true,
+      title: "Miroir · Vous", elapsed_ms: Math.round(performance.now() - started),
+    });
+    delete card.mirrorOf;
+    bus.learn(card);
+    setStatus(card, "ready");
+    mountWidget(card);
+    persist(card);
+    toast("Votre Engramme est prêt : cliquez une bulle pour en faire le filtre de votre prochaine création.", { timeout: 8000 });
+    importCard(card).then(() => persist(card)).catch((err) => console.warn("Prism : miroir non ajouté à Mon Hub", err));
+  } catch (err) {
+    if (!cards.has(card.id)) return;
+    if (err.name === "AbortError") {
+      discard(card);
+      toast("Mode Miroir annulé");
+    } else if (["mirror_locked", "mirror_cooldown", "mirror_insufficient", "consent_required"].includes(err.code) || err.code === "auth_required") {
+      discard(card);
+      if (!handleAccountError(err, () => startMirror())) toast(err.message, { tone: "error", timeout: 9000 });
+    } else {
+      setStatus(card, "error", { error: `Échec du Mode Miroir : ${err.message}` });
+    }
+  } finally {
+    stopTimer(card);
+    card.controller = null;
+  }
+}
+
 const centerOf = (a, b) => ({ x: (a.x + a.w / 2 + b.x + b.w / 2) / 2, y: (a.y + a.h / 2 + b.y + b.h / 2) / 2 });
 
 function startFusion(a, b, { near = null, from = null } = {}) {
@@ -794,6 +890,7 @@ async function runFusion(card) {
       title: `Hyper-Engramme · ${payload.engram.person}`, elapsed_ms: Math.round(performance.now() - started),
     });
     delete card.fusionOf;
+    aura.play("fusion");
     bus.learn(card);
     if (Number.isFinite(payload.sparks)) setSparks(payload.sparks);
     setStatus(card, "ready");
@@ -931,6 +1028,10 @@ const chat = new EngramChat({
 function openChat(card) {
   const engram = engramOf(card);
   if (!engram) return;
+  if (engram.mirror) {
+    toast("Votre Engramme est un filtre pour vos créations : cliquez une bulle pour l'appliquer à votre prochaine demande.");
+    return;
+  }
   canvas.select(card.id);
   canvas.ensureVisible(card);
   chat.open(card, engram);
@@ -982,6 +1083,7 @@ async function dissolveCard(card) {
   const target = { x: ws.left + canvas.view.x + center.x * canvas.view.z, y: ws.top + canvas.view.y + center.y * canvas.view.z };
   const rect = el.getBoundingClientRect();
   el.classList.add("is-dissolving");
+  aura.play("dissolve");
   await shatter(rect, target, card.accent || "#7cc4ff");
   delete card.dissolving;
   el.classList.remove("is-dissolving");
@@ -1192,6 +1294,7 @@ window.addEventListener("message", (event) => {
     }
     if (typeof data.nodeId !== "string") return;
     setDna(card.id, data.nodeId);
+    if (dna) aura.play("pin");
     if (dna) {
       promptEl.focus();
       toast(`Filtre ADN : « ${dna.trait.title} ». Décrivez votre widget dans la barre du bas.`);
@@ -1206,6 +1309,9 @@ window.addEventListener("message", (event) => {
     const text = typeof data.text === "string" ? data.text.slice(0, 12000) : "";
     if (file && !file.name) return;
     injectDna(card, data.nodeId, { file, text });
+  } else if (data.prism === "engram-sound") {
+    // Seuls les Engrammes, et seulement le son d'une ombre qui fuit le pointeur (espacé par l'aura).
+    if (isEngram(card) && data.kind === "shadow") aura.play("shadow");
   } else if (data.prism === "spotlight") {
     toggleSpotlight();
   } else if (data.prism === "thumbnail") {
@@ -1446,6 +1552,38 @@ $("zoom-in").addEventListener("click", () => canvas.zoomBy(1.2));
 $("zoom-out").addEventListener("click", () => canvas.zoomBy(1 / 1.2));
 $("zoom-reset").addEventListener("click", () => canvas.zoomBy(1 / canvas.view.z));
 $("zoom-fit").addEventListener("click", () => canvas.fit());
+// ============================================================================
+// V5 · Aura sonore et haptique, mode spatial (aperçu en arc, réalité mixte WebXR si l'appareil le permet)
+// ============================================================================
+const aura = new Aura({ enabled: eco.aura });
+addEventListener("pointerdown", () => aura.unlock(), { capture: true, passive: true }); // audio permis après un geste
+
+const spatial = new Spatial({
+  workspace: $("workspace"),
+  onChange: (on) => {
+    $("spatial").setAttribute("aria-pressed", String(on));
+    $("spatial").classList.toggle("is-on", on);
+  },
+});
+let spatialFrame = 0;
+function spatialLayout() {
+  if (!spatial?.on || spatialFrame) return;
+  spatialFrame = requestAnimationFrame(() => {
+    spatialFrame = 0;
+    spatial.layout();
+  });
+}
+async function toggleSpatial() {
+  const on = spatial.toggle();
+  if (!on) return;
+  const xr = await spatial.detect();
+  toast(xr ? "Mode spatial : cartes en arc. Cet appareil sait projeter Prism dans la pièce." : "Mode spatial : cartes en arc (réalité mixte indisponible sur cet appareil).", {
+    action: xr ? { label: "Entrer en réalité mixte", onClick: () => spatial.enterXR().catch((err) => toast(err.message, { tone: "error" })) } : null,
+    timeout: 7000,
+  });
+}
+$("spatial").addEventListener("click", () => toggleSpatial());
+
 $("arrange").addEventListener("click", () => {
   if (cards.size) canvas.arrange();
   else toast("Aucun widget à ranger.");
@@ -1548,6 +1686,7 @@ function spotlightItems(query) {
   command("Tout voir", "⤢", () => canvas.fit(), ["cadrer", "fit", "zoom", "vue"]);
   if (cards.size) command("Ranger les cartes", "▤", () => canvas.arrange(), ["grille", "organiser", "aligner"]);
   command("Zoom 100 %", "⊙", () => canvas.zoomBy(1 / canvas.view.z), ["taille réelle", "reset"]);
+  command(spatial.on ? "Quitter le mode spatial" : "Mode spatial", "◎", () => toggleSpatial(), ["3d", "arc", "réalité mixte", "webxr", "espace", "casque"]);
   command("Nouveau widget", "＋", () => promptEl.focus(), ["écrire", "créer", "demande", "dock"], "/");
   command("Créer un Engramme cognitif…", "◉", () => spotlight.open("Engramme : "), ["esprit", "personnalité", "portrait", "adn"]);
   command("Incantation vocale", "◎", () => incantation.start("toggle"), ["voix", "micro", "parler", "dictée", "espace"], "Espace maintenu");
@@ -1727,6 +1866,12 @@ async function start() {
       toast("Sédiments effacés");
     },
     ecoChanged: () => { confusion.enabled = eco.watch; },
+    auraChanged: (on) => {
+      aura.setEnabled(on); // appelé pendant le clic : le contexte audio peut démarrer
+      if (on) aura.play("link");
+    },
+    mirrorStatus: () => mirrorStatus(),
+    startMirror: () => startMirror(),
   });
   onAccountChange((state, change) => {
     if (change.signedIn) syncCanvasFromServer();

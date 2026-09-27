@@ -3,7 +3,7 @@
  * fil séparé : le fil de la carte reste libre pour le pointeur et les autres cartes) ou, à défaut, sur le fil
  * de la carte (navigateur sans OffscreenCanvas, Worker refusé).
  *
- * createRenderer({ canvas, ctx, sim, data, reduced, makeCanvas, rng, seed }) → {
+ * createRenderer({ canvas, ctx, sim, data, reduced, makeCanvas, rng, seed, sprites }) → {   (sprites : halos pré-rendus, Worker)
  *   resize(w, h, dpr)  taille CSS et densité de pixels (repeint le ciel pré-rendu) ;
  *   set(patch)         état d'affichage : { hover, pinned, drop } (identifiants de bulles), focus (catégorie),
  *                      trace ([{ id, why }] ou null) ;
@@ -132,7 +132,38 @@
     }
 
     // ---------------------------------------------------------------- formes
+    // Halos : dans le Worker (o.sprites), un dégradé radial par couleur est dessiné une fois puis gardé en ImageBitmap
+    // et posé à la taille et à l'opacité voulues (les arrêts du dégradé sont proportionnels à l'opacité : rendu
+    // identique) — 1,6 fois plus rapide mesuré ; sur le fil de la page, où poser une image sur une toile accélérée
+    // coûte plus cher qu'un dégradé, un dégradé par bulle et par image.
+    var SPRITE = 64;
+    var sprites = {};
+    function glowSprite(c) {
+      var key = c[0] + "," + c[1] + "," + c[2];
+      if (!sprites[key]) {
+        var sprite = o.makeCanvas(SPRITE * 2, SPRITE * 2);
+        sprite.width = SPRITE * 2;
+        sprite.height = SPRITE * 2;
+        var g = sprite.getContext("2d");
+        var grad = g.createRadialGradient(SPRITE, SPRITE, 0, SPRITE, SPRITE, SPRITE);
+        grad.addColorStop(0, rgba(c, 1));
+        grad.addColorStop(0.4, rgba(c, 0.35));
+        grad.addColorStop(1, rgba(c, 0));
+        g.fillStyle = grad;
+        g.fillRect(0, 0, SPRITE * 2, SPRITE * 2);
+        sprites[key] = typeof sprite.transferToImageBitmap === "function" ? sprite.transferToImageBitmap() : sprite;
+      }
+      return sprites[key];
+    }
     function glow(x, y, radius, c, alpha) {
+      if (!(alpha > 0) || !(radius > 0)) return;
+      if (o.sprites) {
+        var previous = ctx.globalAlpha;
+        ctx.globalAlpha = previous * Math.min(1, alpha);
+        ctx.drawImage(glowSprite(c), x - radius, y - radius, radius * 2, radius * 2);
+        ctx.globalAlpha = previous;
+        return;
+      }
       var g = ctx.createRadialGradient(x, y, 0, x, y, radius);
       g.addColorStop(0, rgba(c, alpha));
       g.addColorStop(0.4, rgba(c, alpha * 0.35));

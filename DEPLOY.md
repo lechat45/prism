@@ -43,6 +43,8 @@ aussi, automatiquement (rien n'est jamais supprimé).
      relais immédiat sur surcharge ou quota) ; copiez la valeur de `backend/.env`. `/api/health` indique leur
      nombre (`gemini_keys`).
 
+   Facultatif (V5) : `PRISM_MIRROR_SPARKS` (50 par défaut) et `PRISM_MIRROR_COOLDOWN_HOURS` (24) règlent le Mode Miroir.
+
    > Branche déployée : celle choisie à la création du service (ici **`v4`**), pas forcément celle du site
    > (`v3`, GitHub Pages). Une publication pousse donc les deux branches, ou réglez la branche du service Render.
 

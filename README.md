@@ -30,6 +30,9 @@ personne : **[PROJET.md](PROJET.md)**
 | **Incantation** (V4) | maintenir Espace et parler : la demande dictée devient une carte sous le pointeur ; pendant l'écoute, le **verre organique** respire avec la voix |
 | **Hyper-Engramme** (V5) | glisser un Engramme sur un autre : fusion des deux esprits (noyaux attirés, ombres en collision), chaque bulle garde sa provenance |
 | **Darwinisme d'interface** (V5) | un pointeur qui tourne en rond sur un widget : Prism propose de le simplifier (jamais de dépense sans votre clic) |
+| **Mode Miroir** (V5) | après 50 Sparks dépensés, votre propre Engramme de créateur, tiré de vos usages (avec votre accord), comme filtre ADN |
+| **Aura et mode spatial** (V5) | sons discrets et vibrations (au choix) ; cartes en arc, et réalité mixte WebXR si l'appareil le permet |
+| **Bouclier API** (V5) | une demande déjà servie revient sans appel au modèle ni Sparks (« Générer à nouveau » pour une vraie génération) |
 | **Sédimentation** (V5) | « Dissoudre » brise une carte en particules ; ses mots-clés restent dans le sol et nourrissent, visiblement, les widgets créés au même endroit |
 
 ## Deux façons de l'utiliser
@@ -254,6 +257,18 @@ Le canvas devient un milieu : les cartes fusionnent, s'adaptent à ceux qui les 
   même case reçoit `ghost` (gabarit `engine/ghost-template.txt`), affiché dans l'inspecteur ; trois usages par case ;
   désactivable et effaçable dans les Paramètres.
 
+### V5 « Écosystème sensitif » : socle et sens
+
+- **Nettoyage mémoire** (`js/scope.js`) : une portée par carte (écouteurs via AbortController, minuteurs, observateurs,
+  URL de Blob) défaite d'un coup à la fermeture ; iframes détruites. `node tools/bench_memory.mjs --assert` (dans la CI)
+  vérifie qu'ouvrir et fermer des widgets ne laisse rien derrière.
+- **Bouclier API** (`backend/cache.py`) : demande équivalente déjà servie au même compte et dans le même contexte → même
+  widget, sans modèle ni Sparks (cosinus ≥ 0,90 sur trigrammes hachés, mêmes nombres, mêmes mots porteurs).
+- **Mode Miroir** (`backend/mirror.py`) : votre Engramme de créateur (seuil `PRISM_MIRROR_SPARKS`, accord explicite,
+  gratuit, jalons réels).
+- **Aura** (`js/aura.js`) et **mode spatial** (`js/spatial.js`) : sons synthétisés, vibrations ; arc 3D, WebXR
+  `immersive-ar` + superposition DOM.
+
 ## Architecture
 
 ```
@@ -339,6 +354,7 @@ node tools/e2e_canvas.mjs --base http://127.0.0.1:8004
 node tools/e2e_canvas.mjs --base http://127.0.0.1:8001/
 node tools/perf_probe.mjs --base http://127.0.0.1:8001/           # fluidité (--profile dossier : profils CPU)
 node tools/bench_engram.mjs [--inline]                            # Engrammes : Worker ou fil de la carte, retard du pointeur
+node tools/bench_memory.mjs --assert                              # V5 : ouvrir/fermer des cartes ne laisse rien en mémoire
 .venv/Scripts/python tools/e2e_server.py &                        # faux Gemini : génération et refactorisation
 node tools/e2e_canvas.mjs --base http://127.0.0.1:8003 --refactor
 node tools/e2e_pages_api.mjs --api http://127.0.0.1:8004          # GitHub Pages → API (serveur démo lancé)
@@ -416,6 +432,8 @@ API ajoutée en phase 1 (jeton `Authorization: Bearer …` sauf `register`/`logi
 | `PRISM_ALLOW_SQLITE` | vide | `1` : SQLite tolérée en production (disque persistant seulement) |
 | `PRISM_MAX_FILE_DATA_MB` | `16` | données de fichier joint par widget |
 | `PRISM_SIGNUP_SPARKS` | `50` | Sparks offerts à l'inscription |
+| `PRISM_MIRROR_SPARKS` | `50` | Sparks dépensés qui ouvrent le Mode Miroir (V5) |
+| `PRISM_MIRROR_COOLDOWN_HOURS` | `24` | délai entre deux Engrammes miroirs d'un même compte |
 | `PRISM_TOKEN_TTL_HOURS` | `168` | durée d'une session |
 
 Régénérer le logo : `python tools/pixel_logo.py`.

@@ -4,6 +4,8 @@
 // Les iframes avalent les évènements pointeur : pendant un glisser, <body> reçoit une classe
 // qui les rend transparentes aux clics (voir style.css), en plus de la capture de pointeur.
 
+import { destroyFrame, Scope } from "./scope.js";
+
 export const CARD_MIN_W = 280;
 export const CARD_MIN_H = 220;
 const ZOOM_MIN = 0.2;
@@ -244,7 +246,9 @@ export class Canvas {
       el.style.setProperty("--from-dy", `${Math.round(from.y - (card.y + card.h / 2))}px`);
       el.classList.add("is-emerging");
     } else if (animate) el.classList.add("is-entering");
-    el.addEventListener("animationend", () => el.classList.remove("is-entering", "is-emerging"), { once: true });
+    // Portée de la carte (écouteurs, minuteurs…), recréée si la carte revient (« Rétablir »).
+    if (!card.scope || card.scope.disposed) card.scope = new Scope();
+    card.scope.on(el, "animationend", () => el.classList.remove("is-entering", "is-emerging"), { once: true });
     this.world.append(el);
     this.cards.set(card.id, { card, el });
     card.z = card.z || ++this.topZ;
@@ -262,9 +266,19 @@ export class Canvas {
     this.cards.delete(id);
     this.onRemove(id);
     if (this.selectedId === id) this.selectedId = null;
-    entry.el.classList.add("is-leaving");
-    const done = () => entry.el.remove();
-    entry.el.addEventListener("animationend", done, { once: true });
+    // Tout ce que la carte a installé disparaît d'un coup (écouteurs, minuteurs, observateurs…).
+    entry.card.scope?.dispose();
+    const { el } = entry;
+    el.classList.add("is-leaving");
+    let gone = false;
+    const done = () => {
+      if (gone) return;
+      gone = true;
+      // Fin de l'animation de sortie : documents des widgets détruits, élément retiré, plus aucune référence.
+      el.querySelectorAll("iframe").forEach(destroyFrame);
+      el.remove();
+    };
+    el.addEventListener("animationend", done, { once: true });
     setTimeout(done, 400);
   }
 
@@ -309,7 +323,8 @@ export class Canvas {
   }
 
   bindCard(card, el) {
-    el.addEventListener("click", (e) => {
+    const on = (target, type, fn, options) => card.scope.on(target, type, fn, options);
+    on(el, "click", (e) => {
       const btn = e.target.closest("[data-action]");
       if (!btn) return;
       e.stopPropagation();
@@ -318,7 +333,7 @@ export class Canvas {
       else this.onAction(card.id, action);
     });
 
-    el.addEventListener("pointerdown", (e) => {
+    on(el, "pointerdown", (e) => {
       if (e.button !== 0) return;
       const onResize = e.target.closest(".card-resize");
       const onBar = e.target.closest(".card-bar") && !e.target.closest("button");
@@ -362,12 +377,12 @@ export class Canvas {
         } else if (moved) this.onCardChange(card);
         else if (onBar) this.onInspect(card.id);
       };
-      el.addEventListener("pointermove", move);
-      el.addEventListener("pointerup", up);
-      el.addEventListener("pointercancel", up);
+      on(el, "pointermove", move);
+      on(el, "pointerup", up);
+      on(el, "pointercancel", up);
     });
 
-    el.querySelector(".card-bar").addEventListener("keydown", (e) => {
+    on(el.querySelector(".card-bar"), "keydown", (e) => {
       const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();

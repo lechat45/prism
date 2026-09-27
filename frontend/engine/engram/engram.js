@@ -243,7 +243,7 @@
     }
     const values = {
       lang: lang === "en" ? "en" : "fr",
-      title: escapeHtml(`${Array.isArray(engram.parents) ? "Hyper-Engramme" : "Engramme"} · ${engram.person || "?"}`),
+      title: escapeHtml(`${engram.mirror ? "Miroir" : Array.isArray(engram.parents) ? "Hyper-Engramme" : "Engramme"} · ${engram.person || "?"}`),
       tailwind: `<script src="${escapeHtml(libs.tailwind.url)}" integrity="${escapeHtml(libs.tailwind.integrity)}" crossorigin="anonymous"><\/script>`,
       physics,
       render,
