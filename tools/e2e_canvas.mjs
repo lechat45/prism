@@ -100,6 +100,7 @@ async function main() {
     const downloadEvents = [];
     const inflight = new Map(); // requêtes réseau de la page non terminées (diagnostic)
     const thumbsSent = []; // miniatures envoyées au Hub : « widget@seconde » (diagnostic)
+    const thumbLogs = []; // réponses « thumbnail » des widgets et avertissements de la page (diagnostic)
     const t0 = Date.now();
     cdp.listeners.push((msg) => {
       if (msg.sessionId === S && msg.method === "Network.requestWillBeSent") {
@@ -120,8 +121,19 @@ async function main() {
         const d = msg.params.exceptionDetails;
         pageErrors.push(`${d.exception?.description || d.text} @${d.url || ""}:${d.lineNumber}`);
       }
+      if (msg.method === "Runtime.consoleAPICalled" && msg.sessionId === S) {
+        const text = msg.params.args.map((a) => a.value ?? a.description ?? "").join(" ");
+        if (/e2e-thumb|miniature/.test(text)) thumbLogs.push(`${Math.round((Date.now() - t0) / 1000)}s ${text.slice(0, 140)}`);
+      }
     });
     await cdp.send("Runtime.enable", {}, S);
+    // Diagnostic des miniatures : chaque réponse « thumbnail » d'un widget (carte, taille ou erreur), rechargements compris.
+    await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: `addEventListener("message", (e) => {
+      const d = e.data; if (!d || d.prism !== "thumbnail") return;
+      const f = [...document.querySelectorAll("iframe")].find((x) => x.contentWindow === e.source);
+      const id = f && f.closest(".card") ? f.closest(".card").dataset.id.slice(0, 8) : "?";
+      console.debug("[e2e-thumb] " + id + " " + (d.data ? "ok " + d.data.length + " car." : "erreur " + d.error));
+    }, true);` }, S);
     await cdp.send("Network.enable", {}, S);
     await cdp.send("Page.enable", {}, S);
     await cdp.send("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true }, S);
@@ -540,7 +552,7 @@ async function main() {
         meta: el.querySelector(".hub-meta").textContent, onCanvas: !!el.querySelector(".hub-badge"), thumb: !!el.querySelector(".hub-thumb img") }))`);
       check("Mon Hub : 2 widgets avec miniatures fabriquées dans la sandbox, carte fermée hors canvas",
         hub.every((h) => h.thumb) && hub.filter((h) => h.onCanvas).length === 1,
-        hub.map((h) => `${h.title} [${h.id.slice(0, 8)}]${h.onCanvas ? " (canvas)" : ""}${h.thumb ? " 🖼" : ""}`).join(", ") + ` · miniatures envoyées : ${thumbsSent.join(", ") || "aucune"}`);
+        hub.map((h) => `${h.title} [${h.id.slice(0, 8)}]${h.onCanvas ? " (canvas)" : ""}${h.thumb ? " 🖼" : ""}`).join(", ") + ` · miniatures envoyées : ${thumbsSent.join(", ") || "aucune"} · réponses des widgets : ${thumbLogs.join(" | ") || "aucune"}`);
 
       // Réouverture de la carte fermée : code et état du widget repris du serveur.
       const closedItem = hub.find((h) => !h.onCanvas);
