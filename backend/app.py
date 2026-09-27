@@ -44,6 +44,7 @@ import cache
 import db
 import engram
 import mirror
+import nexus
 import security
 import widgets
 from mocks import mock_component
@@ -60,7 +61,7 @@ from sanitize import (
     validate_document,
 )
 
-__version__ = "6.0.0a1"
+__version__ = "6.0.0a2"
 
 BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
@@ -338,6 +339,7 @@ app.include_router(auth.router)
 app.include_router(widgets.router)
 app.include_router(engram.router)
 app.include_router(mirror.router)
+app.include_router(nexus.router)
 
 
 SECURITY_HEADERS = {

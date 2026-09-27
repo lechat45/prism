@@ -69,6 +69,8 @@ function accountPanel() {
     prices.engram !== undefined ? `Engramme : ${sparks(prices.engram)}` : "",
     prices.engram_chat !== undefined ? `message à un Engramme : ${sparks(prices.engram_chat)}` : "",
     prices.engram_fusion !== undefined ? `fusion d'Engrammes : ${sparks(prices.engram_fusion)}` : "",
+    prices.nexus_think !== undefined ? `pensée d'un esprit du Nexus : ${sparks(prices.nexus_think)}` : "",
+    prices.nexus_debate !== undefined ? `débat de War Room : ${sparks(prices.nexus_debate)}` : "",
   ].filter(Boolean).join(" · ")));
   panel.push(row(
     button("Mon Hub", () => { close(); hooks.openHub(); }),

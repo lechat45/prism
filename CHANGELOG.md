@@ -1,5 +1,28 @@
 # Changelog
 
+## 6.0.0-alpha.2 — 2026-09-27 (V6 : le Nexus pense avec Gemini ; la porte d'entrée devient l'accueil)
+
+- **Le Nexus pense avec Gemini** (`backend/nexus.py`) : `POST /api/nexus/think` (un esprit pense à partir de ses
+  fils, 0,25 Spark) et `POST /api/nexus/debate` (War Room : positions, réponses, synthèse, 1 Spark) ; prompts et
+  schémas de réponse dans `frontend/engine/nexus/`. Tout ce qui vient du modèle est vérifié : 2 à 4 phrases, données
+  dédoublonnées, souvenir mobilisé seulement s'il fait partie des Memories de l'esprit, chaque esprit parle à chaque
+  tour du débat ; sinon le modèle suivant, et les Sparks sont rendus si rien n'aboutit. Sans modèle (démo) : une
+  pensée mécanique qui le dit.
+- **Menu « Intelligence »** du Nexus : simulation locale (gratuite, par règles) ou Gemini, avec le même compte et la
+  même session que le Mode Focus (module `js/account.js`, balise `prism-api` sur GitHub Pages), compte d'essai en un
+  clic. En Gemini, un esprit dont les entrées ou l'anatomie changent attend (« Prêt à penser ») ; le bouton
+  « Penser · x Spark » affiche le prix avant tout débit, et « Débattre · 1 Spark » dans la War Room. Les pensées
+  payées sont gardées pour exactement ces entrées : refaire un fil coupé ne coûte rien.
+- **Autre esprit** : n'importe quel nom depuis le menu Engramme (anatomie à régler au double-clic).
+- **Scène enregistrée sur l'appareil** (bulles, anatomies, fils, Hubs, vue, pensées payées) et retrouvée au retour ;
+  menu « ⋯ » : nouvelle scène vide ou scène de démonstration (second clic pour confirmer).
+- **La porte d'entrée devient l'accueil du site** : la racine de GitHub Pages ouvre `frontend/nexus.html` ; le logo
+  du Mode Focus y ramène, et la Lentille Continua remplace l'ancien logo dans toute l'application.
+- Mobile : le Nexus s'ouvre à un zoom lisible (50 % au moins). Paramètres → Compte : tarifs du Nexus.
+- Tests : 11 Python (`test_nexus.py`) ; E2E Nexus : scène retrouvée, autre esprit, et parcours avec serveur (compte
+  d'essai, prix affichés, 2 × 0,25 + 1 Spark, pensées gardées au retour) en démo et avec le faux Gemini ; E2E GitHub
+  Pages → API : porte d'entrée, puis Nexus qui pense par l'API.
+
 ## 6.0.0-alpha.1 — 2026-09-27 (V6 « Nexus » : logo, porte d'entrée et prototype du Mode Nexus)
 
 - **Logo `logo_prism`, la Lentille Continua** (`frontend/assets/logo_prism.svg`) : trois rubans sans fin entrelacés en

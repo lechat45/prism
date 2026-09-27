@@ -1,0 +1,37 @@
+{
+  "type": "object",
+  "properties": {
+    "positions": {
+      "type": "array",
+      "description": "Round 1: one position per mind.",
+      "items": {
+        "type": "object",
+        "properties": { "author": { "type": "string" }, "text": { "type": "string" } },
+        "required": ["author", "text"],
+        "propertyOrdering": ["author", "text"]
+      }
+    },
+    "replies": {
+      "type": "array",
+      "description": "Round 2: each mind answers another mind.",
+      "items": {
+        "type": "object",
+        "properties": { "author": { "type": "string" }, "to": { "type": "string" }, "text": { "type": "string" } },
+        "required": ["author", "to", "text"],
+        "propertyOrdering": ["author", "to", "text"]
+      }
+    },
+    "synthesis": {
+      "type": "object",
+      "properties": {
+        "summary": { "type": "string" },
+        "points": { "type": "array", "items": { "type": "string" } },
+        "first_step": { "type": "string" }
+      },
+      "required": ["summary", "points", "first_step"],
+      "propertyOrdering": ["summary", "points", "first_step"]
+    }
+  },
+  "required": ["positions", "replies", "synthesis"],
+  "propertyOrdering": ["positions", "replies", "synthesis"]
+}

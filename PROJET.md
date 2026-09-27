@@ -1,6 +1,6 @@
 # Prism — description complète du projet
 
-> Version décrite : **6.0.0-alpha.1** (27 septembre 2026). En ligne : <https://lechat45.github.io/prism/>,
+> Version décrite : **6.0.0-alpha.2** (27 septembre 2026). En ligne : <https://lechat45.github.io/prism/>,
 > API : <https://prism-api-0x4z.onrender.com>. Code : <https://github.com/lechat45/prism> (branches `v3` = site public
 > sur GitHub Pages, `v4` = branche déployée par Render pour l'API, `v5` et `v6` = développement ; identiques à chaque publication).
 > Ce document est mis à jour à chaque livraison ; le détail technique de chaque version est dans `CHANGELOG.md`.
@@ -9,6 +9,11 @@
 
 Les dernières mises à jour, de la plus récente à la plus ancienne.
 
+- **6.0.0-alpha.2 — 27 septembre 2026 · le Nexus pense pour de vrai.** Le site s'ouvre désormais sur la porte
+  d'entrée (Focus ou Nexus). Dans le Nexus, le menu « Intelligence » fait penser les Engrammes avec Gemini, avec votre
+  compte Prism : le bouton « Penser » affiche son prix (0,25 Spark par esprit) avant toute dépense, et la War Room
+  débat pour 1 Spark. On peut créer un esprit à partir de n'importe quel nom, et la scène est gardée sur l'appareil :
+  on la retrouve en revenant, pensées déjà payées comprises.
 - **6.0.0-alpha.1 — 27 septembre 2026 · le Mode Nexus (prototype de la V6).** Prism a son logo, la Lentille Continua
   (trois rubans sans fin entrelacés autour d'une lentille vide), et une porte d'entrée à deux portes : **Focus**, Prism
   tel que vous le connaissez, et **Nexus**, un laboratoire où l'on relie à la main des contextes, des esprits
@@ -70,7 +75,8 @@ d'aucune clé. Deux façons d'entrer :
 - **Tester** : un **compte d'essai** immédiat, sans e-mail, avec 10 Sparks ; il fonctionne comme un vrai compte et
   disparaît à la déconnexion.
 
-Tarifs : un widget 1 Spark, une refactorisation 0,5, un Engramme 2, un message à un Engramme 0,25. Sans serveur (ou
+Tarifs : un widget 1 Spark, une refactorisation 0,5, un Engramme 2, un message à un Engramme 0,25, une fusion 3 ;
+dans le Nexus, la pensée d'un esprit 0,25 et un débat de War Room 1. Sans serveur (ou
 pendant son réveil, l'hébergement gratuit s'endort après 15 minutes), Prism bascule sur le **moteur du navigateur** :
 démonstration, ou vraie génération avec la clé Gemini de l'utilisateur (Paramètres → Moteur).
 
@@ -245,8 +251,9 @@ récent), Prism propose d'y entrer : l'interface Liquid Glass s'affiche par-dess
 
 ## 6. Le Mode Nexus (V6, prototype)
 
-La V6 fait de Prism un **système d'exploitation cognitif spatial**. Le prototype `frontend/nexus.html` (un seul
-fichier, sans dépendance ni requête réseau) en montre l'expérience.
+La V6 fait de Prism un **système d'exploitation cognitif spatial**. `frontend/nexus.html` est à la fois la page
+d'accueil du site et le Mode Nexus. Sans serveur, il fonctionne seul (simulation locale) ; avec le serveur Prism, ses
+Engrammes pensent avec Gemini.
 
 ### 6.1 La porte d'entrée
 
@@ -298,32 +305,54 @@ La pensée de l'Engramme s'affiche en direct pendant qu'on le modifie ; en remon
 ### 6.5 Hubs : les War Rooms
 
 Entourer plusieurs Engrammes crée un **Hub** (un anneau qui les suit). Sa **War Room** les réunit : on pose une
-question, chacun prend position, puis répond à un autre, et le Hub livre une **synthèse** commune. Dans le prototype,
-le débat est simulé localement à partir de l'anatomie de chaque Engramme.
+question, chacun prend position, puis répond à un autre, et le Hub livre une **synthèse** commune.
 
-### 6.6 Ce qui reste à brancher
+### 6.6 Intelligence : simulation locale ou Gemini
 
-Le prototype raisonne sans modèle. Prochaines étapes : faire penser les bulles par les vrais Engrammes de Prism
-(Gemini, Sparks avec accord), générer de vrais widgets dans les bulles de Rendu, sauvegarder les scènes dans Mon Hub,
-et faire de la porte d'entrée la page d'accueil du site.
+Le menu **Intelligence** (en haut à droite) choisit comment les esprits pensent :
+
+- **Simulation locale** : gratuite et instantanée ; chaque esprit raisonne par règles à partir de son anatomie. C'est
+  le mode par défaut, et le seul sans serveur ;
+- **Gemini** : de vraies pensées, avec votre compte Prism (le même que dans le Mode Focus ; un compte d'essai s'ouvre
+  depuis le menu). Un esprit dont les entrées ou l'anatomie changent passe en attente (« Prêt à penser ») ; le bouton
+  **« Penser · 0,5 Spark »** (0,25 par esprit) affiche le prix avant toute dépense, et rien n'est débité sans ce clic.
+  Dans la War Room, **« Débattre · 1 Spark »** fait débattre les esprits en deux tours avec une synthèse.
+
+Le serveur vérifie tout ce que le modèle renvoie (un souvenir cité doit exister, chaque esprit parle à chaque tour) et
+rend les Sparks si rien n'aboutit. Une pensée payée est gardée pour exactement ces entrées : refaire un fil coupé ne
+coûte rien.
+
+### 6.7 Autres esprits, scène gardée
+
+Le menu Engramme propose Marie Curie, Steve Jobs, un expert UX, Ada Lovelace, ou **n'importe quel nom** (son anatomie
+se règle ensuite). La scène (bulles, anatomies, fils, Hubs, vue, pensées payées) est **gardée sur l'appareil** et
+retrouvée en revenant ; le menu « ⋯ » repart d'une scène vide ou de la démonstration (un second clic confirme).
+
+### 6.8 Prochaines étapes
+
+Générer de vrais widgets dans les bulles de Rendu (moteur du Mode Focus), relier une bulle Engramme à un Engramme
+complet de Prism (ses 36 à 44 bulles), et synchroniser les scènes dans Mon Hub.
 
 ## 7. Architecture technique
 
 ```
 frontend/  (site statique : GitHub Pages, ou servi par l'API)
   index.html, style.css            interface « Liquid Glass » (CSS pur) : le Mode Focus
-  nexus.html                        V6 : porte d'entrée et Mode Nexus (prototype autonome, un seul fichier)
+  nexus.html                        V6 : porte d'entrée (accueil du site) et Mode Nexus, un seul fichier ; pont vers
+                                    le compte (js/account.js) pour penser avec Gemini
   assets/logo_prism.svg             le logo, la Lentille Continua
   js/                               modules : canvas, cartes, sandbox, bus, Hub, Spotlight, compte, Engramme,
                                     conversation (chat.js), voix (voice.js), paramètres (prefs.js), Web Worker ;
                                     V5 : confusion.js (pointeur), sediment.js (sédiments), ecosystem.js (réglages)
   engine/                           partagé par les deux moteurs : prompts, gabarits, schémas, validation JS,
                                     moteur navigateur (local.js) ; engram/ : Engramme (schéma, prompts, validation,
-                                    fusion, physique, rendu (render.js, dans un Worker), document de carte, démos Marie Curie et Ada Lovelace)
+                                    fusion, physique, rendu (render.js, dans un Worker), document de carte, démos Marie Curie et Ada Lovelace) ;
+                                    nexus/ : prompts et schémas du Nexus (pensée, débat)
 backend/   (FastAPI, Python 3.13)
   app.py        génération, santé, CORS, en-têtes de sécurité, garde-fous de production
   engram.py     Engramme, conversation, fusion      auth.py   comptes, sessions JWT, compte d'essai
   billing.py    Sparks (réservation, confirmation, remboursement, grand livre)
+  nexus.py      V6 : pensée d'un esprit du Nexus, débat de War Room (vérifiés, remboursés en cas d'échec)
   widgets.py    Mon Hub      providers.py   Gemini (répartition entre les clés, relais) et Groq en secours
   db.py, models.py   SQLAlchemy : SQLite en local, PostgreSQL (Neon) en production
 tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesures de performance
@@ -335,7 +364,7 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
 - **Socle (V5, phase 1)** : rendu des Engrammes dans un Web Worker ; une portée par carte défaite à sa fermeture (rien ne
   reste en mémoire, vérifié par la CI) ; bouclier API (une demande déjà servie au même compte revient sans appel au
   modèle).
-- **Qualité** : 157 tests Python (sur SQLite et PostgreSQL), 93 tests Node, parité Python ↔ navigateur sur des cas
+- **Qualité** : 168 tests Python (sur SQLite et PostgreSQL), 93 tests Node, parité Python ↔ navigateur sur des cas
   partagés, sept scénarios E2E dans Chrome (site statique, serveur de démo, faux Gemini, GitHub Pages → API, Engramme en
   mode serveur et statique, Mode Nexus), contrôle de l'image Docker ; tout est rejoué par la CI GitHub à chaque envoi. Aucun test ne
   touche la production.
@@ -358,6 +387,7 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
 | alpha.4 | phase 1 : physique et dessin des Engrammes dans un Web Worker (OffscreenCanvas), physique v2, budget de calcul |
 | alpha.5 | phase 1 : nettoyage mémoire, bouclier API ; phase 2 : Mode Miroir, aura sonore et haptique, mode spatial |
 | 6.0.0-alpha.1 | V6 « Nexus » : logo (Lentille Continua), porte d'entrée Focus / Nexus, prototype du Mode Nexus (synapses, fil coupé, anatomie, War Rooms) |
+| alpha.2 | le Nexus pense avec Gemini (compte, Sparks au clic), autres esprits, scène gardée ; la porte d'entrée devient l'accueil du site |
 
 ## 9. Limites connues
 
@@ -369,6 +399,6 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
   répond en moteur navigateur pendant ce temps).
 - La reconnaissance vocale dépend du navigateur (Chrome, Edge, Safari) ; l'incantation demande que le focus ne soit pas
   dans un widget.
-- Le Mode Nexus est un prototype : ses Engrammes raisonnent par une simulation locale (pas encore par Gemini), et une
-  scène n'est pas sauvegardée quand on quitte la page.
+- Le Mode Nexus garde sa scène sur l'appareil seulement (pas encore dans Mon Hub) ; ses bulles de Rendu composent un
+  écran à partir des pensées, pas encore un widget généré.
 - Les Engrammes restent des interprétations : leur qualité dépend du dossier public de la personne et du modèle.

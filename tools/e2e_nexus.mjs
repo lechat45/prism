@@ -3,6 +3,7 @@
 // Tous les gestes passent par de vrais évènements souris (CDP), comme un utilisateur.
 //
 // Usage : node tools/e2e_nexus.mjs [--base http://127.0.0.1:8001/frontend/] [--shots dossier] [--width 1440 --height 900]
+//         node tools/e2e_nexus.mjs --base http://127.0.0.1:8004/ --server   (serveur démo ; 8003 : faux Gemini)
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -12,6 +13,8 @@ const argv = process.argv.slice(2);
 const opt = (name, fallback) => { const i = argv.indexOf(`--${name}`); return i === -1 ? fallback : argv[i + 1]; };
 const BASE = opt("base", "http://127.0.0.1:8001/frontend/");
 const SHOTS = opt("shots", "");
+// --server : la page est servie par un serveur Prism (tools/e2e_server.py) : compte d'essai, Gemini (faux ou démo), Sparks.
+const SERVER = argv.includes("--server");
 const WIDTH = Number(opt("width", 1440));
 const HEIGHT = Number(opt("height", 900));
 const URL_NEXUS = new URL("nexus.html", BASE.endsWith("/") ? BASE : BASE + "/").href;
@@ -218,6 +221,60 @@ try {
   await click(center("document.getElementById('to-gate')"));
   await waitFor("!document.getElementById('gate').hidden && document.getElementById('nexus').hidden", "retour à la porte");
   await check("retour à la porte (War Room fermée)", "document.getElementById('room').hidden", true);
+
+  // --- La scène est enregistrée sur l'appareil : on revient, tout est là --------------------------------------------------
+  await cdp.send("Page.navigate", { url: `${URL_NEXUS}?retour=1#nexus` }, S);
+  await waitFor("window.__nexus && __nexus.nodes.size === 5 && __nexus.links.size === 5 && __nexus.hubs.size === 1", "scène restaurée", 20000);
+  await check("scène retrouvée après rechargement (bulles, fils, Hub, anatomie, fil coupé)",
+    "[__nexus.find('Marie Curie').core, __nexus.find('Marie Curie').memory === null, __nexus.find('render').memory.thoughts.length, __nexus.find('Ada Lovelace').x]",
+    ["systems", true, 2, -560]);
+
+  // --- Un autre esprit, par son nom -------------------------------------------------------------------------------------------
+  await click(center("document.getElementById('add-engram')"));
+  await waitFor("!document.getElementById('engram-menu').hidden", "menu des Engrammes");
+  await evaluate("document.querySelector('.custom-mind input').value = 'Léonard de Vinci'");
+  await click(center("document.querySelector('.custom-mind button')"));
+  await check("« Autre esprit » : un Engramme au nom libre", "(()=>{const n=__nexus.find('Léonard de Vinci');return !!n && n.role === 'Esprit libre' && document.getElementById('engram-menu').hidden})()", true);
+  await evaluate("__nexus.find('Léonard de Vinci').el.querySelector('.close').click()");
+
+  // --- Avec le serveur Prism : penser avec Gemini (compte, prix affiché, Sparks au clic) ---------------------------------------
+  if (SERVER) {
+    await waitFor("window.__prismLink && __prismLink.ready", "API Prism détectée", 30000);
+    await check("sans compte, Gemini ne dépense rien : l'intelligence reste locale", "[__nexus.intel(), document.getElementById('think-all').hidden]", ["local", true]);
+    await click(center("document.getElementById('intel')"));
+    await waitFor("!document.getElementById('intel-menu').hidden && !!document.getElementById('intel-guest')", "menu Intelligence : connexion requise");
+    await click(center("document.getElementById('intel-guest')"));
+    await waitFor("__prismLink.account.user && __prismLink.account.user.sparks > 0 && !document.querySelector('#intel-menu .opt[data-mode=gemini]').disabled", "compte d'essai");
+    const start = await evaluate("__prismLink.account.user.sparks");
+    await click(center("document.querySelector('#intel-menu .opt[data-mode=gemini]')"));
+    await waitFor("!document.getElementById('think-all').hidden", "bouton « Penser »");
+    await check("« Penser » annonce son prix, rien n'est encore dépensé", "[document.getElementById('think-all').textContent, __prismLink.account.user.sparks]", ["Penser · 0,5 Spark", start]);
+    await check("en attente, l'Engramme le dit", "__nexus.find('Steve Jobs').el.querySelector('.thought').textContent.startsWith('Prêt à penser')", true);
+    await click(center("document.getElementById('think-all')"));
+    await waitFor("document.getElementById('think-all').hidden && [...__nexus.nodes.values()].every(n=>!n.el.classList.contains('is-thinking'))", "pensées reçues", 90000);
+    await check("Jobs et Ada ont pensé par l'API (2 × 0,25 Spark)",
+      "[['Steve Jobs','Ada Lovelace'].every(n=>__nexus.find(n).memory && __nexus.find(n).memory.source==='api'), __prismLink.account.user.sparks]", [true, start - 0.5]);
+    await waitFor(`__nexus.find('render').memory && __nexus.find('render').memory.thoughts.every(t=>t.source==='api') && ${flowSettled}`, "écran nourri par l'API", 20000);
+    await check("l'écran dit d'où vient la pensée", "/ · (Gemini|serveur \\(mode démo\\))$/.test(document.querySelector('#nodes .render .by').textContent)", true);
+    await click(center("document.getElementById('fit')")); // « Tout voir » cadre aussi l'anneau du Hub et son étiquette
+    await sleep(1100);
+    await check("« Tout voir » montre le bouton de la War Room",
+      `(()=>{const [x,y]=${center("document.querySelector('.hub .label button')")};return document.elementFromPoint(x,y)===document.querySelector('.hub .label button')})()`, true);
+    await click(center("document.querySelector('.hub .label button')"));
+    await waitFor("!document.getElementById('room').hidden", "War Room");
+    await check("« Débattre » annonce son prix", "document.getElementById('ask-send').textContent", "Débattre · 1 Spark");
+    await evaluate("document.getElementById('log').replaceChildren(); document.getElementById('question').value = 'Par quoi commencer ?'");
+    await click(center("document.getElementById('ask-send')"));
+    await waitFor("!!document.querySelector('#log .msg.synth') && !document.getElementById('ask-send').disabled", "débat par l'API", 90000);
+    await check("débat par l'API : 3 positions, 3 réponses, une synthèse (1 Spark)",
+      "[document.querySelectorAll('#log .msg.mind:not(.typing):not(.error)').length, __prismLink.account.user.sparks]", [6, start - 1.5]);
+    await shot("nexus-7-gemini.png");
+    await key("Escape");
+    await cdp.send("Page.navigate", { url: `${URL_NEXUS}?retour=2#nexus` }, S);
+    await waitFor("window.__nexus && __nexus.nodes.size === 5 && window.__prismLink && __prismLink.ready && __prismLink.account.user", "retour avec le compte", 30000);
+    await check("au retour, les pensées payées sont gardées : rien à repayer",
+      "[__nexus.intel(), __nexus.pendingCount(), document.getElementById('think-all').hidden, __nexus.find('Steve Jobs').memory.source]", ["gemini", 0, true, "api"]);
+  }
 
   const errors = cdp.events.filter((e) => e.method === "Runtime.exceptionThrown")
     .map((e) => e.params.exceptionDetails.exception?.description || e.params.exceptionDetails.text);

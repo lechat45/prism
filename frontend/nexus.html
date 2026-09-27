@@ -6,6 +6,9 @@
 <title>Prism — Nexus</title>
 <meta name="description" content="Prism V6 : le système d'exploitation cognitif spatial. Mode Nexus : dessinez des chaînes de pensée entre contextes, Engrammes et rendus.">
 <meta name="color-scheme" content="dark">
+<!-- API Prism (comptes, Sparks, Gemini) : utilisée sur GitHub Pages ; ailleurs, l'API qui sert la page (cf. js/account.js). -->
+<meta name="prism-api" content="https://prism-api-0x4z.onrender.com">
+<link rel="icon" href="assets/logo_prism.svg" type="image/svg+xml">
 <style>
 /* ==========================================================================
    Prism V6 · Nexus — prototype en un seul fichier (HTML, CSS, JS purs ; aucune dépendance, aucune requête).
@@ -365,6 +368,31 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
 .ask button:disabled { opacity: 0.5; cursor: default; }
 .room .note { padding: 0 16px 10px; font-size: 10.5px; color: var(--faint); }
 
+/* ---- Intelligence des Engrammes : simulation locale ou Gemini (compte Prism) ---------------- */
+.tool i.intel-dot { background: var(--ic, #8ff3ff); box-shadow: 0 0 10px var(--ic, #8ff3ff); }
+.tool.think-all { color: #05060a; background: linear-gradient(90deg, #fff, #c9b8ff); font-weight: 600; }
+.tool.think-all:hover { color: #05060a; background: linear-gradient(90deg, #fff, #dccfff); }
+.tool.think-all:disabled { opacity: 0.6; cursor: progress; }
+.menu.intel-menu, .menu.scene-menu { left: auto; right: 0; }
+.menu.intel-menu { width: 340px; }
+.intel-menu .micro { padding: 8px 10px 4px; }
+.intel-menu .opt { display: grid; grid-template-columns: 16px 1fr; gap: 10px; align-items: start; }
+.intel-menu .opt[aria-pressed="true"] { background: rgba(255, 255, 255, 0.08); }
+.intel-menu .opt:disabled { opacity: 0.5; cursor: default; }
+.intel-menu .radio { width: 14px; height: 14px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--line-strong); }
+.intel-menu .opt[aria-pressed="true"] .radio { border-color: #fff; background: radial-gradient(circle, #fff 0 34%, transparent 40%); }
+.intel-menu .status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 10px 8px 36px; font-size: 11.5px; color: var(--muted); }
+.intel-menu .status a { color: #cfe3ff; }
+.intel-menu .status .glass-btn { padding: 5px 10px; font-size: 11.5px; }
+.node.engram.is-pending .orb .body { filter: saturate(0.35) brightness(0.75); }
+.node.engram.is-pending .thought { color: #d6c8ff; }
+.custom-mind { display: flex; gap: 6px; margin-top: 4px; padding: 8px 4px 4px; border-top: 1px solid var(--line); }
+.custom-mind input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 999px; background: rgba(0, 0, 0, 0.3); padding: 7px 12px;
+  font-size: 12px; outline: none; }
+.custom-mind input:focus { border-color: rgba(200, 185, 255, 0.5); }
+.custom-mind .glass-btn { padding: 6px 12px; font-size: 12px; }
+.msg.error { --c: #ff9a9a; }
+
 @media (max-width: 760px) {
   .hint { display: none; }
   .tool .label { display: none; }
@@ -443,12 +471,27 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
         style="--c: #d6c8ff"><i></i><span class="label">Hub</span> <kbd>Alt</kbd></button>
     </div>
     <span class="spacer"></span>
+    <div class="pill" role="toolbar" aria-label="Intelligence">
+      <span class="anchor">
+        <button class="tool" id="intel" type="button" aria-haspopup="true" aria-expanded="false" title="Intelligence des Engrammes"><i class="intel-dot"></i><span
+          class="label" id="intel-label">Simulation locale</span></button>
+        <div class="menu intel-menu" id="intel-menu" hidden></div>
+      </span>
+      <button class="tool think-all" id="think-all" type="button" hidden></button>
+    </div>
     <div class="pill" role="toolbar" aria-label="Vue">
       <button class="tool" id="zoom-out" type="button" aria-label="Dézoomer">−</button>
       <button class="tool zoomlabel" id="zoom-reset" type="button" title="100 %">100 %</button>
       <button class="tool" id="zoom-in" type="button" aria-label="Zoomer">+</button>
       <button class="tool" id="fit" type="button" title="Tout voir (F)" aria-label="Tout voir"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"
         stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9"/></svg><span class="label">Tout voir</span></button>
+      <span class="anchor">
+        <button class="tool" id="scene" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Scène" title="Scène">⋯</button>
+        <div class="menu scene-menu" id="scene-menu" role="menu" hidden>
+          <button type="button" id="scene-empty" role="menuitem"><span><b>Nouvelle scène vide</b><small>Remplace la scène enregistrée sur cet appareil</small></span></button>
+          <button type="button" id="scene-demo" role="menuitem"><span><b>Scène de démonstration</b><small>Un brief, Marie Curie, Steve Jobs et un écran</small></span></button>
+        </div>
+      </span>
     </div>
   </header>
 
@@ -472,7 +515,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     <div class="anat-stage" id="anat-stage">
       <svg class="anat-links" id="anat-links" aria-hidden="true"></svg>
       <div class="preview">
-        <div class="micro">Sa pensée, en direct</div>
+        <div class="micro" id="anat-preview-label">Sa pensée, en direct</div>
         <p id="anat-preview"></p>
       </div>
       <div class="anat-core orb" id="anat-core">
@@ -512,7 +555,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     </header>
     <div class="log" id="log" aria-live="polite"></div>
     <form class="ask" id="ask"><input id="question" maxlength="300" placeholder="Posez une question au Hub…" aria-label="Question au Hub"><button id="ask-send" type="submit">Débattre</button></form>
-    <div class="note">Débat simulé localement à partir de l'anatomie de chaque Engramme — prêt à se brancher sur les Engrammes de Prism.</div>
+    <div class="note" id="room-note"></div>
   </aside>
 </section>
 
@@ -710,6 +753,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     viewport.style.setProperty("--gx", view.x + "px");
     viewport.style.setProperty("--gy", view.y + "px");
     $("zoom-reset").textContent = Math.round(view.z * 100) + " %";
+    save();
   }
   function toWorld(sx, sy) { return { x: (sx - view.x) / view.z, y: (sy - view.y) / view.z }; }
   function zoomAt(sx, sy, z) {
@@ -742,8 +786,12 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
       minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
       maxX = Math.max(maxX, n.x + n.el.offsetWidth); maxY = Math.max(maxY, n.y + n.el.offsetHeight);
     });
+    hubs.forEach(function (h) { // l'anneau d'un Hub et son étiquette (au-dessus) restent dans le cadre
+      minX = Math.min(minX, h.el.offsetLeft); minY = Math.min(minY, h.el.offsetTop - 30);
+      maxX = Math.max(maxX, h.el.offsetLeft + h.el.offsetWidth); maxY = Math.max(maxY, h.el.offsetTop + h.el.offsetHeight);
+    });
     var W = innerWidth, H = innerHeight - 90;
-    var z = Math.max(0.3, Math.min(1.15, Math.min(W / (maxX - minX + 180), H / (maxY - minY + 160))));
+    var z = Math.max(innerWidth < 760 ? 0.5 : 0.3, Math.min(1.15, Math.min(W / (maxX - minX + 180), H / (maxY - minY + 160))));
     var target = { z: z, x: W / 2 - ((minX + maxX) / 2) * z, y: 70 + H / 2 - ((minY + maxY) / 2) * z };
     if (animated) animateView(target, 700); else { Object.assign(view, target); applyView(); }
   }
@@ -758,6 +806,15 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     return e;
   }
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+
+  /** Un esprit qui n'est pas dans la liste : n'importe quel nom ; son anatomie se règle ensuite (double-clic). */
+  function customMind(name) {
+    var hue = 0;
+    for (var i = 0; i < name.length; i++) hue = (hue * 31 + name.charCodeAt(i)) % 360;
+    return { name: name.slice(0, 80), role: "Esprit libre", color: "hsl(" + hue + ", 85%, 72%)", core: "systems",
+      state: { energy: 65, patience: 60, creativity: 60 }, memories: [],
+      metaphor: "Imaginons la forme la plus claire que cela pourrait prendre." };
+  }
 
   function addNode(type, x, y, opts) {
     opts = opts || {};
@@ -782,13 +839,18 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
         clearTimeout(timer);
         timer = setTimeout(function () { propagate(); }, 650); // le flux repart quand la saisie se pose
       });
-      node.querySelector(".title").addEventListener("input", function (e) { n.title = e.target.textContent.trim() || "Contexte"; });
+      node.querySelector(".title").addEventListener("input", function (e) { n.title = e.target.textContent.trim() || "Contexte"; save(); });
       requestAnimationFrame(function () { autosize(area); });
     } else if (type === "engram") {
-      var p = PERSONAS[opts.persona] || PERSONAS.curie;
-      n.persona = opts.persona || "curie";
-      n.name = p.name; n.role = p.role; n.color = p.color; n.metaphor = p.metaphor;
-      n.core = p.core; n.state = Object.assign({}, p.state); n.memories = p.memories.slice();
+      var p = opts.mind || PERSONAS[opts.persona] || PERSONAS.curie;
+      n.persona = opts.persona || (opts.mind ? "custom" : "curie");
+      n.name = String(p.name || "Esprit").slice(0, 80); n.role = p.role || ""; n.color = p.color || "#c9b8ff";
+      n.metaphor = p.metaphor || "Imaginons la forme la plus claire que cela pourrait prendre.";
+      n.core = CORES[p.core] ? p.core : "systems";
+      n.state = Object.assign({ energy: 60, patience: 60, creativity: 60 }, p.state);
+      n.memories = (Array.isArray(p.memories) ? p.memories : []).slice(0, 16);
+      n.cache = opts.cache && typeof opts.cache.sig === "string" ? opts.cache : null; // dernière pensée Gemini
+      n.pending = null; // signature des entrées qui attendent une pensée Gemini
       node.style.setProperty("--c", n.color);
       node.innerHTML = '<div class="orb" title="Double-clic : plonger dans son anatomie"><div class="ring r2"></div><div class="ring"></div><div class="body"></div><div class="veil"></div>' +
         '<span class="sat"></span><span class="sat s2"></span><span class="sat s3"></span></div>' +
@@ -810,6 +872,8 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     nodesLayer.append(node);
     nodes.set(n.id, n);
     node.addEventListener("animationend", function () { node.classList.remove("is-entering"); }, { once: true });
+    if (opts.still) node.classList.remove("is-entering");
+    save();
     return n;
   }
   function autosize(area) { area.style.height = "auto"; area.style.height = Math.min(220, area.scrollHeight + 2) + "px"; }
@@ -822,7 +886,10 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     e.querySelector(".mood span").textContent = mood.label;
     e.querySelector(".core-chip").textContent = CORES[n.core].short;
     e.querySelector(".core-chip").title = CORES[n.core].label;
-    e.querySelector(".thought").textContent = n.memory ? n.memory.lines[0] : "";
+    e.classList.toggle("is-pending", !n.memory && !!n.pending);
+    e.querySelector(".thought").textContent = n.memory ? n.memory.lines[0]
+      : n.pending ? (thinkingNow.has(n.id) ? "Réflexion avec Gemini…" : "Prêt à penser · " + sparksLabel(priceOf("nexus_think")) + " au clic sur « Penser »")
+      : "";
   }
 
   function paintRender(n) {
@@ -843,6 +910,8 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
       return '<div class="voice" style="--vc:var(--context)"><b>Contexte brut</b>' + esc(ctx.text.slice(0, 160)) + "</div>";
     }).join("");
     var by = m.thoughts.length ? "Pensé par " + m.thoughts.map(function (t) { return t.author; }).join(" × ") : "Contexte seul (aucun esprit)";
+    var remote = m.thoughts.filter(function (t) { return t.source === "api"; });
+    if (remote.length) by += remote.every(function (t) { return t.mode !== "mock"; }) ? " · Gemini" : " · serveur (mode démo)";
     screen.innerHTML = '<div class="out-ui" style="--c:' + c + '"><h3>' + esc(m.title) + '</h3><div class="by">' + esc(by) + '</div>' +
       '<div class="tiles">' + tiles + '</div><div class="voices">' + voices + '</div>' +
       '<button class="cta" type="button">' + esc(m.action) + ' →</button></div>';
@@ -1039,7 +1108,16 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
       var ins = incoming(id).map(function (l) { return nodes.get(l.from).memory; }).filter(Boolean);
       var mem = null;
       if (n.type === "context") mem = n.text.trim() ? { kind: "context", text: n.text.trim(), title: n.title } : null;
-      else if (n.type === "engram") mem = ins.length ? think(n, ins) : null;
+      else if (n.type === "engram") {
+        n.pending = null;
+        if (!ins.length) mem = null;
+        else if (intel === "gemini") {
+          // Gemini : la pensée mémorisée pour exactement ces entrées et cette anatomie, sinon rien (au clic sur « Penser »).
+          var sig = signature(n, ins);
+          if (n.cache && n.cache.sig === sig) mem = n.cache.thought;
+          else n.pending = sig;
+        } else mem = think(n, ins);
+      }
       else mem = ins.length ? compose(ins) : null;
       n.memory = mem;
       var after = mem ? JSON.stringify(mem) : "";
@@ -1062,6 +1140,9 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
         });
       }, delay);
     });
+    nodes.forEach(function (n) { if (n.type === "engram" && !n.memory) paintEngram(n); });
+    renderIntel();
+    save();
   }
   function repaint(n, erased) {
     if (n.type === "engram") paintEngram(n);
@@ -1098,7 +1179,9 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     var port = e.target.closest(".port.out");
     var nodeEl = e.target.closest(".node");
     closeMenus();
-    if (e.target.closest(".link")) return; // un clic sur un fil le coupe (voir addLink)
+    // Un clic sur un fil le coupe (voir addLink) ; l'étiquette d'un Hub ouvre sa War Room : pas de glisser du fond ici
+    // (sa capture du pointeur détournerait le clic).
+    if (e.target.closest(".link, .hub .label")) return;
     // La capture se fait sur la bulle elle-même : clics et double-clics gardent leur cible.
     if (port && nodeEl) {
       // Tirer une synapse depuis un port de sortie.
@@ -1178,6 +1261,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     var g = gesture;
     gesture = null;
     viewport.classList.remove("is-panning", "is-lasso");
+    save();
     if (g.kind === "node") g.n.el.classList.remove("is-dragging");
     if (g.kind === "wire") {
       $("draft").hidden = true;
@@ -1276,6 +1360,20 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     });
     menu.append(b);
   });
+  var customForm = el("form", "custom-mind", '<input maxlength="80" placeholder="Autre esprit : un nom…" aria-label="Nom d\'un autre esprit">' +
+    '<button class="glass-btn" type="submit">Créer</button>');
+  customForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var input = customForm.querySelector("input");
+    var name = input.value.trim().replace(/\s+/g, " ");
+    if (!name) return;
+    input.value = "";
+    closeMenus();
+    var s = centerSpot(0);
+    select(addNode("engram", s.x, s.y, { mind: customMind(name) }).id);
+    toast(name + " rejoint le Nexus : double-cliquez pour régler son anatomie.");
+  });
+  menu.append(customForm);
   $("add-engram").addEventListener("click", function (e) {
     e.stopPropagation();
     var open = menu.hidden;
@@ -1283,7 +1381,12 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     menu.hidden = !open;
     $("add-engram").setAttribute("aria-expanded", String(open));
   });
-  function closeMenus() { menu.hidden = true; $("add-engram").setAttribute("aria-expanded", "false"); }
+  function closeMenus() {
+    [["engram-menu", "add-engram"], ["intel-menu", "intel"], ["scene-menu", "scene"]].forEach(function (pair) {
+      $(pair[0]).hidden = true;
+      $(pair[1]).setAttribute("aria-expanded", "false");
+    });
+  }
   document.addEventListener("click", function (e) { if (!e.target.closest(".anchor")) closeMenus(); });
 
   $("zoom-in").addEventListener("click", function () { zoomAt(innerWidth / 2, innerHeight / 2, view.z * 1.2); });
@@ -1489,6 +1592,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     hubs.set(id, h);
     e.querySelector("button").addEventListener("click", function () { openRoom(id); });
     placeHub(h);
+    save();
     return h;
   }
   function placeHub(h) {
@@ -1510,6 +1614,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     hubs.delete(id);
     h.el.remove();
     if (roomOf === id) closeRoom();
+    save();
   }
 
   var roomOf = null;
@@ -1579,6 +1684,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
 
   /** Débat : chaque esprit prend position, puis répond à un autre, puis le Hub fait sa synthèse. */
   function debate(question) {
+    if (intel === "gemini") return debateRemote(question);
     var h = hubs.get(roomOf);
     if (!h || debating) return Promise.resolve();
     debating = true;
@@ -1657,7 +1763,10 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     $("gate").classList.add("is-leaving");
     $("nexus").hidden = false;
     requestAnimationFrame(function () { $("nexus").classList.add("is-on"); });
-    if (!seeded) seed();
+    if (!seeded) {
+      seeded = true;
+      if (!restoreScene()) seed();
+    }
     setTimeout(function () { $("gate").hidden = true; }, reduced ? 0 : 1000);
     if (location.hash !== "#nexus") history.replaceState(null, "", "#nexus");
   }
@@ -1690,17 +1799,397 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     }, reduced ? 0 : 900);
   }
 
+  // ======================================================================================
+  // Intelligence : simulation locale (gratuite) ou Gemini par le compte Prism (Sparks, toujours au clic).
+  // Le pont vers le compte (module js/account.js, en bas de page) annonce l'API et la session : « prism:link ».
+  // ======================================================================================
+  var intel = "local";
+  var link = window.__prismLink || null;
+  var busy = false;
+  var thinkingNow = new Set();
+  var PRICES = { nexus_think: 0.25, nexus_debate: 1 };
+  addEventListener("prism:link", function (e) { link = e.detail; renderIntel(); });
+
+  function priceOf(action) {
+    var pricing = link && link.account && link.account.pricing;
+    return pricing && typeof pricing[action] === "number" ? pricing[action] : PRICES[action];
+  }
+  function sparksLabel(v) {
+    var n = Math.round(v * 100) / 100;
+    return String(n).replace(".", ",") + (n >= 2 ? " Sparks" : " Spark");
+  }
+  function canGemini() { return !!(link && link.ready && link.account && link.account.user); }
+  function signature(n, ins) {
+    return JSON.stringify([n.name, n.role, n.core, n.state.energy, n.state.patience, n.state.creativity, n.memories,
+      ins.map(function (m) { return [m.kind, m.author || "", m.title || "", m.text]; })]);
+  }
+  function mindOf(n) {
+    return { name: n.name, role: n.role || "", core: n.core, mood: moodOf(n.state).label, energy: n.state.energy,
+      patience: n.state.patience, creativity: n.state.creativity, memories: n.memories.slice(0, 16) };
+  }
+  function toInput(m) {
+    return m.kind === "context" ? { kind: "context", title: String(m.title || "").slice(0, 120), text: m.text.slice(0, 3000) }
+      : { kind: "thought", author: String(m.author || "").slice(0, 120), text: m.text.slice(0, 3000) };
+  }
+  function fromRemote(n, t, mode) {
+    var lines = t.lines.slice();
+    if (t.memory) lines.push("Souvenir mobilisé : " + t.memory + ".");
+    return { kind: "thought", author: n.name, color: n.color, core: n.core, mood: moodOf(n.state).label, keys: t.keys || [],
+      subject: t.title, lines: lines, text: t.lines.join(" "), action: t.action, source: "api", mode: mode };
+  }
+  function errorText(err) {
+    if (!err) return "Erreur inconnue.";
+    if (err.status === 401) return "Session expirée : reconnectez-vous (menu Intelligence) pour penser avec Gemini.";
+    if (err.status === 403 && err.code === "insufficient_sparks") {
+      return "Plus assez de Sparks (il en faut " + sparksLabel((err.detail && err.detail.required) || 0) + ").";
+    }
+    if (err.status === 0) return "Serveur Prism injoignable : réessayez, ou restez en simulation locale.";
+    if (err.status === 502) return "Le modèle n'a pas pu répondre ; aucun Spark n'a été dépensé. (" + err.message + ")";
+    return err.message || String(err);
+  }
+
+  /** Esprits qui devront penser : ceux en attente, et tout Engramme en aval (leurs entrées vont changer). */
+  function toThink() {
+    var set = new Set();
+    nodes.forEach(function (n) { if (n.type === "engram" && n.pending) set.add(n.id); });
+    var stack = Array.from(set);
+    while (stack.length) {
+      var id = stack.pop();
+      links.forEach(function (l) {
+        if (l.from === id && nodes.get(l.to).type === "engram" && !set.has(l.to)) { set.add(l.to); stack.push(l.to); }
+      });
+    }
+    return Array.from(set);
+  }
+
+  /** « Penser » : chaque esprit en attente pense avec Gemini, couche après couche (Sparks débités à ce clic seulement). */
+  function thinkAll() {
+    if (busy) return Promise.resolve(false);
+    if (!canGemini()) {
+      toast(link && link.ready ? "Connectez-vous pour penser avec Gemini (menu Intelligence)." : "Serveur Prism injoignable : restez en simulation locale.");
+      openIntel();
+      return Promise.resolve(false);
+    }
+    busy = true;
+    renderIntel();
+    var rounds = 0;
+    function step() {
+      var todo = [];
+      nodes.forEach(function (n) { if (n.type === "engram" && n.pending && !thinkingNow.has(n.id)) todo.push(n); });
+      if (!todo.length || rounds++ >= 8) return Promise.resolve(true);
+      return Promise.all(todo.map(thinkRemote)).then(function () { propagate(); return step(); });
+    }
+    return step().catch(function (err) { propagate(); toast(errorText(err)); return false; })
+      .then(function (ok) { busy = false; renderIntel(); return ok; });
+  }
+  function thinkRemote(n) {
+    var sig = n.pending;
+    var ins = incoming(n.id).map(function (l) { return nodes.get(l.from).memory; }).filter(Boolean);
+    thinkingNow.add(n.id);
+    n.el.classList.add("is-thinking");
+    paintEngram(n);
+    incoming(n.id).forEach(function (l) { pulse(l, 900); });
+    return link.api("/api/nexus/think", { method: "POST", body: { mind: mindOf(n), inputs: ins.map(toInput), language: "fr" } })
+      .then(function (res) {
+        if (link.setSparks) link.setSparks(res.sparks);
+        if (nodes.get(n.id) === n) n.cache = { sig: sig, thought: fromRemote(n, res.thought, res.mode) };
+      })
+      .finally(function () {
+        thinkingNow.delete(n.id);
+        n.el.classList.remove("is-thinking");
+        paintEngram(n);
+      });
+  }
+
+  /** War Room avec Gemini : deux tours et une synthèse en un appel (prix affiché sur le bouton « Débattre »). */
+  function debateRemote(question) {
+    var h = hubs.get(roomOf);
+    if (!h || debating) return Promise.resolve();
+    var log = $("log");
+    var u = addMsg("user", null, "Vous", question);
+    u.body.textContent = question;
+    if (!canGemini()) {
+      var m = addMsg("mind error", null, "Prism", "");
+      m.body.textContent = "Connectez-vous (menu Intelligence) pour débattre avec Gemini, ou revenez à la simulation locale.";
+      return Promise.resolve();
+    }
+    debating = true;
+    $("ask-send").disabled = true;
+    var minds = h.members.map(function (id) { return nodes.get(id); });
+    var ctx = firstContext();
+    var byName = {};
+    minds.forEach(function (n) { byName[n.name.trim().replace(/\s+/g, " ").toLowerCase()] = n; });
+    var tint = function (name) { var n = byName[String(name).toLowerCase()]; return n ? n.color : "#c9b8ff"; };
+    var short = function (name) { return String(name).split(" ").pop(); };
+    var t = typing("#c9b8ff", "War Room · Gemini");
+    return link.api("/api/nexus/debate", { method: "POST", body: { minds: minds.map(mindOf), question: question,
+      context: ctx ? ctx.text.slice(0, 3000) : "", language: "fr" } })
+      .then(function (res) {
+        if (link.setSparks) link.setSparks(res.sparks);
+        t.remove();
+        var d = res.debate;
+        var chain = Promise.resolve().then(function () { log.append(el("div", "round", "Tour 1 · positions")); });
+        d.positions.forEach(function (p) { chain = chain.then(function () { return type(addMsg("mind", tint(p.author), p.author, p.text)); }); });
+        chain = chain.then(function () { log.append(el("div", "round", "Tour 2 · confrontation")); });
+        d.replies.forEach(function (r) {
+          chain = chain.then(function () { return type(addMsg("mind", tint(r.author), r.author + " → " + short(r.to), r.text)); });
+        });
+        return chain.then(function () {
+          var s = el("div", "msg synth");
+          s.innerHTML = "<b></b><span></span><ul></ul>";
+          s.querySelector("b").textContent = "Synthèse du Hub" + (res.mode === "mock" ? " · serveur (mode démo)" : " · Gemini");
+          s.querySelector("span").textContent = d.synthesis.summary;
+          var ul = s.querySelector("ul");
+          d.synthesis.points.concat(d.synthesis.first_step ? ["Premier geste : " + d.synthesis.first_step] : []).forEach(function (pt) {
+            var li = el("li");
+            li.textContent = pt;
+            ul.append(li);
+          });
+          log.append(s);
+        });
+      })
+      .catch(function (err) {
+        t.remove();
+        var m = addMsg("mind error", null, "Prism", "");
+        m.body.textContent = errorText(err);
+      })
+      .then(function () {
+        debating = false;
+        $("ask-send").disabled = false;
+        log.scrollTop = log.scrollHeight;
+      });
+  }
+
+  function setIntel(mode) {
+    if (mode === "gemini" && !canGemini()) { openIntel(); return false; }
+    intel = mode === "gemini" ? "gemini" : "local";
+    propagate();
+    if (anatomyOf) renderPreview();
+    return true;
+  }
+  function renderIntel() {
+    var gem = intel === "gemini";
+    $("intel-label").textContent = gem ? "Gemini" : "Simulation locale";
+    $("intel").style.setProperty("--ic", gem ? "#c9b8ff" : "#8ff3ff");
+    var todo = gem ? toThink() : [];
+    var btn = $("think-all");
+    btn.hidden = !gem || (!todo.length && !busy);
+    btn.disabled = busy;
+    btn.textContent = busy ? "Réflexion…" : "Penser · " + sparksLabel(todo.length * priceOf("nexus_think"));
+    btn.title = todo.length + (todo.length > 1 ? " esprits pensent" : " esprit pense") + " avec Gemini (" + sparksLabel(priceOf("nexus_think")) + " chacun)";
+    $("ask-send").textContent = gem ? "Débattre · " + sparksLabel(priceOf("nexus_debate")) : "Débattre";
+    $("room-note").textContent = gem ? "Débat par Gemini, à partir de l'anatomie de chaque Engramme : " + sparksLabel(priceOf("nexus_debate")) +
+      ", débité seulement au clic sur « Débattre »."
+      : "Débat simulé localement, à partir de l'anatomie de chaque Engramme. Pour un vrai débat : menu Intelligence → Gemini.";
+    $("anat-preview-label").textContent = gem ? "Aperçu local de sa pensée · Gemini pensera au clic sur « Penser »" : "Sa pensée, en direct";
+    if (!$("intel-menu").hidden) fillIntel();
+  }
+  function fillIntel() {
+    var box = $("intel-menu");
+    box.replaceChildren(el("div", "micro", "Intelligence des Engrammes"));
+    var option = function (mode, title, text) {
+      var b = el("button", "opt", '<span class="radio"></span><span><b></b><small></small></span>');
+      b.type = "button";
+      b.dataset.mode = mode;
+      b.setAttribute("aria-pressed", String(intel === mode));
+      b.querySelector("b").textContent = title;
+      b.querySelector("small").textContent = text;
+      b.addEventListener("click", function () { if (setIntel(mode)) closeMenus(); });
+      box.append(b);
+      return b;
+    };
+    option("local", "Simulation locale", "Gratuite et instantanée : les esprits raisonnent par règles, sans modèle ni compte.");
+    var gem = option("gemini", "Gemini", "Vraie pensée : " + sparksLabel(priceOf("nexus_think")) + " par esprit, " + sparksLabel(priceOf("nexus_debate")) +
+      " par débat. Rien n'est dépensé sans votre clic sur « Penser » ou « Débattre ».");
+    var status = el("div", "status");
+    if (!link || !link.ready) {
+      gem.disabled = intel !== "gemini";
+      status.textContent = link && link.waking ? "Réveil du serveur Prism…" : "Serveur Prism injoignable (ouvrez le Nexus depuis le site Prism).";
+    } else if (!link.account.user) {
+      gem.disabled = intel !== "gemini";
+      status.append(document.createTextNode("Connexion requise."));
+      var guest = el("button", "glass-btn", "");
+      guest.type = "button";
+      guest.id = "intel-guest";
+      guest.textContent = "Compte d'essai (" + sparksLabel(link.account.guestSparks || 10) + ")";
+      guest.addEventListener("click", function () {
+        guest.disabled = true;
+        link.signInAsGuest().then(function () { toast("Compte d'essai ouvert : choisissez Gemini."); fillIntel(); },
+          function (err) { guest.disabled = false; toast(errorText(err)); });
+      });
+      var signin = el("a", "", "Se connecter");
+      signin.href = "index.html";
+      status.append(guest, signin);
+    } else {
+      status.textContent = "Connecté · " + sparksLabel(link.account.user.sparks) + " disponibles.";
+    }
+    box.append(status);
+  }
+  function openIntel() {
+    closeMenus();
+    $("intel-menu").hidden = false;
+    $("intel").setAttribute("aria-expanded", "true");
+    fillIntel();
+  }
+  $("intel").addEventListener("click", function (e) {
+    e.stopPropagation();
+    if ($("intel-menu").hidden) openIntel(); else closeMenus();
+  });
+  $("think-all").addEventListener("click", function () { thinkAll(); });
+
+  // ======================================================================================
+  // Scène enregistrée sur l'appareil (localStorage) : bulles, anatomies, fils, Hubs, vue, pensées Gemini déjà payées.
+  // ======================================================================================
+  var STORE = "prism:nexus:scene";
+  var restoring = false;
+  var saveTimer = 0;
+  function snapshot() {
+    var out = { v: 1, intel: intel, view: { x: view.x, y: view.y, z: view.z }, nodes: [], links: [], hubs: [] };
+    nodes.forEach(function (n) {
+      var o = { id: n.id, type: n.type, x: n.x, y: n.y };
+      if (n.type === "context") { o.title = n.title; o.text = n.text; }
+      if (n.type === "engram") {
+        o.mind = { name: n.name, role: n.role, color: n.color, metaphor: n.metaphor, core: n.core, state: n.state, memories: n.memories };
+        if (n.cache) o.cache = n.cache;
+      }
+      out.nodes.push(o);
+    });
+    links.forEach(function (l) { out.links.push([l.from, l.to]); });
+    hubs.forEach(function (h) { out.hubs.push(h.members.slice()); });
+    return out;
+  }
+  function saveNow() {
+    clearTimeout(saveTimer);
+    try { localStorage.setItem(STORE, JSON.stringify(snapshot())); } catch (e) { /* stockage indisponible ou plein */ }
+  }
+  function save() {
+    if (restoring || !seeded) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveNow, 400);
+  }
+  addEventListener("pagehide", function () { if (seeded && !restoring) saveNow(); }); // la dernière retouche n'attend pas
+  function restoreScene() {
+    var data = null;
+    try { data = JSON.parse(localStorage.getItem(STORE) || "null"); } catch (e) { data = null; }
+    if (!data || data.v !== 1 || !Array.isArray(data.nodes)) return false;
+    restoring = true;
+    try {
+      data.nodes.forEach(function (o) {
+        if (!o || ["context", "engram", "render"].indexOf(o.type) < 0 || nodes.has(String(o.id))) return;
+        addNode(o.type, +o.x || 0, +o.y || 0, { id: String(o.id), title: o.title, text: o.text, mind: o.mind, cache: o.cache, still: true });
+        var num = parseInt(String(o.id).slice(1), 10);
+        if (num > seq) seq = num;
+      });
+      if (data.view && isFinite(data.view.z) && isFinite(data.view.x) && isFinite(data.view.y)) {
+        Object.assign(view, { x: +data.view.x, y: +data.view.y, z: Math.max(0.25, Math.min(2.5, +data.view.z)) });
+      }
+      applyView();
+      (data.links || []).forEach(function (pair) { if (pair && nodes.has(pair[0]) && nodes.has(pair[1])) addLink(pair[0], pair[1], true); });
+      (data.hubs || []).forEach(function (members) {
+        members = (members || []).filter(function (id) { return nodes.has(id) && nodes.get(id).type === "engram"; });
+        if (members.length >= 2) createHub(members);
+      });
+      intel = data.intel === "gemini" ? "gemini" : "local";
+    } finally {
+      restoring = false;
+    }
+    propagate({ instant: true });
+    if (links.size) { hintHidden = true; $("hint").style.opacity = "0"; } // une scène déjà tissée : l'aide n'est plus utile
+    if (!nodes.size) toast("Scène vide : double-cliquez dans le vide pour un contexte.");
+    return true;
+  }
+  function clearScene() {
+    if (anatomyOf) closeAnatomy();
+    closeRoom();
+    links.forEach(function (l) { l.el.remove(); l.grad.remove(); });
+    links.clear();
+    hubs.forEach(function (h) { h.el.remove(); });
+    hubs.clear();
+    nodes.forEach(function (n) { n.el.remove(); });
+    nodes.clear();
+    selected = null;
+    $("log").replaceChildren();
+  }
+  // Remplacer la scène efface le travail : un second clic confirme.
+  function armed(button, run) {
+    var small = button.querySelector("small");
+    var original = small.textContent;
+    button.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (!button.dataset.armed) {
+        button.dataset.armed = "1";
+        small.textContent = "Cliquez encore pour remplacer la scène actuelle";
+        setTimeout(function () { delete button.dataset.armed; small.textContent = original; }, 3500);
+        return;
+      }
+      delete button.dataset.armed;
+      small.textContent = original;
+      closeMenus();
+      clearScene();
+      run();
+      saveNow();
+    });
+  }
+  armed($("scene-empty"), function () {
+    Object.assign(view, { x: innerWidth / 2, y: innerHeight / 2, z: 1 });
+    applyView();
+    renderIntel();
+    toast("Scène vide : double-cliquez dans le vide pour un contexte.");
+  });
+  armed($("scene-demo"), function () { seed(); });
+  $("scene").addEventListener("click", function (e) {
+    e.stopPropagation();
+    var open = $("scene-menu").hidden;
+    closeMenus();
+    $("scene-menu").hidden = !open;
+    $("scene").setAttribute("aria-expanded", String(open));
+  });
+
   // Accès pour les tests et démonstrations (lecture et commandes).
   window.__nexus = {
     nodes: nodes, links: links, hubs: hubs, view: view,
     memory: function (id) { var n = nodes.get(id); return n && n.memory; },
     connect: addLink, cut: cutLink, open: openAnatomy, close: closeAnatomy, hub: createHub, room: openRoom, debate: debate,
+    setIntel: setIntel, intel: function () { return intel; }, thinkAll: thinkAll, pendingCount: function () { return toThink().length; },
+    saveNow: saveNow, clearScene: clearScene,
     enter: enterNexus, find: function (name) { var f = null; nodes.forEach(function (n) { if (!f && (n.name === name || n.title === name || n.type === name)) f = n; }); return f; }
   };
 
   applyView();
+  renderIntel();
   if (location.hash === "#nexus") { $("gate").classList.add("is-leaving"); enterNexus(); }
 })();
+</script>
+<script type="module">
+  // Pont vers le compte Prism : même API, même session que le Mode Focus (js/account.js). Sans serveur (fichier local,
+  // GitHub Pages sans API), rien ne se passe : le Nexus reste en simulation locale.
+  import { account, api, initAccount, onAccountChange, setSparks, signInAsGuest, API_BASE, REMOTE_API, STATIC_HOST } from "./js/account.js";
+
+  const link = { ready: false, waking: false, info: null, account, api, setSparks, signInAsGuest };
+  const announce = () => dispatchEvent(new CustomEvent("prism:link", { detail: link }));
+  onAccountChange(announce);
+  async function probe() {
+    const signal = typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(8000) : undefined;
+    const res = await fetch(`${API_BASE}/api/health`, { cache: "no-store", signal });
+    const info = res.ok ? await res.json() : null;
+    return info && info.status === "ok" && info.auth ? info : null;
+  }
+  async function connect(tries) {
+    let info = null;
+    try { info = await probe(); } catch { /* serveur absent ou endormi */ }
+    if (info) {
+      Object.assign(link, { ready: true, waking: false, info });
+      await initAccount(info);
+      announce();
+      return;
+    }
+    // Hébergement gratuit endormi : il se réveille en une minute environ.
+    link.waking = Boolean(REMOTE_API) && tries > 0;
+    announce();
+    if (link.waking) setTimeout(() => connect(tries - 1), 8000);
+  }
+  window.__prismLink = link;
+  if (!STATIC_HOST || REMOTE_API) connect(12);
 </script>
 </body>
 </html>

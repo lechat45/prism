@@ -22,7 +22,9 @@ SIGNUP_BONUS = round(float(os.getenv("PRISM_SIGNUP_SPARKS", "50")) * CENTS)
 GUEST_BONUS = round(float(os.getenv("PRISM_GUEST_SPARKS", "10")) * CENTS)
 PRICES = {"generate": 1 * CENTS, "refactor": CENTS // 2, "engram": 2 * CENTS,  # engramme : 36 à 44 nœuds
           "engram_chat": CENTS // 4,  # un message de conversation avec un Engramme
-          "engram_fusion": 3 * CENTS}  # V5 : Hyper-Engramme né de deux Engrammes
+          "engram_fusion": 3 * CENTS,  # V5 : Hyper-Engramme né de deux Engrammes
+          "nexus_think": CENTS // 4,  # V6 : un esprit du Nexus pense (Gemini)
+          "nexus_debate": 1 * CENTS}  # V6 : débat d'une War Room (deux tours et une synthèse)
 
 
 def as_sparks(cents: int) -> float:

@@ -269,14 +269,19 @@ Le canvas devient un milieu : les cartes fusionnent, s'adaptent à ceux qui les 
 - **Aura** (`js/aura.js`) et **mode spatial** (`js/spatial.js`) : sons synthétisés, vibrations ; arc 3D, WebXR
   `immersive-ar` + superposition DOM.
 
-## Prism V6 « Nexus » (prototype)
+## Prism V6 « Nexus »
 
-`frontend/nexus.html` : un seul fichier (HTML, CSS, JS purs, aucune dépendance ni requête). Porte d'entrée (logo
+`frontend/nexus.html`, accueil du site (la racine y redirige) : un seul fichier HTML, CSS et JS. Porte d'entrée (logo
 `assets/logo_prism.svg`, la Lentille Continua ; portes Focus → `index.html` et Nexus), puis le Mode Nexus : bulles de
 Contexte, d'Engramme et de Rendu, synapses tirées de port à port (flux Contexte → Engramme → Rendu, sans boucle),
 impulsions le long des fils, fil coupé au clic qui efface à l'instant la mémoire en aval, anatomie d'un Engramme au
 double-clic (Core, State, Memories), Hubs au lasso (Alt + glisser) et War Room où les Engrammes débattent. Détails :
 [PROJET.md, section 6](PROJET.md). `window.__nexus` expose l'état pour les tests.
+
+Avec le serveur, les esprits pensent avec Gemini (`backend/nexus.py`) : `POST /api/nexus/think` (0,25 Spark) et
+`POST /api/nexus/debate` (1 Spark), prompts et schémas dans `frontend/engine/nexus/`, réponse du modèle vérifiée,
+Sparks rendus en cas d'échec. La page réutilise la session du Mode Focus (module `js/account.js`) ; rien n'est débité
+sans un clic sur « Penser » ou « Débattre », qui affichent leur prix. La scène est gardée en `localStorage`.
 
 ## Architecture
 
@@ -289,6 +294,7 @@ backend/
   sanitize.py           nettoyage de la sortie LLM, épinglage de Tailwind et Chart.js, validation HTML/JS
   mocks.py              mode démo (lit les gabarits partagés)
   engram.py             V4 : /api/engram, validation de l'Engramme, repli JSON simple
+  nexus.py              V6 : /api/nexus/think et /api/nexus/debate (le Nexus pense avec Gemini)
   tests/                unittest : nettoyage, API avec faux Gemini, comptes, Sparks, parité Python ↔ JS
 frontend/
   index.html            barre du haut, canvas, dock de saisie, inspecteur, réglages (Mode Focus)
@@ -366,6 +372,7 @@ node tools/perf_probe.mjs --base http://127.0.0.1:8001/           # fluidité (-
 node tools/bench_engram.mjs [--inline]                            # Engrammes : Worker ou fil de la carte, retard du pointeur
 node tools/bench_memory.mjs --assert                              # V5 : ouvrir/fermer des cartes ne laisse rien en mémoire
 node tools/e2e_nexus.mjs --base http://127.0.0.1:8001/frontend/   # V6 : Mode Nexus (--shots dossier : captures)
+node tools/e2e_nexus.mjs --base http://127.0.0.1:8004/ --server    # V6 : Nexus + serveur (compte d'essai, Gemini, Sparks)
 .venv/Scripts/python tools/e2e_server.py &                        # faux Gemini : génération et refactorisation
 node tools/e2e_canvas.mjs --base http://127.0.0.1:8003 --refactor
 node tools/e2e_pages_api.mjs --api http://127.0.0.1:8004          # GitHub Pages → API (serveur démo lancé)
