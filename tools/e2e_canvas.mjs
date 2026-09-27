@@ -373,14 +373,20 @@ async function main() {
 
     // ------------------------------------------------------------------ 7. Inspecteur : accent et export
     const titleBox = await stableBox(`.card[data-id="${c2.id}"] .card-title`);
+    // Journal des évènements du clic (diagnostic en cas d'échec).
+    await evaluate(`(() => { window.__clicks = []; for (const t of ["pointerdown", "pointerup", "click"]) addEventListener(t, (e) => {
+      const card = e.target.closest && e.target.closest(".card"); window.__clicks.push(t + ":" + e.target.tagName + (card ? "@" + card.dataset.id.slice(0, 8) : "")); }, true); })()`);
     await click(titleBox.cx, titleBox.cy);
     await waitFor(() => evaluate(`!document.getElementById("inspector").hidden`), "inspecteur").catch(async (err) => {
       // Diagnostic : ce qui se trouvait sous le clic (un toast, une pastille, une autre carte…).
       const under = await evaluate(`(() => { const e = document.elementFromPoint(${titleBox.cx}, ${titleBox.cy}); const t = document.getElementById("toast");
         const card = e && e.closest(".card");
         return (e ? e.tagName + "." + [...e.classList].join(".") + (card ? " dans la carte " + card.dataset.id : "") : "rien")
-          + " · toast : " + (t.hidden ? "caché" : t.textContent.slice(0, 90)); })()`).catch(() => "?");
-      throw new Error(`${err.message} (sous le clic en ${Math.round(titleBox.cx)}, ${Math.round(titleBox.cy)} : ${under})`);
+          + " · toast : " + (t.hidden ? "caché" : t.textContent.slice(0, 90))
+          + " · évènements : " + (window.__clicks || []).join(",")
+          + " · cartes " + document.querySelectorAll('.card[data-id="${c2.id}"]').length + " (" + [...(document.querySelector('.card[data-id="${c2.id}"]') || {}).classList || []].join(".") + ")"
+          + " · body : " + document.body.className + " · chat : " + (document.getElementById("chat") ? document.getElementById("chat").hidden : "-"); })()`).catch((e) => "? " + e.message);
+      throw new Error(`${err.message} (sous le clic en ${Math.round(titleBox.cx)}, ${Math.round(titleBox.cy)} : ${under} ; exceptions JS : ${pageErrors.slice(-3).join(" | ").slice(0, 600) || "aucune"})`);
     });
     check("clic sur la carte : inspecteur ouvert", (await evaluate(`document.getElementById("insp-title").textContent`)) === resized.title);
     // Fin réelle du glissement d'entrée du volet (sous charge, l'animation peut démarrer tard et
