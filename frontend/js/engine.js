@@ -178,11 +178,12 @@ export async function generate(request, signal) {
     if (request.widgetId) body.widget_id = request.widgetId;
     if (request.canvas?.length) body.canvas = request.canvas;
     if (request.dna && !request.widgetId) body.dna = request.dna;
+    if (request.ghost?.length && !request.widgetId) body.ghost = request.ghost;
     payload = await api("/api/generate", { method: "POST", body, signal });
   } else {
     const options = {
       key: readKey(), models: readModels(), file: request.file || null, baseHtml: request.baseHtml || null, canvas: request.canvas || null,
-      dna: request.dna || null,
+      dna: request.dna || null, ghost: request.ghost || null,
     };
     payload = await run("generate", { prompt: request.prompt, options }, { signal });
   }
@@ -204,6 +205,18 @@ export async function createEngram(person, signal) {
   return payload;
 }
 
+/**
+ * V5, « Singularité symbiotique » : deux Engrammes → un Hyper-Engramme → { engram, mode, model, sparks?, cost? }.
+ * Erreurs : ApiError code « fusion_invalid » (identiques, ancienne version), insufficient_sparks…
+ */
+export async function fuseEngrams(a, b, signal) {
+  await engineReady;
+  const payload = engine.kind === "server"
+    ? await api("/api/engram/fusion", { method: "POST", body: { a, b, language: "fr" }, signal })
+    : await run("engramFusion", { a, b, options: { key: readKey(), models: readModels(), language: "fr" } }, { signal });
+  if (!payload?.engram?.nodes?.length) throw new Error("réponse vide");
+  return payload;
+}
 /**
  * « Discuter avec … » : réponse à la première personne fondée sur l'Engramme → { reply, trace, mode, model, sparks?, cost? }.
  * history : [{ role: "user" | "persona", text }] ; trace : [{ id, why }] (les bulles qui ont guidé la réponse).

@@ -9,7 +9,7 @@
 // Usage : node tools/e2e_engram.mjs [--base URL] [--screenshot capture.png]
 //   Serveur (tools/e2e_server.py --demo) ou site statique (moteur navigateur, démo) : détecté.
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,6 +19,7 @@ const opt = (name) => { const i = argv.indexOf(`--${name}`); return i === -1 ? n
 const BASE = opt("base") || "http://127.0.0.1:8004";
 const SHOT = opt("screenshot");
 const SHOT_CHAT = opt("screenshot-chat"); // capture pendant la conversation (ronds de la logique écrits)
+const SHOT_FUSION = opt("screenshot-fusion"); // V5 : captures pendant puis après la fusion (…-intro.png, …-fin.png)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const BROWSER = [
   process.env.PRISM_BROWSER,
@@ -84,7 +85,7 @@ async function main() {
   const csvPath = join(work, "mesures.csv");
   writeFileSync(csvPath, "echantillon;activite\nA;12\nB;30\nC;7\n");
   const browser = spawn(BROWSER, ["--headless=new", "--remote-debugging-port=0", `--user-data-dir=${join(work, "profile")}`,
-    "--no-first-run", "--no-default-browser-check", "--window-size=1440,900", "--autoplay-policy=no-user-gesture-required",
+    "--no-first-run", "--disable-gpu-shader-disk-cache", "--no-default-browser-check", "--window-size=1440,900", "--autoplay-policy=no-user-gesture-required",
     "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
   const pageErrors = [];
   const consoleLines = []; // avertissements de la page (diagnostic)
@@ -117,7 +118,7 @@ async function main() {
         const d = msg.params.exceptionDetails;
         pageErrors.push(`${d.exception?.description || d.text} @${d.url || ""}:${d.lineNumber}`);
       }
-      if (msg.sessionId === S && msg.method === "Network.requestWillBeSent" && /\/api\/(generate|engram)$/.test(msg.params.request.url)) {
+      if (msg.sessionId === S && msg.method === "Network.requestWillBeSent" && /\/api\/(generate|engram(\/fusion)?)$/.test(msg.params.request.url)) {
         try { requests.push({ url: msg.params.request.url, body: JSON.parse(msg.params.request.postData || "{}") }); } catch { /* corps non JSON */ }
       }
     });
@@ -518,6 +519,202 @@ async function main() {
     await waitFor(async () => (await cardCount()) === total && allReady(), "cartes restaurées", 30000);
     const EF2 = await findFrame(`Boolean(window.__engram) && window.__engram.sim.nodes.length === 37`, "Engramme restauré");
     check("rechargement : Engramme restauré et vivant", Boolean(EF2), `${total} cartes`);
+
+    // ------------------------------------------------------------------ 11. V5 · Singularité symbiotique (fusion)
+    const sparksNow = async () => parseFloat((await evaluate(`document.getElementById("sparks-count").textContent`)).replace(",", "."));
+    await submit("Engramme : Ada Lovelace");
+    await waitFor(async () => (await cardCount()) === total + 1 && allReady(), "Engramme d'Ada Lovelace prêt", 30000);
+    await clickSel("#arrange"); // grille sans chevauchement, puis « Tout voir »
+    await sleep(900);
+    const ada = (await cards()).find((c) => c.title === "Engramme · Ada Lovelace");
+    const curieBox = await stableBox(`.card[data-id="${engramCard.id}"]`);
+    const adaBar = await stableBox(`.card[data-id="${ada.id}"] .card-title`);
+    const sparksFusion = serverMode ? await sparksNow() : 0;
+    await mouse("mouseMoved", adaBar.cx, adaBar.cy);
+    await mouse("mousePressed", adaBar.cx, adaBar.cy);
+    const [tx, ty] = [curieBox.cx, curieBox.cy];
+    for (let i = 1; i <= 14; i++) {
+      await mouse("mouseMoved", adaBar.cx + ((tx - adaBar.cx) * i) / 14, adaBar.cy + ((ty - adaBar.cy) * i) / 14, { buttons: 1 });
+      await sleep(25);
+    }
+    const highlighted = await evaluate(`document.querySelector('.card[data-id="${engramCard.id}"]').classList.contains("is-fusion-target")`);
+    await mouse("mouseReleased", tx, ty);
+    const fusionOffer = await waitFor(() => evaluate(`(() => { const t = document.getElementById("toast"); const b = t.querySelector("button");
+      return !t.hidden && b && b.textContent.startsWith("Fusionner") ? { text: t.textContent, button: b.textContent } : null; })()`), "fusion proposée", 5000);
+    await sleep(600); // retour de la carte à sa place
+    const adaAfter = (await cards()).find((c) => c.id === ada.id);
+    check("glisser un Engramme sur un autre : cible surlignée, fusion proposée, carte revenue à sa place",
+      highlighted && fusionOffer.text.includes("Ada Lovelace et Marie Curie") && adaAfter.left === ada.left && adaAfter.top === ada.top && !(await evaluate(`Boolean(document.querySelector(".is-fusion-target"))`)),
+      `${fusionOffer.button} · ${ada.left},${ada.top} → ${adaAfter.left},${adaAfter.top}`);
+    if (serverMode) check("fusion : prix affiché, rien débité avant l'accord", fusionOffer.button === "Fusionner (3 Sparks)" && (await sparksNow()) === sparksFusion, fusionOffer.button);
+    const beforeFusion = await cardCount();
+    await clickSel("#toast button");
+    await waitFor(async () => (await cardCount()) === beforeFusion + 1 && allReady(), "Hyper-Engramme prêt", 30000);
+    const hyperCard = (await cards()).find((c) => c.title.startsWith("Hyper-Engramme"));
+    const HF = await findFrame(`Boolean(window.__engram) && Array.isArray(window.__engram.data.parents)`, "document de l'Hyper-Engramme");
+    const shotFusion = async (suffix) => {
+      if (!SHOT_FUSION) return;
+      const { data } = await cdp.send("Page.captureScreenshot", { format: "png" }, S);
+      writeFileSync(SHOT_FUSION.replace(/\.png$/i, "") + `-${suffix}.png`, Buffer.from(data, "base64"));
+    };
+    await shotFusion("intro");
+    const early = await evaluate(`({ fusion: window.__engram.state().fusion, fusing: document.getElementById("stage").classList.contains("is-fusing"),
+      kicker: document.querySelector('[data-t="kicker"]').textContent, parents: window.__engram.data.parents })`, HF);
+    check("Hyper-Engramme : titre, parents, libellé", hyperCard?.title === "Hyper-Engramme · Ada Lovelace × Marie Curie" && early.kicker.startsWith("Hyper-Engramme")
+      && early.parents.join(" + ") === "Ada Lovelace + Marie Curie", `${hyperCard?.title} · ${early.kicker}`);
+    check("fusion jouée : attraction des noyaux, ombres en glitch pendant l'introduction", early.fusion !== null && (early.fusion >= 1 || early.fusing),
+      `avancement ${early.fusion} · glitch ${early.fusing}`);
+    const settled = await waitFor(() => evaluate(`window.__engram.state().fusion === 1 && !document.getElementById("stage").classList.contains("is-fusing")`, HF), "fin de la fusion", 8000).catch(() => false);
+    if (SHOT_FUSION) {
+      await sleep(2500);
+      await shotFusion("fin");
+    }
+    const lineage = await evaluate(`(() => { const n = window.__engram.data.nodes; const only = (k) => n.filter((x) => x.sources && x.sources.length === 1 && x.sources[0] === k).length;
+      return { total: n.length, a: only("a"), b: only("b"), both: n.filter((x) => x.sources && x.sources.length === 2).length,
+        artifacts: n.filter((x) => x.category === "artifact").length, seen: localStorage.getItem("prism:fusion-seen") }; })()`, HF);
+    check("Hyper-Engramme : bulles des deux vies (provenance), 10 évènements, intro jouée une fois", settled && lineage.total >= 36 && lineage.a > 0 && lineage.b > 0
+      && lineage.artifacts === 10 && lineage.seen === "1", JSON.stringify(lineage));
+    if (serverMode) {
+      const req = requests.filter((r) => r.url.endsWith("/api/engram/fusion")).at(-1);
+      check("POST /api/engram/fusion (JSON complet des deux Engrammes), 3 Sparks", req?.body.a?.person === "Ada Lovelace" && req.body.b?.person === "Marie Curie"
+        && req.body.a.nodes.length === 37 && Math.abs(sparksFusion - (await sparksNow()) - 3) < 0.05, `${req?.body.a?.nodes?.length} + ${req?.body.b?.nodes?.length} bulles`);
+    }
+
+    // ------------------------------------------------------------------ 12. V5 · Darwinisme d'interface (confusion)
+    await clickSel("#zoom-fit"); // tout à l'écran : la vue a suivi l'Hyper-Engramme
+    await sleep(900);
+    /** Widgets prêts (hors Engrammes) dont le centre de l'iframe est visible et libre. */
+    const visibleWidgets = () => evaluate(`[...document.querySelectorAll(".card")].map((c) => {
+      const title = c.querySelector(".card-title").textContent;
+      const f = c.querySelector("iframe.card-frame");
+      if (!f || /^(Hyper-)?Engramme/.test(title) || c.dataset.state !== "ready") return null;
+      const r = f.getBoundingClientRect();
+      const [cx, cy] = [r.left + r.width / 2, r.top + r.height / 2];
+      return r.width > 150 && document.elementFromPoint(cx, cy) === f ? { id: c.dataset.id, title, cx, cy, meta: c.querySelector(".card-meta").textContent } : null;
+    }).filter(Boolean)`);
+    // Inspecteur fermé pendant les cercles : son verre flouté au-dessus des Engrammes animés sature le rendu
+    // logiciel de Chrome headless et espacerait les évènements du pointeur.
+    // Zoom (Ctrl + molette) sur le widget : les Engrammes animés sortent de l'écran, où Chrome bride leurs iframes.
+    const [aimed] = await visibleWidgets();
+    for (let i = 0; i < 12; i++) {
+      const w = await evaluate(`document.querySelector('.card[data-id="${aimed.id}"]').getBoundingClientRect().width`);
+      if (w > 560) break;
+      const at = await evaluate(`(() => { const r = document.querySelector('.card[data-id="${aimed.id}"] .card-bar').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+      await cdp.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: at.x, y: at.y, deltaX: 0, deltaY: -240, modifiers: 2 }, S);
+      await sleep(120);
+    }
+    await sleep(600);
+    const widget = (await visibleWidgets()).find((w) => w.id === aimed.id) || (await visibleWidgets())[0];
+    const withModel = !widget.meta.includes("Démo");
+    const requestsBefore = requests.length;
+    // Journal des messages (toasts) de la suite du scénario.
+    await evaluate(`(() => { window.__toasts = []; const t = document.getElementById("toast");
+      new MutationObserver(() => { if (!t.hidden && window.__toasts.at(-1) !== t.textContent) window.__toasts.push(t.textContent); })
+        .observe(t, { childList: true, subtree: true, characterData: true, attributes: true }); })()`);
+    // Cercles au pointeur (sans clic) jusqu'au verdict, 14 s au plus : une machine chargée peut couper la série.
+    // Sujets émis par la carte, tels qu'enregistrés (IndexedDB) : la preuve de l'émission sans ouvrir l'inspecteur.
+    const confusionOf = `new Promise((resolve) => {
+      const chip = document.querySelector('.card[data-id="${widget.id}"] .card-evolve');
+      const out = { chip: chip ? chip.textContent : "", verdict: chip ? { ...chip.dataset } : null, bus: "" };
+      const open = indexedDB.open("prism");
+      open.onerror = () => resolve(out);
+      open.onsuccess = () => {
+        const get = open.result.transaction("cards").objectStore("cards").get("${widget.id}");
+        get.onsuccess = () => { out.bus = ((get.result && get.result.topics && get.result.topics.emits) || []).join(" "); open.result.close(); resolve(out); };
+        get.onerror = () => { open.result.close(); resolve(out); };
+      };
+    })`;
+    // Diagnostic : messages « pointer » reçus du widget, rejoués ensuite dans analyzePointer.
+    await evaluate(`(() => { window.__ptr = []; const f = document.querySelector('.card[data-id="${widget.id}"] iframe.card-frame');
+      addEventListener("message", (e) => { if (e.source === f.contentWindow && e.data && e.data.prism === "pointer") window.__ptr.push({ t: e.data.t, x: e.data.x, y: e.data.y, at: Date.now() }); }); })()`);
+    const fps = await evaluate(`new Promise((res) => { let n = 0; const t0 = performance.now(); const f = () => { n++; performance.now() - t0 < 1000 ? requestAnimationFrame(f) : res(n); }; requestAnimationFrame(f); })`);
+    const lat = [];
+    const t0Circles = Date.now();
+    let watch = { chip: "", bus: "" };
+    let seenAfter = 0;
+    const settledConfusion = (v) => (withModel ? v.chip : v.bus.includes("prism.ux.confusion"));
+    for (let i = 0; Date.now() - t0Circles < 14000 && !settledConfusion(watch); i++) {
+      const a = ((Date.now() - t0Circles) / 1000) * 0.7 * 2 * Math.PI;
+      const tSend = Date.now();
+      await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: widget.cx + 45 * Math.cos(a), y: widget.cy + 45 * Math.sin(a), button: "none", buttons: 0 }, S);
+      lat.push(Date.now() - tSend);
+      await sleep(20);
+      if (i % 15 === 0 && settledConfusion((watch = await evaluate(confusionOf)))) seenAfter = Date.now() - t0Circles;
+    }
+    await sleep(1200); // une éventuelle pastille (avec modèle) a le temps d'apparaître
+    watch = await evaluate(confusionOf);
+    // Visible pour l'utilisateur : le sujet figure dans le bus de la carte (inspecteur).
+    await evaluate(`document.querySelector('.card[data-id="${widget.id}"] [data-action="inspect"]').click()`);
+    const busRow = await waitFor(() => evaluate(`(() => { const t = document.getElementById("bus-topics").textContent; return t.includes("prism.ux.confusion") ? t : null; })()`),
+      "sujet dans l'inspecteur", 3000).catch(() => "");
+    const tooSoon = seenAfter && seenAfter < 5000 ? ` (trop tôt : ${seenAfter} ms)` : "";
+    check("pointeur en rond 5 s sans clic : confusion repérée, sujet prism.ux.confusion émis sur le bus", watch.bus.includes("prism.ux.confusion") && busRow.includes("prism.ux.confusion") && !tooSoon,
+      `${widget.title} : après ${(seenAfter / 1000).toFixed(1)} s${tooSoon}` + (watch.bus.includes("prism.ux.confusion") ? "" : ` — diagnostic ${await evaluate(`(async () => {
+        const { analyzePointer } = await import("./js/confusion.js");
+        const p = window.__ptr; const card = document.querySelector('.card[data-id="${widget.id}"]');
+        const gaps = p.slice(1).map((q, i) => q.t - p[i].t);
+        return JSON.stringify({ fps: ${fps}, dispatch: "${lat.length} envois, moy. ${Math.round(lat.reduce((a, b) => a + b, 0) / Math.max(1, lat.length))} ms, max ${Math.max(0, ...lat)} ms", messages: p.length, state: card.dataset.state, frame: card.querySelector(".card-body").dataset.frame, maxGap: Math.max(0, ...gaps),
+          verdict: p.length ? analyzePointer(p.map(({ t, x, y }) => ({ t, x, y })), [], p[p.length - 1].t) : null, bus: document.getElementById("bus-topics").textContent.slice(0, 80) });
+      })()`)}`));
+    if (!withModel) {
+      check("mode démo : aucune simplification proposée (impossible sans modèle), rien dépensé", !watch.chip && requests.length === requestsBefore, watch.chip || "aucune pastille");
+    } else {
+      check("« Simplifier ? » proposé avec son prix, rien dépensé avant l'accord", watch.chip.includes("Simplifier") && requests.length === requestsBefore
+        && (!serverMode || watch.chip.includes("0,5 Spark")), `${watch.chip} · ${JSON.stringify(watch.verdict)}`);
+      await clickSel(`.card[data-id="${widget.id}"] .card-evolve-go`);
+      const simplifyState = `(() => { const t = document.getElementById("toast"); const c = document.querySelector('.card[data-id="${widget.id}"]');
+        return { toast: t.hidden ? "" : t.textContent, state: c && c.dataset.state }; })()`;
+      const simplified = await waitFor(async () => { const v = await evaluate(simplifyState); return v.toast.includes("simplifiée") && /ready|warn/.test(v.state) ? v : null; },
+        "widget simplifié", 30000).catch(async () => evaluate(simplifyState));
+      const simplifyReq = requests.slice(requestsBefore).find((r) => r.url.endsWith("/api/generate"));
+      check("« Simplifier » : refactorisation « simplifier l'UX » de la carte, annulable", simplified.toast.includes("simplifiée") && simplified.toast.includes("Annuler")
+        && (!serverMode || (/^Simplifie l'expérience/.test(simplifyReq?.body.prompt || "") && Boolean(simplifyReq.body.widget_id))),
+        `${simplified.toast} (${simplified.state}) · toasts ${await evaluate(`JSON.stringify(window.__toasts)`)}`);
+    }
+    await evaluate(`document.getElementById("insp-close").click()`);
+    await clickSel("#zoom-fit");
+    await sleep(900);
+
+    // ------------------------------------------------------------------ 13. V5 · Sédimentation (dissoudre, contexte fantôme)
+    const victim = (await visibleWidgets()).find((w) => w.id !== widget.id); // visible : son sédiment sera à l'écran
+    await evaluate(`document.querySelector('.card[data-id="${victim.id}"] [data-action="inspect"]').click()`);
+    await waitFor(() => evaluate(`!document.getElementById("inspector").hidden`), "inspecteur", 5000);
+    await clickSel("#dissolve-card");
+    const shattered = await waitFor(() => evaluate(`Boolean(document.querySelector("canvas.shatter"))`), "particules", 2000).catch(() => false);
+    await waitFor(async () => !(await cards()).some((c) => c.id === victim.id), "carte dissoute", 6000);
+    const sediment = await evaluate(`(() => { const s = JSON.parse(localStorage.getItem("prism:sediments") || "[]").find((x) => x.id === "${victim.id}");
+      return { s, dot: Boolean(document.querySelector('#world .sediment[data-id="${victim.id}"]')), toast: document.getElementById("toast").textContent,
+        particles: Boolean(document.querySelector("canvas.shatter")) }; })()`);
+    check("« Dissoudre » : particules, sédiment incrusté dans le fond, mots-clés gardés", shattered && sediment.dot && !sediment.particles
+      && sediment.s?.words.length > 0 && sediment.toast.includes("dissoute"), `${victim.title} → ${sediment.s?.words.join(", ")} (case ${sediment.s?.cell})`);
+    // Une incantation au même endroit : la nouvelle carte reçoit le contexte fantôme de la zone.
+    await evaluate(`document.activeElement && document.activeElement.blur(); window.__fakeSpeech = "Crée une liste de courses"`);
+    const dot = await box(`#world .sediment[data-id="${victim.id}"]`); // le sédiment : au centre de la carte dissoute
+    const spot = { x: dot.cx, y: dot.cy };
+    await mouse("mouseMoved", spot.x, spot.y);
+    const beforeGhost = await cardCount();
+    const requestsGhost = requests.length;
+    await key("keyDown", { ...SPACE, text: " " });
+    await waitFor(() => evaluate(`!document.getElementById("incantation").hidden`), "orbe d'incantation", 3000);
+    for (let i = 0; i < 6; i++) {
+      await key("keyDown", { ...SPACE, text: " ", autoRepeat: true });
+      await sleep(60);
+    }
+    await waitFor(() => evaluate(`document.querySelector("#incantation .inc-text").textContent.includes("courses")`), "transcription", 3000);
+    const viewGhost = await worldOf();
+    await key("keyUp", SPACE);
+    await waitFor(async () => (await cardCount()) === beforeGhost + 1 && allReady(), "carte née sur le sédiment", 30000);
+    const heir = (await cards()).at(-1);
+    await evaluate(`document.querySelector('.card[data-id="${heir.id}"] [data-action="inspect"]').click()`);
+    const ghostLine = await waitFor(() => evaluate(`(() => { const g = document.getElementById("insp-ghost"); return !g.hidden ? g.textContent : null; })()`), "contexte sédimenté dans l'inspecteur", 5000)
+      .catch(async () => `(rien) — carte ${heir.title} centrée en ${Math.round(heir.left + heir.w / 2)},${Math.round(heir.top + heir.h / 2)} ; sédiment ${sediment.s.x},${sediment.s.y}`
+        + ` ; point ${Math.round(spot.x)},${Math.round(spot.y)} → monde ${Math.round((spot.x - viewGhost.left - viewGhost.x) / viewGhost.z)},${Math.round((spot.y - viewGhost.top - viewGhost.y) / viewGhost.z)}`
+        + ` ; cartes ${JSON.stringify((await cards()).map((c) => [c.title.slice(0, 14), Math.round(c.left + c.w / 2), Math.round(c.top + c.h / 2)]))}`);
+    const ghostReq = requests.slice(requestsGhost).find((r) => r.url.endsWith("/api/generate"));
+    const uses = await evaluate(`JSON.parse(localStorage.getItem("prism:sediments") || "[]").find((x) => x.id === "${victim.id}")?.uses`);
+    check("génération au même endroit : contexte fantôme envoyé et visible dans l'inspecteur", sediment.s.words.every((w) => ghostLine.includes(w)) && uses === 1
+      && (!serverMode || JSON.stringify(ghostReq?.body.ghost) === JSON.stringify(sediment.s.words)), ghostLine);
+    await evaluate(`document.getElementById("insp-close").click()`);
     if (serverMode) {
       // Bouton « Tester » : compte d'essai immédiat, sans e-mail, utilisable comme un vrai compte.
       await evaluate(`document.getElementById("btn-logout").click()`);
@@ -535,9 +732,14 @@ async function main() {
     }
     check("aucune erreur JavaScript dans la page", pageErrors.length === 0, pageErrors.join(" | ").slice(0, 300));
   } finally {
-    browser.kill();
-    await sleep(300);
-    try { rmSync(work, { recursive: true, force: true }); } catch { /* profil encore verrouillé */ }
+    // Profil Chrome jetable : attendre la fin du navigateur (ses processus verrouillent le dossier sous Windows),
+    // puis supprimer en plusieurs essais ; un reste est signalé, jamais ignoré (des centaines de Mo par passage).
+    const exited = browser.exitCode !== null ? Promise.resolve() : new Promise((resolve) => browser.once("exit", resolve));
+    // Windows : kill() n'arrête que le processus principal, ses enfants (rendu, GPU) gardent le profil ouvert.
+    if (process.platform === "win32") spawnSync("taskkill", ["/PID", String(browser.pid), "/T", "/F"], { stdio: "ignore" });
+    else browser.kill();
+    await Promise.race([exited, sleep(5000)]);
+    try { rmSync(work, { recursive: true, force: true, maxRetries: 20, retryDelay: 400 }); } catch (err) { console.warn(`Profil temporaire non supprimé : ${work} (${err.code || err.message})`); }
   }
 }
 

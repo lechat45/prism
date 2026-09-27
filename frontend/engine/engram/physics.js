@@ -17,6 +17,9 @@
  *   les moteurs ondulent doucement ; les ombres sont erratiques (bruit lissé, sursauts), se repoussent et
  *   fuient le pointeur, puis regagnent leur place ; les artefacts, satellites vifs, décrivent de petits
  *   épicycles autour de leur place. La bulle survolée s'arrête et grossit.
+ * FUSION (V5, options.fusion) : les bulles héritées de chaque parent (data.sources) partent de leur côté ;
+ *   une gravité qui croît comme le cube du temps les précipite vers leurs places ; pendant ces secondes, les
+ *   ombres ne se repoussent presque plus : elles entrent en collision (le rendu les fait glitcher), puis tout se range.
  */
 (function (root, factory) {
   const api = factory();
@@ -48,6 +51,7 @@
   };
   const PLACEMENT = ["artifact", "heart", "engine", "shadow"]; // les évènements d'abord : ils ancrent le reste
   const DRIFT = 0.035; // rad/s : rotation commune de tout l'Engramme (un tour en trois minutes)
+  const INTRO = 3.2; // s : durée de la fusion (attraction, collisions), puis mouvement ordinaire
   const EDGE = 26; // marge entre l'anneau extérieur et les bords
   const REPULSION = 2600; // entre deux bulles quelconques (px³/s²), courte portée
   const SHADOW_REPULSION = 14000; // entre ombres : elles ne se mélangent pas
@@ -138,6 +142,7 @@
     let hoverId = null;
     let time = 0;
     let acc = 0;
+    const fusion = Boolean(options.fusion);
 
     const center = () => ({ x: width / 2, y: height / 2 });
     /** Rayon de l'ellipse inscrite (demi-axes : demi-zone moins la marge) dans la direction (ux, uy). */
@@ -203,17 +208,27 @@
       return [x, y];
     }
 
-    // Départ : chaque bulle à sa place, à quelques pixels près (le mouvement naît organiquement).
+    // Départ : chaque bulle à sa place, à quelques pixels près (le mouvement naît organiquement) ; en fusion,
+    // chaque bulle part du côté de son parent (A à gauche, B à droite, les deux : en haut).
     for (const n of nodes) {
       if (n === core) {
         n.x = width / 2;
         n.y = height / 2;
         continue;
       }
+      if (fusion) {
+        const sources = Array.isArray(n.data.sources) ? n.data.sources : [];
+        const side = sources.length === 1 ? (sources[0] === "a" ? 0.16 : 0.84) : 0.5;
+        n.x = width * side + (random() - 0.5) * width * 0.16;
+        n.y = height * (side === 0.5 ? 0.18 : 0.5) + (random() - 0.5) * height * 0.3;
+        continue;
+      }
       const [x, y] = target(n);
       n.x = x + (random() - 0.5) * 12;
       n.y = y + (random() - 0.5) * 12;
     }
+    /** 0 → 1 pendant la fusion (null hors fusion). */
+    const progress = () => (fusion ? Math.min(1, time / INTRO) : null);
 
     function step(dt) {
       time += dt;
@@ -227,10 +242,11 @@
           ay[i] = (cc.y - n.y) * 40;
           continue;
         }
-        // Ressort vers la place logique (qui tourne avec tout l'Engramme).
+        // Ressort vers la place logique (qui tourne avec tout l'Engramme) ; en fusion, gravité croissante.
         const [tx, ty] = target(n);
-        ax[i] = n.p.k * (tx - n.x);
-        ay[i] = n.p.k * (ty - n.y);
+        const pull = fusion && time < INTRO ? 0.04 + 3 * Math.pow(time / INTRO, 3) : 1;
+        ax[i] = n.p.k * pull * (tx - n.x);
+        ay[i] = n.p.k * pull * (ty - n.y);
         // Ombres : bruit lissé asynchrone.
         if (n.p.noise) {
           ax[i] += Math.sin(time * n.w1 + n.phase) * n.p.noise;
@@ -249,7 +265,8 @@
           if (d2 > REPULSION_RANGE * REPULSION_RANGE) continue;
           const d = Math.sqrt(d2) || 0.01;
           const contact = Math.max(d - (a.r + b.r) * 0.9, 4);
-          const strength = (a.category === "shadow" && b.category === "shadow" ? SHADOW_REPULSION : REPULSION) / (contact * contact) * 40;
+          const clash = fusion && time < INTRO ? 0.08 : 1; // fusion : les ombres se heurtent au lieu de s'éviter
+          const strength = (a.category === "shadow" && b.category === "shadow" ? SHADOW_REPULSION * clash : REPULSION) / (contact * contact) * 40;
           const fx = (dx / d) * strength;
           const fy = (dy / d) * strength;
           ax[i] -= fx / a.p.mass;
@@ -309,6 +326,8 @@
       nodes,
       links,
       get time() { return time; },
+      /** Avancement de la fusion (0 → 1), null hors fusion. */
+      get fusion() { return progress(); },
       /** Avance de dt secondes (pas fixes internes). */
       advance(dt) {
         acc += Math.min(Math.max(dt, 0), MAX_FRAME);
@@ -364,5 +383,5 @@
     };
   }
 
-  return { createSimulation, computeSlots, PHYSICS, AROUSAL, DRIFT, rng };
+  return { createSimulation, computeSlots, PHYSICS, AROUSAL, DRIFT, INTRO, rng };
 });

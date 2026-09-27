@@ -28,10 +28,27 @@ const templates = {
   refactor: read("engine/refactor-template.txt").trim(),
   canvas: read("engine/canvas-template.txt").trim(),
   dna: read("engine/dna-template.txt").trim(),
+  ghost: read("engine/ghost-template.txt").trim(),
 };
 const demo = JSON.parse(read("engine/engram/demo-marie-curie.json"));
 const engramTemplate = read("engine/engram/user-template.txt");
 const chatTemplate = read("engine/engram/chat-template.txt");
+const fusionTemplate = read("engine/engram/fusion-template.txt");
+
+function fusionResults(c) {
+  let a;
+  let b;
+  try {
+    [a, b] = E.fusionParents(patched(c.a), patched(c.b));
+  } catch (err) {
+    if (err.name === "FusionError") return { error: "FusionError" };
+    throw err;
+  }
+  const events = E.fusionEvents(a, b);
+  const out = { events, message: E.buildFusionMessage(fusionTemplate, a, b, events, "fr"), demo: E.demoFusion(a, b) };
+  if (c.raw !== null && c.raw !== undefined) out.finished = outcome(() => E.finishFusion(clone(c.raw), a, b, E.fusionEvents(a, b)));
+  return out;
+}
 const clone = (value) => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)));
 
 // Démo de l'Engramme modifiée par les opérations du cas (même algorithme que test_parity.py).
@@ -72,10 +89,11 @@ async function runFixtures() {
     series: fixtures.series.map((c) => L.extractSeries(c.prompt, manifest)),
     renders: await Promise.all(fixtures.render.map(mockHtml)),
     mock_renders: await Promise.all(fixtures.routing.map(mockHtml)),
-    messages: fixtures.messages.map((c) => L.buildUserMessage(c.prompt, c.file || null, c.base_html || null, templates, c.canvas || null, c.dna || null)),
+    messages: fixtures.messages.map((c) => L.buildUserMessage(c.prompt, c.file || null, c.base_html || null, templates, c.canvas || null, c.dna || null, c.ghost || null)),
     engram: fixtures.engram.map((c) => outcome(() => E.normalize(patched(c)))),
     engram_parse: fixtures.engram_parse.map((t) => outcome(() => E.parse(t))),
     engram_messages: fixtures.engram_messages.map((c) => E.buildUserMessage(engramTemplate, c.person, c.language)),
+    engram_fusion: fixtures.engram_fusion.map(fusionResults),
     engram_chat: fixtures.engram_chat.map((c) => {
       const source = c.engram === "demo" ? clone(demo) : c.engram;
       return {

@@ -140,19 +140,57 @@ ADN, base et source, date et impact, palette, mots-clés).
   conversation, les mêmes ronds, cliquables pour rejouer la logique. Sans modèle, une réponse de démonstration honnête
   désigne les bulles qui guideraient la réponse.
 
-## 5. Architecture technique
+## 5. L'écosystème vivant (V5)
+
+### 5.1 Fusionner deux esprits : l'Hyper-Engramme
+
+On glisse un Engramme, par sa barre de titre, sur un autre : la cible s'illumine ; au lâcher, la carte revient à sa place
+et Prism propose la fusion, avec son prix (3 Sparks) — rien n'est dépensé sans ce clic. Le serveur (ou le moteur du
+navigateur, même code) envoie à Gemini **le JSON complet des deux Engrammes** et un schéma de réponse imposé. Le modèle
+synthétise un noyau, un caractère, des émotions, des moteurs et des ombres hybrides (qui s'amplifient, s'annulent ou
+créent un paradoxe) ; il ne peut rien inventer de factuel : les évènements sont ceux des deux vies (les cinq plus
+marquants de chacune, signés du nom de leur personne) et toute bulle nouvelle est marquée comme interprétation. Chaque
+bulle porte sa **provenance** (`sources` : A, B ou les deux), visible dans sa fiche.
+
+La carte « Hyper-Engramme · A × B » joue la fusion à sa première ouverture : deux noyaux fantômes, à gauche et à droite,
+sont précipités l'un vers l'autre par une gravité qui croît comme le cube du temps ; les bulles de chaque vie partent de
+leur côté ; les ombres, qui d'ordinaire s'évitent, se heurtent et glitchent (toile secouée, couleurs décalées) ; un
+éclair, puis tout se range en 3,2 s. Ensuite, c'est un Engramme comme les autres.
+
+### 5.2 Darwinisme d'interface
+
+Chaque widget signale déjà la position du pointeur (pour les reflets) ; elle est maintenant horodatée. La page en garde
+quelques secondes par carte et le **Web Worker** calcule vitesse, hésitation, zone parcourue et tours autour d'un point.
+Plus de 5 secondes de mouvement continu sans clic, à tourner en rond (deux tours, ou 1 500 px dans une zone de 260 px) :
+Prism émet `prism.ux.confusion` sur le bus (les autres widgets peuvent y réagir), puis pose sur la carte « Vous cherchez
+quelque chose ? Simplifier (0,5 Spark) ». Un clic refactorise le widget avec une consigne « simplifier l'UX » (action
+principale évidente, moins de contrôles visibles, une phrase d'aide), annulable. Aucune position ne quitte l'appareil,
+aucune dépense sans accord : le mode automatique est un choix explicite (Paramètres → Écosystème), limité à trois
+simplifications par 24 heures, chacune annulable.
+
+### 5.3 Sédimentation
+
+« Dissoudre », dans l'inspecteur, brise la carte en particules qui s'enfoncent dans le fond du canvas ; un sédiment reste
+incrusté à cet endroit, avec les mots-clés de la carte. Le canvas est découpé en cases de 480 px : un widget créé plus
+tard dans la même case reçoit ces mots comme **contexte fantôme**, qu'il peut glisser subtilement (un ton, un exemple,
+un libellé) sans changer ce qu'on lui demande. Ce contexte n'est jamais caché : il s'affiche pendant la génération et
+dans l'inspecteur de la carte produite, et se désactive ou s'efface dans les Paramètres. Chaque case sert trois fois,
+puis ses sédiments s'effacent.
+
+## 6. Architecture technique
 
 ```
 frontend/  (site statique : GitHub Pages, ou servi par l'API)
   index.html, style.css            interface « Liquid Glass » (CSS pur)
   js/                               modules : canvas, cartes, sandbox, bus, Hub, Spotlight, compte, Engramme,
-                                    conversation (chat.js), voix (voice.js), paramètres (prefs.js), Web Worker
+                                    conversation (chat.js), voix (voice.js), paramètres (prefs.js), Web Worker ;
+                                    V5 : confusion.js (pointeur), sediment.js (sédiments), ecosystem.js (réglages)
   engine/                           partagé par les deux moteurs : prompts, gabarits, schémas, validation JS,
                                     moteur navigateur (local.js) ; engram/ : Engramme (schéma, prompts, validation,
-                                    physique, document de carte, démo Marie Curie)
+                                    fusion, physique, document de carte, démos Marie Curie et Ada Lovelace)
 backend/   (FastAPI, Python 3.13)
   app.py        génération, santé, CORS, en-têtes de sécurité, garde-fous de production
-  engram.py     Engramme et conversation      auth.py   comptes, sessions JWT, compte d'essai
+  engram.py     Engramme, conversation, fusion      auth.py   comptes, sessions JWT, compte d'essai
   billing.py    Sparks (réservation, confirmation, remboursement, grand livre)
   widgets.py    Mon Hub      providers.py   Gemini (clés en tourniquet, relais) et Groq en secours
   db.py, models.py   SQLAlchemy : SQLite en local, PostgreSQL (Neon) en production
@@ -162,12 +200,12 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
 - **Déploiement** : API + frontend sur **Render** (image Docker, offre gratuite, déploiement seulement après une CI
   verte), base **PostgreSQL sur Neon**, site public sur **GitHub Pages** (branche `v3`) branché sur l'API par la balise
   `<meta name="prism-api">`. Secrets (clés Gemini, base, secret de session) uniquement dans le tableau de bord de Render.
-- **Qualité** : 128 tests Python (sur SQLite et PostgreSQL), 72 tests Node, parité Python ↔ navigateur sur des cas
+- **Qualité** : 135 tests Python (sur SQLite et PostgreSQL), 81 tests Node, parité Python ↔ navigateur sur des cas
   partagés, six scénarios E2E dans Chrome (site statique, serveur de démo, faux Gemini, GitHub Pages → API, Engramme en
   mode serveur et statique), contrôle de l'image Docker ; tout est rejoué par la CI GitHub à chaque envoi. Aucun test ne
   touche la production.
 
-## 6. Historique
+## 7. Historique
 
 | Version | Apport |
 | --- | --- |
@@ -179,8 +217,10 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
 | alpha.4 | « Discuter avec … », ronds de la logique, mouvement logique, personnes dans Mon Hub |
 | alpha.5 – alpha.6 | version affichée, Paramètres |
 | alpha.7 | mise en ligne réelle (Render + Neon), bouton « Tester » (compte d'essai), ce document |
+| 5.0.0-alpha.1 | V5 « Écosystème vivant » : route de fusion d'Engrammes (serveur) |
+| alpha.2 | fusion par glisser-déposer et Hyper-Engramme animé, darwinisme d'interface, sédimentation, Paramètres → Écosystème |
 
-## 7. Limites connues
+## 8. Limites connues
 
 - Quand Google est saturé, les longues générations (Engramme) passent par le modèle « lite », moins riche ; un
   Engramme prend de 25 s à 1 min 30.

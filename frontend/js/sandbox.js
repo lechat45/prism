@@ -276,14 +276,15 @@ function prelude(snapshot) {
       html: String(copy.outerHTML || "").slice(0, 3000)
     });
   }, true);
-  // Position du pointeur au-dessus du widget (reflets des bords de sa carte), ~30 fois/s au plus,
-  // jamais bouton enfoncé : pendant un clic ou un glisser, la page ne repeint rien sous l'iframe.
+  // Position du pointeur au-dessus du widget (reflets des bords de sa carte ; V5 : repérage de la confusion,
+  // d'où l'instant du mouvement), ~30 fois/s au plus, jamais bouton enfoncé : pendant un clic ou un glisser,
+  // la page ne repeint rien sous l'iframe.
   var lastPointer = 0;
   window.addEventListener("pointermove", function (e) {
     var now = Date.now();
     if (e.buttons || now - lastPointer < 33) return;
     lastPointer = now;
-    send("pointer", { x: e.clientX, y: e.clientY });
+    send("pointer", { x: e.clientX, y: e.clientY, t: now });
   }, { passive: true, capture: true });
 })();`;
 }

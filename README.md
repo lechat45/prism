@@ -28,6 +28,9 @@ personne : **[PROJET.md](PROJET.md)**
 | **Zoom fractal** (V4) | double-clic sur une partie d'un widget : Prism propose d'en faire un widget complet, qui émerge du point cliqué |
 | **Paramètres** | roue dentée : compte et solde, « Mes écrits » (conversations, demandes, export JSON), moteur et clés, version |
 | **Incantation** (V4) | maintenir Espace et parler : la demande dictée devient une carte sous le pointeur ; pendant l'écoute, le **verre organique** respire avec la voix |
+| **Hyper-Engramme** (V5) | glisser un Engramme sur un autre : fusion des deux esprits (noyaux attirés, ombres en collision), chaque bulle garde sa provenance |
+| **Darwinisme d'interface** (V5) | un pointeur qui tourne en rond sur un widget : Prism propose de le simplifier (jamais de dépense sans votre clic) |
+| **Sédimentation** (V5) | « Dissoudre » brise une carte en particules ; ses mots-clés restent dans le sol et nourrissent, visiblement, les widgets créés au même endroit |
 
 ## Deux façons de l'utiliser
 
@@ -219,7 +222,28 @@ son caractère et ses émotions.
 - **Verre organique** : pendant l'écoute, le volume du micro (AudioContext + AnalyserNode) module le flou et la
   saturation du verre et la taille de l'orbe. Uniquement pendant l'incantation : aucun repeint continu au-dessus
   des widgets. Le micro est réservé à la page (`Permissions-Policy: microphone=(self)`), jamais aux widgets.
-- Coût en mode serveur : **2 Sparks** par Engramme ; sans clé (démo), l'Engramme d'exemple de Marie Curie.
+- Coût en mode serveur : **2 Sparks** par Engramme ; sans clé (démo), les Engrammes d'exemple de Marie Curie et
+  d'Ada Lovelace.
+
+## Prism V5 « Écosystème vivant »
+
+Le canvas devient un milieu : les cartes fusionnent, s'adaptent à ceux qui les utilisent et laissent une trace.
+
+- **Singularité symbiotique** : un Engramme glissé (par sa barre) sur un autre surligne la cible ; au lâcher, la
+  carte revient à sa place et « Fusionner (3 Sparks) » est proposé. `POST /api/engram/fusion` envoie le JSON complet des
+  deux Engrammes à Gemini (schéma imposé `engine/engram/fusion-schema.json`) : noyau, caractère, émotions, moteurs et
+  ombres synthétisés ; les évènements restent ceux des deux vies (5 chacune, signés), toute bulle créée est une
+  interprétation et porte sa provenance (`sources`). La carte Hyper-Engramme joue la fusion à sa première ouverture
+  (gravité en cube du temps, ombres en collision et glitch, éclair), puis vit comme tout Engramme (filtre ADN,
+  « Discuter », Mon Hub).
+- **Darwinisme d'interface** : analyse locale du pointeur (prélude horodaté → page → Web Worker, tâche `confusion` de
+  `js/confusion.js`). Au-delà de 5 s de mouvement continu sans clic, en tournant autour d'un point, Prism émet
+  `prism.ux.confusion` sur le bus puis propose « Simplifier (0,5 Spark) » sur la carte ; le mode automatique est un
+  choix explicite dans Paramètres → Écosystème (3 par 24 h, annulable). Rien en mode démo ni sur un Engramme.
+- **Sédimentation** : « Dissoudre » (inspecteur) → particules sur une toile superposée, sédiment incrusté dans le fond,
+  mots-clés gardés dans une grille de 480 px (`js/sediment.js`, `localStorage` de l'appareil). Une génération dans la
+  même case reçoit `ghost` (gabarit `engine/ghost-template.txt`), affiché dans l'inspecteur ; trois usages par case ;
+  désactivable et effaçable dans les Paramètres.
 
 ## Architecture
 
@@ -308,7 +332,7 @@ node tools/perf_probe.mjs --base http://127.0.0.1:8001/           # fluidité (-
 .venv/Scripts/python tools/e2e_server.py &                        # faux Gemini : génération et refactorisation
 node tools/e2e_canvas.mjs --base http://127.0.0.1:8003 --refactor
 node tools/e2e_pages_api.mjs --api http://127.0.0.1:8004          # GitHub Pages → API (serveur démo lancé)
-node tools/e2e_engram.mjs --base http://127.0.0.1:8004             # V4 : Engramme, ADN, zoom fractal, incantation
+node tools/e2e_engram.mjs --base http://127.0.0.1:8004             # V4-V5 : Engramme, ADN, fractal, voix, fusion, confusion, sédiments
 node tools/e2e_engram.mjs --base http://127.0.0.1:8001/frontend/   # V4 : idem, moteur navigateur
 .venv/Scripts/python tools/prod_local.py &                       # configuration de production, port 8005
 .venv/Scripts/python tools/check_deploy.py http://127.0.0.1:8005 --allow-demo
@@ -353,6 +377,7 @@ API ajoutée en phase 1 (jeton `Authorization: Bearer …` sauf `register`/`logi
 | `GET /api/auth/me` | profil et solde |
 | `POST /api/generate` | `{ prompt, file?, widget_id?, canvas?, dna? }` : génère (1 Spark) ou refactorise ce widget (0,5 Spark) ; `canvas` = autres widgets et sujets du bus (20 au plus) ; `dna` = trait d'Engramme qui filtre la génération (V4) ; **403** `insufficient_sparks` si le solde manque |
 | `POST /api/engram` | `{ person, language? }` : Engramme cognitif (2 Sparks, V4) ; **422** `engram_refused` (personne non publique, Sparks rendus) |
+| `POST /api/engram/fusion` | `{ a, b, language? }` : Hyper-Engramme hybride de deux Engrammes (3 Sparks, V5) ; **422** `fusion_invalid` (identiques, ancienne version) |
 | `POST /api/engram/chat` | `{ engram, history?, message, language? }` : « Discuter avec … » → `{ reply, trace: [{ id, why }] }` (¼ de Spark, V4) |
 | `GET /api/sparks` | solde, tarifs, derniers mouvements |
 | `GET /api/widgets[?on_canvas=true]`, `GET/PATCH/DELETE /api/widgets/{id}`, `POST /api/widgets/{id}/undo` | « Mon Hub » : liste légère, détail, état de la carte (`layout`, `clear_layout`, `storage`, `accent`, `title`, `thumbnail`), annulation, suppression |

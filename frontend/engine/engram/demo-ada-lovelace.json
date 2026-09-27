@@ -1,0 +1,579 @@
+{
+  "person": "Ada Lovelace",
+  "public_figure": true,
+  "refusal": null,
+  "domain": "Mathématiques et calcul, 1833-1852",
+  "summary": "Une imagination mathématique qui voit dans la machine de Babbage bien plus qu'un calculateur : un outil pour manipuler des symboles, et peut-être un jour la musique.",
+  "temperament": "Ardente, ambitieuse et inquiète, elle oscille entre l'exaltation créatrice et l'abattement ; sa rigueur mathématique cohabite avec une imagination qu'elle revendique.",
+  "climate": [
+    {
+      "emotion": "passion",
+      "weight": 0.35
+    },
+    {
+      "emotion": "emerveillement",
+      "weight": 0.3
+    },
+    {
+      "emotion": "angoisse",
+      "weight": 0.2
+    },
+    {
+      "emotion": "fierte",
+      "weight": 0.15
+    }
+  ],
+  "nodes": [
+    {
+      "id": "core",
+      "category": "core",
+      "type": "axiome",
+      "title": "La science poétique",
+      "content": "L'imagination est une faculté scientifique : pour saisir des relations abstraites, il faut les voir, les combiner et les rêver avec rigueur. Le calcul n'est qu'un cas particulier du jeu des symboles.",
+      "directive": "Interface où les formules deviennent images : relations visualisées, transitions fluides, typographie élégante sur fond sombre, chaque abstraction accompagnée d'une métaphore visuelle.",
+      "basis": "interpretation",
+      "evidence": "Ses lettres évoquant une science poétique ; ses Notes de 1843 sur la machine analytique.",
+      "intensity": 1,
+      "emotion": "emerveillement"
+    },
+    {
+      "id": "e1",
+      "category": "engine",
+      "type": "algorithme_resolution",
+      "title": "Décomposer en opérations",
+      "content": "Elle montre comment une suite de calculs se découpe en opérations élémentaires répétées, avec des cycles et des variables : une méthode plutôt qu'un résultat.",
+      "directive": "Afficher les étapes comme une suite d'opérations numérotées, cycles repérés, variables nommées ; chaque résultat relié à l'étape qui le produit.",
+      "basis": "documente",
+      "evidence": "Note G (1843) : procédé de calcul des nombres de Bernoulli par la machine analytique.",
+      "intensity": 0.9
+    },
+    {
+      "id": "e2",
+      "category": "engine",
+      "type": "algorithme_resolution",
+      "title": "Généraliser au-delà du nombre",
+      "content": "Elle perçoit que la machine analytique pourrait manipuler tout symbole dont on définit les relations, pas seulement des nombres, et évoque même la composition musicale.",
+      "directive": "Interface qui transforme n'importe quelle donnée en symboles manipulables : glisser, combiner, recomposer ; les nombres ne sont qu'un cas parmi d'autres.",
+      "basis": "documente",
+      "evidence": "Notes de 1843 : passage sur la manipulation de symboles et l'exemple de la musique.",
+      "intensity": 0.9
+    },
+    {
+      "id": "e3",
+      "category": "engine",
+      "type": "algorithme_resolution",
+      "title": "Mesurer les limites",
+      "content": "Elle précise que la machine n'a aucune prétention à créer quoi que ce soit par elle-même : elle fait ce qu'on sait lui ordonner. Une lucidité sur ses limites autant que sur ses promesses.",
+      "directive": "Montrer clairement ce que l'outil fait et ne fait pas : limites affichées, hypothèses explicites, aucune promesse cachée.",
+      "basis": "documente",
+      "evidence": "Notes de 1843 : passage sur l'absence d'initiative de la machine.",
+      "intensity": 0.7
+    },
+    {
+      "id": "e4",
+      "category": "engine",
+      "type": "empreinte_syntaxique",
+      "title": "Prose dense et imagée",
+      "content": "Ses Notes mêlent démonstration rigoureuse et images saisissantes, comme la comparaison avec le métier Jacquard qui tisse des motifs floraux.",
+      "directive": "Textes qui expliquent par l'image : une métaphore par concept, puis la précision ; titres évocateurs, corps rigoureux.",
+      "basis": "documente",
+      "evidence": "Notes de 1843 : comparaison avec le métier à tisser Jacquard.",
+      "intensity": 0.75,
+      "keywords": [
+        "métier Jacquard",
+        "tisser",
+        "opérations",
+        "symboles",
+        "analyse",
+        "science poétique"
+      ]
+    },
+    {
+      "id": "e5",
+      "category": "engine",
+      "type": "empreinte_syntaxique",
+      "title": "Correspondance ardente",
+      "content": "Dans ses lettres, le ton est vif, parfois exalté, riche en projets et en affirmations sur ses propres capacités.",
+      "directive": "Microcopie vive et directe, verbes d'action, enthousiasme mesuré ; chaque message annonce la suite.",
+      "basis": "declare",
+      "evidence": "Correspondance avec Charles Babbage et avec sa famille (années 1840).",
+      "intensity": 0.55,
+      "keywords": [
+        "projets",
+        "capacités",
+        "machine",
+        "avenir"
+      ]
+    },
+    {
+      "id": "e6",
+      "category": "engine",
+      "type": "matrice_esthetique",
+      "title": "Le tissage des algèbres",
+      "content": "Son imaginaire visuel est celui du métier Jacquard : fils, motifs répétés, cartes perforées, l'algèbre tissée comme une étoffe.",
+      "directive": "Motifs tissés, grilles régulières, or sur fond nuit, transitions comme des fils qui se croisent ; la structure devient ornement.",
+      "basis": "interpretation",
+      "evidence": "Image du métier Jacquard dans les Notes de 1843.",
+      "intensity": 0.7,
+      "palette": [
+        "#1b1a2e",
+        "#c9a227",
+        "#e8e2d0",
+        "#6b4e9b"
+      ]
+    },
+    {
+      "id": "e7",
+      "category": "engine",
+      "type": "methode_travail",
+      "title": "Traduire et amplifier",
+      "content": "Chargée de traduire l'article de Menabrea sur la machine analytique, elle y ajoute des Notes bien plus longues que le texte d'origine.",
+      "directive": "Interface d'annotation : le texte source et ses notes côte à côte, les ajouts mis en valeur, rien de l'original n'est perdu.",
+      "basis": "documente",
+      "evidence": "Traduction de l'article de L. F. Menabrea, publiée en 1843 avec ses Notes.",
+      "intensity": 0.8
+    },
+    {
+      "id": "e8",
+      "category": "engine",
+      "type": "methode_travail",
+      "title": "Apprendre par correspondance",
+      "content": "Elle se forme par des cours par lettres et des échanges écrits réguliers, en posant des questions précises et exigeantes.",
+      "directive": "Questions-réponses structurées, fil de discussion, progression pas à pas ; chaque doute noté trouve sa réponse.",
+      "basis": "documente",
+      "evidence": "Cours par correspondance avec Augustus De Morgan (1840-1841).",
+      "intensity": 0.6
+    },
+    {
+      "id": "e9",
+      "category": "engine",
+      "type": "methode_travail",
+      "title": "L'œuvre avant le nom",
+      "content": "Ses Notes paraissent signées de ses seules initiales, A.A.L. : l'attention va au raisonnement plutôt qu'à l'autrice.",
+      "directive": "Interface centrée sur l'œuvre : crédits discrets mais présents, le contenu d'abord.",
+      "basis": "documente",
+      "evidence": "Publication des Notes signées A.A.L. (1843).",
+      "intensity": 0.45
+    },
+    {
+      "id": "s1",
+      "category": "shadow",
+      "type": "paradoxe",
+      "title": "Rigueur et exaltation",
+      "content": "Elle revendique la rigueur mathématique tout en se laissant emporter par des projets grandioses, parfois au-delà de ce qu'elle peut mener à bien.",
+      "directive": "Double lecture : vue rigoureuse et vue visionnaire, séparées clairement ; les ambitions sont chiffrées.",
+      "basis": "interpretation",
+      "evidence": "Projets évoqués dans sa correspondance des années 1840.",
+      "intensity": 0.7
+    },
+    {
+      "id": "s2",
+      "category": "shadow",
+      "type": "paradoxe",
+      "title": "La poésie qu'on voulait écarter",
+      "content": "Élevée pour tenir la poésie à distance, elle finit par réclamer une science imaginative : l'héritage qu'on voulait éloigner revient au cœur de sa méthode.",
+      "directive": "Interface où la contrainte produit la créativité : cadres stricts, contenus libres.",
+      "basis": "interpretation",
+      "evidence": "Éducation mathématique voulue par sa mère ; ses lettres sur l'imagination.",
+      "intensity": 0.6
+    },
+    {
+      "id": "s3",
+      "category": "shadow",
+      "type": "paradoxe",
+      "title": "Visionnaire sans machine",
+      "content": "Elle décrit le fonctionnement d'une machine qui ne sera jamais achevée de son vivant : sa pensée précède l'outil qui pourrait la vérifier.",
+      "directive": "Maquettes et simulations assumées : ce qui est imaginé est signalé comme tel, ce qui est prouvé aussi.",
+      "basis": "documente",
+      "evidence": "La machine analytique de Babbage n'a pas été construite.",
+      "intensity": 0.65
+    },
+    {
+      "id": "s4",
+      "category": "shadow",
+      "type": "peur_primaire",
+      "title": "Ne pas accomplir son potentiel",
+      "content": "Ses lettres trahissent la crainte de gâcher ses capacités, faute de temps ou de reconnaissance.",
+      "directive": "Objectifs atteignables découpés, progrès toujours visibles, rien ne reste en suspens.",
+      "basis": "declare",
+      "evidence": "Correspondance des années 1840.",
+      "intensity": 0.75,
+      "emotion": "angoisse"
+    },
+    {
+      "id": "s5",
+      "category": "shadow",
+      "type": "peur_primaire",
+      "title": "Le regard des autres",
+      "content": "Fille de Byron et femme de science, elle attire l'attention ; elle protège sa réputation en signant de ses initiales.",
+      "directive": "Confidentialité par défaut, contrôle clair de ce qui est montré et à qui.",
+      "basis": "interpretation",
+      "evidence": "Signature A.A.L. des Notes (1843).",
+      "intensity": 0.55,
+      "emotion": "peur"
+    },
+    {
+      "id": "s6",
+      "category": "shadow",
+      "type": "peur_primaire",
+      "title": "La dette et le hasard",
+      "content": "À la fin des années 1840, des paris sur les courses de chevaux la mettent en difficulté financière.",
+      "directive": "Budgets et risques affichés en clair, alerte avant toute perte, aucun pari implicite.",
+      "basis": "documente",
+      "evidence": "Dettes de jeu documentées vers 1851.",
+      "intensity": 0.5,
+      "emotion": "angoisse"
+    },
+    {
+      "id": "s7",
+      "category": "shadow",
+      "type": "biais_cognitif",
+      "title": "Surestimer les systèmes",
+      "content": "Convaincue de pouvoir mathématiser presque tout, elle aurait cru, selon ses biographes, pouvoir rendre les paris rationnels.",
+      "directive": "Toujours montrer l'incertitude : intervalles, probabilités, mises en garde avant chaque décision.",
+      "basis": "interpretation",
+      "evidence": "Récits biographiques sur ses paris (vers 1851).",
+      "intensity": 0.6
+    },
+    {
+      "id": "s8",
+      "category": "shadow",
+      "type": "biais_cognitif",
+      "title": "Confiance en son propre génie",
+      "content": "Elle affirme volontiers la supériorité de ses capacités, ce qui la rend parfois moins attentive aux critiques ou aux limites pratiques.",
+      "directive": "Interface qui sollicite la contradiction : relecture, avis contraires visibles, validation par un tiers.",
+      "basis": "declare",
+      "evidence": "Lettres à Charles Babbage (1843).",
+      "intensity": 0.55,
+      "emotion": "fierte"
+    },
+    {
+      "id": "s9",
+      "category": "shadow",
+      "type": "biais_cognitif",
+      "title": "L'idéalisation du père",
+      "content": "Elle se forge une image d'un père qu'elle n'a pas connu, et y cherche parfois une clé de sa propre nature.",
+      "directive": "Distinguer faits et récits : sources indiquées, légendes signalées comme telles.",
+      "basis": "interpretation",
+      "evidence": "Correspondance et biographies.",
+      "intensity": 0.45,
+      "emotion": "melancolie"
+    },
+    {
+      "id": "s10",
+      "category": "shadow",
+      "type": "biais_cognitif",
+      "title": "Travailler jusqu'à l'épuisement",
+      "content": "Elle travaille par élans intenses jusqu'à l'épuisement, puis se retire : le travail intellectuel l'isole autant qu'il l'exalte.",
+      "directive": "Pauses suggérées, sessions courtes, travail sauvegardé à chaque étape.",
+      "basis": "interpretation",
+      "evidence": "Correspondance des années 1840.",
+      "intensity": 0.5,
+      "emotion": "solitude"
+    },
+    {
+      "id": "a1",
+      "category": "artifact",
+      "type": "tournant",
+      "title": "Naissance, fille de Lord Byron",
+      "content": "Elle naît à Londres ; ses parents se séparent quelques semaines plus tard et elle ne connaîtra pas son père.",
+      "directive": "Frise chronologique précise : la date en évidence, l'évènement relié à ce qu'il a changé.",
+      "basis": "documente",
+      "evidence": "Naissance, fille de Lord Byron",
+      "intensity": 0.6,
+      "date": "1815-12-10",
+      "impact": "Une éducation tournée vers les mathématiques, voulue par sa mère."
+    },
+    {
+      "id": "a2",
+      "category": "artifact",
+      "type": "tournant",
+      "title": "Rencontre avec Charles Babbage",
+      "content": "Présentée à Babbage lors d'une réception, elle découvre peu après la machine à différences.",
+      "directive": "Frise chronologique précise : la date en évidence, l'évènement relié à ce qu'il a changé.",
+      "basis": "documente",
+      "evidence": "Rencontre avec Charles Babbage",
+      "intensity": 0.9,
+      "date": "1833-06",
+      "impact": "Le début d'une collaboration et d'une fascination durables.",
+      "emotion": "emerveillement"
+    },
+    {
+      "id": "a3",
+      "category": "artifact",
+      "type": "tournant",
+      "title": "L'amitié de Mary Somerville",
+      "content": "La savante Mary Somerville devient une amie et une conseillère, qui l'encourage dans ses études.",
+      "directive": "Frise chronologique précise : la date en évidence, l'évènement relié à ce qu'il a changé.",
+      "basis": "documente",
+      "evidence": "L'amitié de Mary Somerville",
+      "intensity": 0.5,
+      "date": "1834",
+      "impact": "Un modèle de femme de science et un accès aux cercles savants."
+    },
+    {
+      "id": "a4",
+      "category": "artifact",
+      "type": "tournant",
+      "title": "Mariage avec William King",
+      "content": "Elle épouse William King, qui deviendra comte de Lovelace en 1838.",
+      "directive": "Frise chronologique précise : la date en évidence, l'évènement relié à ce qu'il a changé.",
+      "basis": "documente",
+      "evidence": "Mariage avec William King",
+      "intensity": 0.5,
+      "date": "1835-07-08",
+      "impact": "Un titre de comtesse, une famille, et moins de temps pour l'étude."
+    },
+    {
+      "id": "a5",
+      "category": "artifact",
+      "type": "tournant",
+      "title": "Études avec Augustus De Morgan",
+      "content": "Elle reprend des mathématiques avancées par correspondance avec le logicien Augustus De Morgan.",
+      "directive": "Frise chronologique précise : la date en évidence, l'évènement relié à ce qu'il a changé.",
+      "basis": "documente",
+      "evidence": "Études avec Augustus De Morgan",
+      "intensity": 0.6,
+      "date": "1840",
+      "impact": "Les bases techniques de son travail de 1843."
+    },
+    {
+      "id": "a6",
+      "category": "artifact",
+      "type": "succes",
+      "title": "Publication des Notes",
+      "content": "Sa traduction de l'article de Menabrea paraît avec ses Notes, dont la Note G.",
+      "directive": "Frise chronologique précise : la date en évidence, l'évènement relié à ce qu'il a changé.",
+      "basis": "documente",
+      "evidence": "Publication des Notes",
+      "intensity": 0.95,
+      "date": "1843",
+      "impact": "Un texte souvent considéré comme la première description d'un programme destiné à une machine.",
+      "emotion": "fierte"
+    },
+    {
+      "id": "a7",
+      "category": "artifact",
+      "type": "tournant",
+      "title": "Désaccord avec Babbage",
+      "content": "Elle refuse que Babbage joigne à ses Notes une déclaration de sa main, et le lui écrit fermement.",
+      "directive": "Frise chronologique précise : la date en évidence, l'évènement relié à ce qu'il a changé.",
+      "basis": "documente",
+      "evidence": "Désaccord avec Babbage",
+      "intensity": 0.6,
+      "date": "1843-08",
+      "impact": "Elle affirme son autonomie d'autrice face à son mentor."
+    },
+    {
+      "id": "a8",
+      "category": "artifact",
+      "type": "echec",
+      "title": "Les dettes de jeu",
+      "content": "Ses paris sur les courses la laissent lourdement endettée.",
+      "directive": "Frise chronologique précise : la date en évidence, l'évènement relié à ce qu'il a changé.",
+      "basis": "documente",
+      "evidence": "Les dettes de jeu",
+      "intensity": 0.55,
+      "date": "1851",
+      "impact": "Une fin de vie assombrie par les soucis d'argent.",
+      "emotion": "angoisse"
+    },
+    {
+      "id": "a9",
+      "category": "artifact",
+      "type": "echec",
+      "title": "Mort à trente-six ans",
+      "content": "Elle meurt à Londres à trente-six ans, après une longue maladie.",
+      "directive": "Frise chronologique précise : la date en évidence, l'évènement relié à ce qu'il a changé.",
+      "basis": "documente",
+      "evidence": "Mort à trente-six ans",
+      "intensity": 0.7,
+      "date": "1852-11-27",
+      "impact": "Son œuvre, peu reconnue de son vivant, sera redécouverte au XXe siècle.",
+      "emotion": "tristesse"
+    },
+    {
+      "id": "a10",
+      "category": "artifact",
+      "type": "tournant",
+      "title": "Redécouverte des Notes",
+      "content": "Ses Notes sont republiées dans un ouvrage sur les premiers calculateurs électroniques.",
+      "directive": "Frise chronologique précise : la date en évidence, l'évènement relié à ce qu'il a changé.",
+      "basis": "documente",
+      "evidence": "Redécouverte des Notes",
+      "intensity": 0.75,
+      "date": "1953",
+      "impact": "Elle devient une figure fondatrice de l'informatique."
+    },
+    {
+      "id": "h1",
+      "category": "heart",
+      "type": "trait",
+      "title": "Ambition intellectuelle assumée",
+      "content": "Elle se veut l'égale des grands esprits de son temps et le dit dans ses lettres. Elle revendique un rôle scientifique à une époque qui en refuse l'accès aux femmes.",
+      "directive": "Interface ambitieuse : objectifs affichés en grand, progression mesurée, ton assuré sans fausse modestie.",
+      "basis": "declare",
+      "evidence": "Correspondance avec Charles Babbage (1843).",
+      "intensity": 0.85,
+      "emotion": "fierte"
+    },
+    {
+      "id": "h2",
+      "category": "heart",
+      "type": "trait",
+      "title": "Tempérament ardent et changeant",
+      "content": "Ses proches la décrivent passant de l'enthousiasme fébrile à l'abattement ; elle travaille par élans intenses.",
+      "directive": "Rythmes contrastés : phases intenses et pauses explicites, animations vives mais courtes.",
+      "basis": "documente",
+      "evidence": "Biographies et correspondance familiale.",
+      "intensity": 0.7
+    },
+    {
+      "id": "h3",
+      "category": "heart",
+      "type": "emotion",
+      "title": "L'émerveillement devant la machine",
+      "content": "Découvrant la machine à différences de Babbage en 1833, elle en saisit aussitôt la portée ; cet émerveillement nourrit dix ans de réflexion.",
+      "directive": "Révéler le mécanisme : engrenages et étapes visibles, chaque calcul montré en mouvement.",
+      "basis": "documente",
+      "evidence": "Témoignages de l'époque sur sa visite de 1833.",
+      "intensity": 0.85,
+      "emotion": "emerveillement"
+    },
+    {
+      "id": "h4",
+      "category": "heart",
+      "type": "emotion",
+      "title": "L'inquiétude de ne pas aboutir",
+      "content": "Elle traverse des périodes d'abattement dont ses lettres gardent la trace, et redoute de ne pas accomplir ce qu'elle se sent capable de faire.",
+      "directive": "Interface rassurante : sauvegarde permanente visible, états d'erreur doux, rien ne se perd.",
+      "basis": "declare",
+      "evidence": "Sa correspondance des années 1840.",
+      "intensity": 0.6,
+      "emotion": "angoisse"
+    },
+    {
+      "id": "h5",
+      "category": "heart",
+      "type": "emotion",
+      "title": "La joie de la collaboration",
+      "content": "La rédaction des Notes avec Babbage, en 1843, est un échange vif et exigeant où elle défend ses idées ; elle y trouve une joie intellectuelle intense.",
+      "directive": "Interface collaborative : commentaires en marge, versions comparées, échanges visibles.",
+      "basis": "documente",
+      "evidence": "Lettres échangées avec Babbage pendant la rédaction des Notes (1843).",
+      "intensity": 0.65,
+      "emotion": "joie"
+    },
+    {
+      "id": "h6",
+      "category": "heart",
+      "type": "attachement",
+      "title": "L'héritage d'un père absent",
+      "content": "Fille de Lord Byron, qu'elle n'a pas connu, elle est élevée loin de la poésie par une mère qui mise sur les mathématiques ; la figure du père reste pour elle une énigme.",
+      "directive": "Deux registres côte à côte : rigueur et poésie, données et récit, qui se répondent.",
+      "basis": "documente",
+      "evidence": "Séparation de ses parents en 1816 ; éducation voulue par Annabella Milbanke.",
+      "intensity": 0.6,
+      "emotion": "melancolie"
+    },
+    {
+      "id": "h7",
+      "category": "heart",
+      "type": "attachement",
+      "title": "Mentors et amitiés savantes",
+      "content": "Mary Somerville puis Augustus De Morgan accompagnent sa formation ; elle entretient avec eux des liens d'estime et de confiance.",
+      "directive": "Interface de mentorat : explications progressives, exercices guidés, retours bienveillants.",
+      "basis": "documente",
+      "evidence": "Amitié avec Mary Somerville (années 1830) ; cours par lettres avec De Morgan (1840-1841).",
+      "intensity": 0.55,
+      "emotion": "tendresse"
+    }
+  ],
+  "links": [
+    {
+      "from": "a2",
+      "to": "h3",
+      "kind": "forge"
+    },
+    {
+      "from": "a2",
+      "to": "e2",
+      "kind": "forge"
+    },
+    {
+      "from": "a6",
+      "to": "e1",
+      "kind": "forge"
+    },
+    {
+      "from": "a6",
+      "to": "e7",
+      "kind": "forge"
+    },
+    {
+      "from": "a7",
+      "to": "s8",
+      "kind": "forge"
+    },
+    {
+      "from": "a1",
+      "to": "h6",
+      "kind": "forge"
+    },
+    {
+      "from": "a1",
+      "to": "s2",
+      "kind": "forge"
+    },
+    {
+      "from": "a5",
+      "to": "e8",
+      "kind": "forge"
+    },
+    {
+      "from": "a3",
+      "to": "h7",
+      "kind": "forge"
+    },
+    {
+      "from": "a8",
+      "to": "s6",
+      "kind": "forge"
+    },
+    {
+      "from": "s7",
+      "to": "s6",
+      "kind": "nourrit"
+    },
+    {
+      "from": "h1",
+      "to": "s8",
+      "kind": "nourrit"
+    },
+    {
+      "from": "e4",
+      "to": "e6",
+      "kind": "nourrit"
+    },
+    {
+      "from": "h6",
+      "to": "s9",
+      "kind": "nourrit"
+    },
+    {
+      "from": "s3",
+      "to": "e3",
+      "kind": "contredit"
+    },
+    {
+      "from": "h2",
+      "to": "s10",
+      "kind": "nourrit"
+    },
+    {
+      "from": "e9",
+      "to": "s5",
+      "kind": "nourrit"
+    }
+  ]
+}

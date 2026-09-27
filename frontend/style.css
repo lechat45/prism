@@ -382,6 +382,12 @@ body.is-dragging { cursor: grabbing; user-select: none; }
 }
 .card-bar:focus-visible { outline-offset: -2px; }
 .card.is-moving .card-bar { cursor: grabbing; }
+/* V5 · fusion : Engramme tenu au-dessus d'un autre, puis retour à sa place une fois la fusion proposée. */
+.card.is-fusion-target { box-shadow: 0 0 0 2px #e879f9, 0 0 60px -6px rgba(232, 121, 249, 0.75); animation: fusion-pull 0.5s ease-in-out infinite alternate; }
+.card.is-fusion-source { opacity: 0.82; }
+.card.is-returning { transition: left 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), top 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes fusion-pull { from { scale: 1; } to { scale: 1.015; } }
+@media (prefers-reduced-motion: reduce) { .card.is-fusion-target { animation: none; } .card.is-returning { transition: none; } }
 .card-title { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-meta { flex: none; max-width: 40%; font-size: 11.5px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-actions { display: flex; gap: 2px; opacity: 0.55; transition: opacity 0.2s; }
@@ -1290,3 +1296,39 @@ body.is-incanting .glass {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
+
+/* ==========================================================================
+   V5 · Écosystème vivant
+   ========================================================================== */
+/* Sédimentation : la carte s'efface pendant que ses particules (toile .shatter) s'enfoncent dans le fond. */
+.card.is-dissolving { opacity: 0; transition: opacity 0.25s ease; pointer-events: none; }
+.shatter { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 60; }
+.sediment {
+  position: absolute; width: 150px; height: 150px; margin: -75px 0 0 -75px; border-radius: 50%; pointer-events: none; z-index: 0;
+  opacity: calc(0.25 + 0.55 * var(--wear, 1));
+  background:
+    radial-gradient(circle at 50% 50%, rgba(180, 200, 230, 0.2) 0 3px, transparent 4px),
+    radial-gradient(circle at 34% 58%, rgba(124, 196, 255, 0.28) 0 2px, transparent 3px),
+    radial-gradient(circle at 63% 38%, rgba(255, 255, 255, 0.22) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 58% 66%, rgba(155, 92, 255, 0.24) 0 2px, transparent 3px),
+    radial-gradient(circle, rgba(124, 196, 255, 0.1), transparent 68%);
+}
+.sediment.is-fresh { animation: sediment-settle 1.4s var(--ease); }
+@keyframes sediment-settle { from { transform: scale(1.6); filter: brightness(2.2); } to { transform: none; filter: none; } }
+.insp-ghost { color: #d9c6ff; }
+
+/* Darwinisme d'interface : pastille « Simplifier ? » posée sur le widget où le pointeur tourne en rond. */
+.card-evolve {
+  position: absolute; right: 10px; bottom: 10px; z-index: 5; display: flex; align-items: center; gap: 8px;
+  padding: 6px 6px 6px 12px; border: 1px solid var(--line-strong); border-radius: 999px;
+  background: var(--glass-solid); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  box-shadow: var(--shadow); font-size: 12.5px; animation: evolve-in 0.35s var(--spring);
+}
+.card-evolve button { border: 0; border-radius: 999px; font: inherit; cursor: pointer; }
+.card-evolve-go { padding: 5px 11px; background: var(--text); color: var(--bg); font-weight: 600; }
+.card-evolve-no { width: 26px; height: 26px; background: var(--glass-fill); color: var(--text); }
+.card-evolve button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+@keyframes evolve-in { from { opacity: 0; transform: translateY(8px) scale(0.96); } }
+.prefs-toggle { align-items: flex-start; line-height: 1.4; }
+.prefs-toggle input { margin-top: 2px; flex: none; }
+@media (prefers-reduced-motion: reduce) { .sediment.is-fresh, .card-evolve { animation: none; } }

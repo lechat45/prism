@@ -21,8 +21,10 @@ const ICONS = {
 
 export class Canvas {
   constructor({ workspace, world, onViewChange, onCardChange, onSelect, onInspect, onAction, onBackground,
-    onPlace = () => {}, onAdd = () => {}, onRemove = () => {} }) {
-    Object.assign(this, { workspace, world, onViewChange, onCardChange, onSelect, onInspect, onAction, onBackground, onPlace, onAdd, onRemove });
+    onPlace = () => {}, onAdd = () => {}, onRemove = () => {}, onDrag = () => {}, onDrop = () => false }) {
+    // onDrag(card, sx, sy) pendant le déplacement d'une carte (card null : fin) ; onDrop(card, sx, sy) au lâcher :
+    // vrai = dépôt pris en charge (ex. fusion d'Engrammes), la carte revient alors à sa place.
+    Object.assign(this, { workspace, world, onViewChange, onCardChange, onSelect, onInspect, onAction, onBackground, onPlace, onAdd, onRemove, onDrag, onDrop });
     this.view = { x: 0, y: 0, z: 1 };
     this.cards = new Map(); // id -> { card, el }
     this.selectedId = null;
@@ -339,16 +341,25 @@ export class Canvas {
         } else {
           card.x = Math.round(start.x + dx);
           card.y = Math.round(start.y + dy);
+          this.onDrag(card, ev.clientX, ev.clientY);
         }
         this.place(card);
       };
-      const up = () => {
+      const up = (ev) => {
         el.removeEventListener("pointermove", move);
         el.removeEventListener("pointerup", up);
         el.removeEventListener("pointercancel", up);
         document.body.classList.remove("is-dragging");
         el.classList.remove("is-resizing", "is-moving");
-        if (moved) this.onCardChange(card);
+        const dropped = moved && !onResize && ev.type === "pointerup" && this.onDrop(card, ev.clientX, ev.clientY);
+        if (moved && !onResize) this.onDrag(null);
+        if (dropped) {
+          card.x = start.x;
+          card.y = start.y;
+          el.classList.add("is-returning");
+          this.place(card);
+          setTimeout(() => el.classList.remove("is-returning"), 450);
+        } else if (moved) this.onCardChange(card);
         else if (onBar) this.onInspect(card.id);
       };
       el.addEventListener("pointermove", move);
@@ -378,6 +389,17 @@ export class Canvas {
         this.onCardChange(card);
       }
     });
+  }
+
+  /** Carte la plus haute sous un point de l'écran, hors exceptId (coordonnées monde : la carte tenue ne masque rien). */
+  cardAt(sx, sy, exceptId = null) {
+    const p = this.screenToWorld(sx, sy);
+    let best = null;
+    for (const { card: c } of this.cards.values()) {
+      if (c.id === exceptId || p.x < c.x || p.x > c.x + c.w || p.y < c.y || p.y > c.y + c.h) continue;
+      if (!best || (c.z || 0) > (best.z || 0)) best = c;
+    }
+    return best;
   }
 
   /** Vrai si un rectangle w × h en (x, y) ne touche aucune carte (marge comprise). */

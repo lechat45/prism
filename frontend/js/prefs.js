@@ -2,11 +2,13 @@
 // avec les Engrammes, demandes, export), le moteur de génération et la version.
 
 import { account, onAccountChange, signOut } from "./account.js";
+import { AUTO_PER_DAY, eco } from "./ecosystem.js";
 import { engine, onEngineChange, readKey } from "./engine.js";
 
 const $ = (id) => document.getElementById(id);
 const REPO = "https://github.com/lechat45/prism";
-let hooks = null; // { cards(), engramOf(card), openChat(card), focusCard(card), openHub(), openPro(), openAuth(), openSettings(), toast }
+let hooks = null; // { cards(), engramOf(card), openChat(card), focusCard(card), openHub(), openPro(), openAuth(), openSettings(), toast,
+// sediments(), clearSediments(), ecoChanged() }
 let tab = "account";
 
 const el = (tag, className, text) => {
@@ -30,6 +32,16 @@ const fact = (label, value) => {
   const p = el("p", "prefs-fact");
   p.append(el("span", "prefs-label", label), el("strong", "", value));
   return p;
+};
+const toggle = (label, checked, onChange, disabled = false) => {
+  const box = el("label", "check prefs-toggle");
+  const input = el("input");
+  input.type = "checkbox";
+  input.checked = checked;
+  input.disabled = disabled;
+  input.addEventListener("change", () => onChange(input.checked));
+  box.append(input, document.createTextNode(` ${label}`));
+  return box;
 };
 const sparks = (value) => `${String(Math.round(value * 100) / 100).replace(".", ",")} Spark${value > 1 ? "s" : ""}`;
 const version = () => $("app-version").textContent.trim();
@@ -56,6 +68,7 @@ function accountPanel() {
     `Widget : ${sparks(prices.generate ?? 1)}`, `refactorisation : ${sparks(prices.refactor ?? 0.5)}`,
     prices.engram !== undefined ? `Engramme : ${sparks(prices.engram)}` : "",
     prices.engram_chat !== undefined ? `message à un Engramme : ${sparks(prices.engram_chat)}` : "",
+    prices.engram_fusion !== undefined ? `fusion d'Engrammes : ${sparks(prices.engram_fusion)}` : "",
   ].filter(Boolean).join(" · ")));
   panel.push(row(
     button("Mon Hub", () => { close(); hooks.openHub(); }),
@@ -156,7 +169,27 @@ function aboutPanel() {
   return panel;
 }
 
-const PANELS = { account: accountPanel, writings: writingsPanel, engine: enginePanel, about: aboutPanel };
+function ecosystemPanel() {
+  const panel = [el("h3", "prefs-sub", "Darwinisme d'interface")];
+  panel.push(el("p", "fine", "Sur cet appareil, Prism repère quand le pointeur tourne en rond plus de 5 secondes au-dessus d'un widget sans rien cliquer, et propose alors de simplifier ce widget. L'analyse reste locale : aucune position n'est envoyée."));
+  panel.push(toggle("Repérer la confusion et proposer une simplification", eco.watch, (on) => { eco.watch = on; hooks.ecoChanged(); render(); }));
+  const price = engine.kind === "server" && account.pricing?.refactor !== undefined ? `, ${sparks(account.pricing.refactor)} chacune` : "";
+  panel.push(toggle(`Mode automatique : simplifier sans demander (${AUTO_PER_DAY} fois par jour au plus${price}, chaque fois annulable)`, eco.auto,
+    (on) => { eco.auto = on; hooks.toast(on ? "Mode automatique activé : Prism simplifiera seul les widgets où vous vous perdez." : "Mode automatique désactivé"); render(); },
+    !eco.watch));
+  if (eco.auto) panel.push(el("p", "fine", `Simplifications automatiques ces dernières 24 h : ${eco.autoToday()} sur ${AUTO_PER_DAY}.`));
+
+  panel.push(el("h3", "prefs-sub", "Sédimentation"));
+  panel.push(el("p", "fine", "« Dissoudre » (dans l'inspecteur) brise une carte en particules qui s'incrustent dans le fond. Ses mots-clés restent à cet endroit : un widget créé dans la même zone les reçoit comme contexte fantôme, affiché dans son inspecteur. Chaque zone sert trois fois, puis s'efface."));
+  panel.push(toggle("Utiliser le contexte fantôme des zones sédimentées", eco.sediment, (on) => { eco.sediment = on; hooks.ecoChanged(); render(); }));
+  const list = hooks.sediments();
+  const words = [...new Set(list.flatMap((s) => s.words))];
+  panel.push(fact("Sédiments", list.length ? `${list.length} · ${words.slice(0, 14).join(", ")}${words.length > 14 ? "…" : ""}` : "aucun"));
+  if (list.length) panel.push(row(button("Effacer les sédiments", () => { hooks.clearSediments(); render(); }, "tool danger")));
+  return panel;
+}
+
+const PANELS = { account: accountPanel, writings: writingsPanel, engine: enginePanel, ecosystem: ecosystemPanel, about: aboutPanel };
 
 function render() {
   if (!$("prefs").open) return;

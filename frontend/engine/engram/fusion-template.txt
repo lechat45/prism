@@ -1,0 +1,14 @@
+ENGRAM A — {{a_person}} (complete JSON):
+<<<
+{{a_json}}
+>>>
+ENGRAM B — {{b_person}} (complete JSON):
+<<<
+{{b_json}}
+>>>
+GIVEN EVENTS of the Hyper-Engram (real dated events chosen from both lives; reference them by id in "links", do not
+produce artifact nodes):
+<<<
+{{events}}
+>>>
+Build the Hyper-Engram "{{a_person}} × {{b_person}}". Language of every human-readable string: {{language}}.

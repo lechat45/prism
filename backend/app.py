@@ -58,7 +58,7 @@ from sanitize import (
     validate_document,
 )
 
-__version__ = "4.0.0a7"
+__version__ = "5.0.0a2"
 
 BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
@@ -135,6 +135,7 @@ FILE_TEMPLATE = _engine_text("file-template.txt")
 REFACTOR_TEMPLATE = _engine_text("refactor-template.txt")
 CANVAS_TEMPLATE = _engine_text("canvas-template.txt")
 DNA_TEMPLATE = _engine_text("dna-template.txt")
+GHOST_TEMPLATE = _engine_text("ghost-template.txt")
 TOPIC_RE = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$"  # même règle que frontend/js/bus.js
 
 
@@ -205,6 +206,9 @@ class GenerateRequest(BaseModel):
     canvas: list[CanvasWidget] = Field([], max_length=20)
     # Trait d'Engramme déposé sur la demande (génération seulement ; ignoré en refactorisation).
     dna: DnaTrait | None = None
+    # V5, sédimentation : mots-clés de widgets dissous à cet endroit du canvas (contexte fantôme, visible dans
+    # l'inspecteur ; génération seulement).
+    ghost: list[Annotated[str, StringConstraints(min_length=1, max_length=40)]] = Field([], max_length=12)
 
 
 def dna_block(dna: DnaTrait | None) -> str:
@@ -228,6 +232,12 @@ def dna_block(dna: DnaTrait | None) -> str:
     return re.sub(r"\{\{(person|category|type|title|content|directive|extras)\}\}", lambda m: values[m.group(1)], DNA_TEMPLATE) + "\n"
 
 
+def ghost_block(words: list[str] | None) -> str:
+    """Section CONTEXTE FANTÔME du message ; même texte que buildGhostBlock() dans engine/local.js."""
+    clean = [" ".join(w.split()) for w in (words or []) if w.strip()]
+    return GHOST_TEMPLATE.replace("{{words}}", ", ".join(clean)) + "\n" if clean else ""
+
+
 def canvas_block(canvas: list[CanvasWidget] | None) -> str:
     """Section CANVAS du message ; même texte que buildCanvasBlock() dans engine/local.js."""
     lines = []
@@ -246,15 +256,16 @@ def canvas_block(canvas: list[CanvasWidget] | None) -> str:
 def build_user_message(
     prompt: str, file: AttachedFile | None = None, base_html: str | None = None, canvas: list[CanvasWidget] | None = None,
     dna: DnaTrait | None = None,
+    ghost: list[str] | None = None,
 ) -> str:
     file_block = ""
     if file:
         file_block = FILE_TEMPLATE.replace("{{kind}}", file.kind).replace("{{summary}}", file.summary) + "\n"
     template = REFACTOR_TEMPLATE if base_html else USER_TEMPLATE
     values = {"file": file_block, "canvas": canvas_block(canvas), "dna": "" if base_html else dna_block(dna),
-              "prompt": prompt, "html": base_html or ""}
+              "ghost": "" if base_html else ghost_block(ghost), "prompt": prompt, "html": base_html or ""}
     # Une seule passe : rien de ce qui est inséré (code, demande, titres…) n'est réinterprété comme gabarit.
-    return re.sub(r"\{\{(file|canvas|dna|prompt|html)\}\}", lambda m: values[m.group(1)], template)
+    return re.sub(r"\{\{(file|canvas|dna|ghost|prompt|html)\}\}", lambda m: values[m.group(1)], template)
 
 
 class GenerateResponse(BaseModel):
@@ -517,7 +528,7 @@ async def generate(
         raise insufficient(exc) from exc
 
     try:
-        user_message = build_user_message(prompt, req.file, base_html, req.canvas, req.dna)
+        user_message = build_user_message(prompt, req.file, base_html, req.canvas, req.dna, req.ghost)
         document, mode, model, issues = await run_model(user_message, prompt, req.file.kind if req.file else None)
         widget = await asyncio.to_thread(_save_widget, user, req, document, mode, model)
     except BaseException:

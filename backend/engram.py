@@ -39,10 +39,16 @@ SCHEMA = json.loads((ENGRAM_DIR / "schema.json").read_text(encoding="utf-8"))
 SYSTEM_PROMPT = (ENGRAM_DIR / "system-prompt.txt").read_text(encoding="utf-8").strip()
 USER_TEMPLATE = (ENGRAM_DIR / "user-template.txt").read_text(encoding="utf-8").strip()
 DEMO = json.loads((ENGRAM_DIR / "demo-marie-curie.json").read_text(encoding="utf-8"))
+# Démonstrations sans modèle : la personne demandée si elle en a une, sinon Marie Curie.
+DEMOS = {"marie-curie": DEMO, "ada-lovelace": json.loads((ENGRAM_DIR / "demo-ada-lovelace.json").read_text(encoding="utf-8"))}
 # Conversation avec un Engramme (« Discuter avec … ») : mêmes fichiers pour le moteur navigateur.
 CHAT_SYSTEM = (ENGRAM_DIR / "chat-system.txt").read_text(encoding="utf-8").strip()
 CHAT_TEMPLATE = (ENGRAM_DIR / "chat-template.txt").read_text(encoding="utf-8").strip()
 CHAT_SCHEMA = json.loads((ENGRAM_DIR / "chat-schema.json").read_text(encoding="utf-8"))
+# V5 : fusion de deux Engrammes en un Hyper-Engramme (« Singularité symbiotique »).
+FUSION_SYSTEM = (ENGRAM_DIR / "fusion-system.txt").read_text(encoding="utf-8").strip()
+FUSION_TEMPLATE = (ENGRAM_DIR / "fusion-template.txt").read_text(encoding="utf-8").strip()
+FUSION_SCHEMA = json.loads((ENGRAM_DIR / "fusion-schema.json").read_text(encoding="utf-8"))
 
 TYPES = {
     "core": ("axiome",),
@@ -258,8 +264,14 @@ def build_user_message(person: str, language: str) -> str:
     return re.sub(r"\{\{(person|language)\}\}", lambda m: values[m.group(1)], USER_TEMPLATE)
 
 
-def demo_engram() -> dict:
-    return normalize(DEMO)
+def demo_engram(person: str = "") -> dict:
+    """Engramme de démonstration : Ada Lovelace si elle est demandée, Marie Curie sinon."""
+    return normalize(DEMOS[demo_key(person)])
+
+
+def demo_key(person: str) -> str:
+    plain = "".join(c for c in unicodedata.normalize("NFKD", person.lower()) if not 0x300 <= ord(c) <= 0x36F)
+    return "ada-lovelace" if "lovelace" in plain or re.search(r"\bada\b", plain) else "marie-curie"
 
 
 # --------------------------------------------------------------------------- #
@@ -425,6 +437,161 @@ def demo_chat(engram: dict, message: str) -> dict:
 # --------------------------------------------------------------------------- #
 # Génération
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# Fusion (V5, « Singularité symbiotique ») : deux Engrammes → un Hyper-Engramme
+# --------------------------------------------------------------------------- #
+FUSION_EVENTS_EACH = 5  # évènements hérités de chaque vie (10 au total : le compte exact d'une catégorie D)
+PARENTS = ("a", "b")
+FUSION_MAX_JSON = 200_000  # taille maximale des deux Engrammes reçus
+
+
+class FusionError(Exception):
+    """Engrammes parents inutilisables (ancienne version, identiques…) : rien n'est facturé."""
+
+
+def fusion_parents(a, b) -> tuple[dict, dict]:
+    """Les deux Engrammes reçus du client (non fiables) sont revalidés ; même personne ou ancien format : refus."""
+    try:
+        parent_a, parent_b = normalize(a), normalize(b)
+    except (EngramError, EngramRefused) as exc:
+        raise FusionError(f"Engramme illisible ou d'une version antérieure ({exc}) : régénérez-le avant la fusion.") from exc
+    if parent_a["person"].casefold() == parent_b["person"].casefold():
+        raise FusionError("Une fusion demande deux personnes différentes.")
+    return parent_a, parent_b
+
+
+def _surname(person: str) -> str:
+    words = person.split()
+    return words[-1] if words else person
+
+
+def fusion_events(a: dict, b: dict) -> list[dict]:
+    """Un Hyper-Engramme n'a pas de vie propre : il hérite des 5 évènements les plus marquants de chaque parent,
+    réels et datés (rien n'est inventé), réunis dans l'ordre chronologique et signés du nom de leur personne."""
+    lives = {key: [n for n in parent["nodes"] if n["category"] == "artifact"] for key, parent in zip(PARENTS, (a, b))}
+    chosen: dict[str, list[dict]] = {key: [] for key in PARENTS}
+    # 1. Chaque type (succès, échec, tournant) représenté : l'évènement le plus intense des deux vies.
+    for kind in TYPES["artifact"]:
+        candidates = [(n, key) for key in PARENTS for n in lives[key]
+                      if n["type"] == kind and n not in chosen[key] and len(chosen[key]) < FUSION_EVENTS_EACH]
+        if candidates:
+            node, key = max(candidates, key=lambda c: c[0]["intensity"])
+            chosen[key].append(node)
+    # 2. Chaque vie complétée jusqu'à 5 évènements, les plus intenses d'abord.
+    for key in PARENTS:
+        rest = sorted((n for n in lives[key] if n not in chosen[key]), key=lambda n: -n["intensity"])
+        chosen[key] += rest[: FUSION_EVENTS_EACH - len(chosen[key])]
+    names = {key: _surname(parent["person"]) for key, parent in zip(PARENTS, (a, b))}
+    events = [{**node, "title": _text(f"{names[key]} · {node['title']}", LIMITS["title"]), "sources": [key]}
+              for key in PARENTS for node in chosen[key]]
+    events.sort(key=lambda n: _date_key(n["date"]))
+    for index, node in enumerate(events, 1):
+        node["id"] = f"ev{index}"
+    return events
+
+
+def _plain(value):
+    """JSON identique à JSON.stringify : un nombre entier s'écrit « 1 », pas « 1.0 »."""
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, dict):
+        return {k: _plain(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_plain(v) for v in value]
+    return value
+
+
+def build_fusion_message(a: dict, b: dict, events: list[dict], language: str) -> str:
+    compact = lambda value: json.dumps(_plain(value), ensure_ascii=False, separators=(",", ":"))  # noqa: E731
+    values = {
+        "a_person": a["person"], "b_person": b["person"], "a_json": compact(a), "b_json": compact(b),
+        "events": compact([{k: n[k] for k in ("id", "type", "title", "date", "impact", "sources")} for n in events]),
+        "language": LANGUAGES.get(language, "French"),
+    }
+    return re.sub(r"\{\{(a_person|b_person|a_json|b_json|events|language)\}\}", lambda m: values[m.group(1)], FUSION_TEMPLATE)
+
+
+def finish_fusion(raw, a: dict, b: dict, events: list[dict]) -> dict:
+    """Réponse du modèle + évènements hérités → Hyper-Engramme validé par normalize() (mêmes règles qu'un Engramme),
+    chaque bulle signée de sa provenance (sources) ; toute bulle créée est une interprétation."""
+    if not isinstance(raw, dict):
+        raise EngramError("réponse qui n'est pas un objet JSON")
+    created = [n for n in (raw.get("nodes") if isinstance(raw.get("nodes"), list) else [])
+               if isinstance(n, dict) and n.get("category") != "artifact"]  # un évènement inventé n'entre jamais
+    person = _text(f"{a['person']} × {b['person']}", 120)
+    merged = {**raw, "person": person, "public_figure": True, "refusal": None,
+              "domain": raw.get("domain") or f"{a['domain']} × {b['domain']}", "nodes": created + events}
+    hyper = normalize(merged)
+    provenance = {n["id"]: n["sources"] for n in events}
+    for index, node in enumerate(created):
+        sources = node.get("sources") if isinstance(node.get("sources"), list) else []
+        provenance.setdefault(_slug(node.get("id"), f"n{index}"), [s for s in PARENTS if s in sources] or list(PARENTS))
+    for node in hyper["nodes"]:
+        node["sources"] = provenance.get(node["id"], list(PARENTS))
+        if node["category"] != "artifact":
+            node["basis"] = "interpretation"
+    hyper["parents"] = [a["person"], b["person"]]
+    return hyper
+
+
+def demo_fusion(a: dict, b: dict) -> dict:
+    """Sans modèle : fusion mécanique mais valide — pour chaque catégorie, la bulle la plus intense de chaque type
+    (d'un parent ou de l'autre), complétée par les plus intenses restantes ; noyaux réunis ; évènements hérités."""
+    events = fusion_events(a, b)
+    pool = [{**n, "id": f"{key}{n['id']}", "sources": [key]} for key, parent in zip(PARENTS, (a, b)) for n in parent["nodes"]]
+    nodes = []
+    for category, (_, high) in COUNTS.items():
+        if category in ("core", "artifact"):
+            continue
+        group = sorted((n for n in pool if n["category"] == category), key=lambda n: -n["intensity"])
+        chosen = [next(n for n in group if n["type"] == t) for t in TYPES[category]]
+        chosen += [n for n in group if n not in chosen][: high - len(chosen)]
+        nodes += chosen
+    core_a, core_b = (next(n for n in p["nodes"] if n["category"] == "core") for p in (a, b))
+    core = {"id": "core", "category": "core", "type": "axiome", "title": f"{core_a['title']} × {core_b['title']}",
+            "content": f"{core_a['content']} {core_b['content']}", "directive": f"{core_a['directive']} {core_b['directive']}",
+            "basis": "interpretation", "evidence": "", "intensity": 1, "sources": list(PARENTS)}
+    kept = {n["id"] for n in nodes} | {"core"}
+    rename = {f"{key}{n['id']}": f"{key}{n['id']}" for key, p in zip(PARENTS, (a, b)) for n in p["nodes"]}
+    links = [{"from": f"{key}{l['from']}", "to": f"{key}{l['to']}", "kind": l["kind"]}
+             for key, p in zip(PARENTS, (a, b)) for l in p["links"]
+             if rename.get(f"{key}{l['from']}") in kept and rename.get(f"{key}{l['to']}") in kept]
+    climate: dict[str, float] = {}
+    for parent in (a, b):
+        for item in parent["climate"]:
+            climate[item["emotion"]] = climate.get(item["emotion"], 0) + item["weight"] / 2
+    raw = {"summary": f"Fusion mécanique (mode démo, sans modèle de langage) de {a['person']} et {b['person']}.",
+           "temperament": f"{a['temperament']} / {b['temperament']}",
+           "climate": [{"emotion": e, "weight": w} for e, w in climate.items()],
+           "nodes": [core] + nodes, "links": links[:40]}
+    return finish_fusion(raw, a, b, events)
+
+
+async def run_fusion(providers, http_client, a: dict, b: dict, language: str, timeout: float) -> tuple[dict, str, str]:
+    """(Hyper-Engramme, fournisseur, modèle) : schéma imposé à Gemini, JSON simple si le schéma est refusé."""
+    events = fusion_events(a, b)
+    user = build_fusion_message(a, b, events, language)
+    errors: list[str] = []
+    async with http_client() as client:
+        for provider in providers:
+            for model in provider.models:
+                for schema in ((FUSION_SCHEMA, None) if provider.name == "gemini" else (None,)):
+                    try:
+                        text = await provider.complete(client, model, FUSION_SYSTEM, user, timeout, json_mode=True, schema=schema)
+                        return finish_fusion(parse(text), a, b, events), provider.name, model
+                    except SchemaRejected as exc:
+                        errors.append(str(exc))
+                        continue
+                    except FatalGenerationError as exc:
+                        errors.append(str(exc))
+                        break
+                    except (GenerationError, EngramError) as exc:
+                        log.warning("fusion : %s", exc)
+                        errors.append(f"{model}: {exc}" if isinstance(exc, EngramError) else str(exc))
+                        break
+    raise HTTPException(status_code=502, detail="Fusion impossible : " + " | ".join(errors[-6:]))
+
+
 async def run_models(providers, http_client, person: str, language: str, timeout: float) -> tuple[dict, str, str]:
     """(engramme, fournisseur, modèle). Schéma imposé d'abord ; si chaque modèle le refuse, JSON simple."""
     user = build_user_message(person, language)
@@ -529,7 +696,7 @@ async def create_engram(req: EngramRequest, user: User = Depends(current_user)) 
         if providers:
             engram, mode, model = await run_models(providers, app._http_client, person, req.language, app.TIMEOUT_S)
         else:
-            engram, mode, model = demo_engram(), "mock", "mock:engram-marie-curie"
+            engram, mode, model = demo_engram(person), "mock", f"mock:engram-{demo_key(person)}"
     except EngramRefused as exc:
         await asyncio.shield(asyncio.to_thread(billing.refund, reservation))
         raise HTTPException(status_code=422, detail={"code": "engram_refused", "message": str(exc)}) from exc
@@ -568,6 +735,44 @@ async def chat_with_engram(req: ChatRequest, user: User = Depends(current_user))
     await asyncio.to_thread(billing.confirm, reservation, None)
     return ChatResponse(
         **answer, mode=mode, model=model,
+        sparks=billing.as_sparks(await asyncio.to_thread(billing.balance, user.id)),
+        cost=billing.as_sparks(reservation.cost_cents),
+    )
+
+
+class FusionRequest(BaseModel):
+    a: dict
+    b: dict
+    language: Literal["fr", "en"] = "fr"
+
+
+@router.post("/engram/fusion", response_model=EngramResponse)
+async def fuse_engrams(req: FusionRequest, user: User = Depends(current_user)) -> EngramResponse:
+    """« Singularité symbiotique » : deux Engrammes → un Hyper-Engramme hybride (3 Sparks, rendus en cas d'échec)."""
+    import app  # noqa: PLC0415
+
+    if len(json.dumps([req.a, req.b], ensure_ascii=False)) > FUSION_MAX_JSON:
+        raise HTTPException(status_code=422, detail="Engrammes trop volumineux.")
+    try:
+        parent_a, parent_b = fusion_parents(req.a, req.b)  # vérifiés AVANT toute facturation
+    except FusionError as exc:
+        raise HTTPException(status_code=422, detail={"code": "fusion_invalid", "message": str(exc)}) from exc
+    try:
+        reservation = await asyncio.to_thread(billing.reserve, user.id, "engram_fusion")
+    except billing.InsufficientSparks as exc:
+        raise app.insufficient(exc) from exc
+    try:
+        providers = app.active_providers()
+        if providers:
+            hyper, mode, model = await run_fusion(providers, app._http_client, parent_a, parent_b, req.language, app.TIMEOUT_S)
+        else:
+            hyper, mode, model = demo_fusion(parent_a, parent_b), "mock", "mock:engram-fusion"
+    except BaseException:
+        await asyncio.shield(asyncio.to_thread(billing.refund, reservation))
+        raise
+    await asyncio.to_thread(billing.confirm, reservation, None)
+    return EngramResponse(
+        engram=hyper, mode=mode, model=model,
         sparks=billing.as_sparks(await asyncio.to_thread(billing.balance, user.id)),
         cost=billing.as_sparks(reservation.cost_cents),
     )
