@@ -12,17 +12,60 @@ Chaque fonction renvoie le texte brut du modèle, ou lève :
 from __future__ import annotations
 
 import asyncio
-import itertools
+import contextlib
+import time
 from dataclasses import dataclass, field
 
 import httpx
 
 # Raisons de fin Gemini qui signifient « pas de document exploitable ».
 _GEMINI_BLOCKED = {"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "LANGUAGE", "OTHER"}
-# Surcharge passagère du modèle (« high demand ») : une nouvelle tentative après un court délai.
+# Surcharge passagère du modèle (« high demand ») : une autre clé prend le relais, puis une nouvelle tentative.
 _GEMINI_RETRY = {500, 503}
-# Tourniquet des clés : chaque appel commence par la clé suivante (quota réparti entre les clés).
-_rotation = itertools.count()
+
+
+class KeyPool:
+    """Répartition des appels entre les clés Gemini, pour tout le serveur : aucune clé ne porte seule la charge.
+
+    Ordre d'essai d'un appel : les clés disponibles avant celles en pause, puis la moins occupée (appels en
+    cours : un Engramme garde sa clé près d'une minute, l'Engramme suivant part donc sur une autre), puis
+    celle qui a servi le moins récemment (tourniquet). Une clé au quota (429) se met en pause une minute, une
+    clé surchargée (500/503) vingt secondes : les appels suivants passent par les autres. État en mémoire
+    seulement ; les clés n'apparaissent jamais dans les messages ni dans /api/health (seulement leur nombre)."""
+
+    PAUSE = {429: 60.0, 500: 20.0, 503: 20.0}
+
+    def __init__(self, clock=time.monotonic):
+        self.clock = clock
+        self.clear()
+
+    def clear(self) -> None:
+        self.busy: dict[str, int] = {}
+        self.last: dict[str, int] = {}  # rang du dernier départ (compteur : l'horloge est trop grossière sous Windows)
+        self.seq = 0
+        self.paused: dict[str, float] = {}
+        self.served: dict[str, int] = {}
+
+    def order(self, keys: list[str]) -> list[str]:
+        now = self.clock()
+        return sorted(keys, key=lambda k: (self.paused.get(k, 0.0) > now, self.busy.get(k, 0), self.last.get(k, float("-inf"))))
+
+    @contextlib.contextmanager
+    def using(self, key: str):
+        self.busy[key] = self.busy.get(key, 0) + 1
+        self.seq += 1
+        self.last[key] = self.seq
+        self.served[key] = self.served.get(key, 0) + 1
+        try:
+            yield
+        finally:
+            self.busy[key] -= 1
+
+    def pause(self, key: str, status: int) -> None:
+        self.paused[key] = self.clock() + self.PAUSE.get(status, 20.0)
+
+
+KEYS = KeyPool()
 
 
 class GenerationError(Exception):
@@ -50,10 +93,8 @@ class Provider:
         return [k.strip() for k in self.api_key.split(",") if k.strip()]
 
     def key_order(self) -> list[str]:
-        """Toutes les clés, en commençant par la suivante du tourniquet."""
-        keys = self.keys
-        start = next(_rotation) % len(keys) if keys else 0
-        return keys[start:] + keys[:start]
+        """Toutes les clés, dans l'ordre d'essai de la répartition (cf. KeyPool)."""
+        return KEYS.order(self.keys)
 
     async def complete(self, client: httpx.AsyncClient, model: str, system: str, user: str, timeout: float,
                        *, json_mode: bool = False, schema: dict | None = None) -> str:
@@ -82,26 +123,37 @@ async def _post(client: httpx.AsyncClient, model: str, url: str, **kwargs) -> ht
 
 
 async def _gemini_post(p: Provider, client: httpx.AsyncClient, model: str, payload: dict, timeout: float) -> httpx.Response:
-    """Envoie la requête avec les clés à tour de rôle. Clé refusée ou quota atteint (429) : clé suivante ;
-    surcharge passagère (500/503) : une nouvelle tentative après un court délai. Renvoie la première
-    réponse exploitable (ou l'erreur d'un autre type, traitée par l'appelant)."""
+    """Envoie la requête avec les clés, dans l'ordre de la répartition (KeyPool). Clé refusée, quota atteint
+    (429) ou surcharge passagère (500/503) : la clé suivante prend le relais aussitôt ; si toutes sont
+    surchargées, une nouvelle tentative après un court délai. Renvoie la première réponse exploitable (ou
+    l'erreur d'un autre type, traitée par l'appelant)."""
     url = p.url.replace("{model}", model)
-    refused, exhausted = [], []
-    for index, key in enumerate(p.key_order(), 1):
-        for attempt in range(2):
+    keys = p.keys
+    refused, exhausted, overloaded = [], [], []
+
+    async def send(key: str) -> httpx.Response:
+        with KEYS.using(key):
             # Clé dans un en-tête, jamais dans l'URL (qui finit dans les journaux).
-            resp = await _post(client, model, url, json=payload, headers={"x-goog-api-key": key}, timeout=timeout)
-            if resp.status_code not in _GEMINI_RETRY or attempt:
-                break
-            await asyncio.sleep(p.options.get("retry_delay", 2.0))
+            return await _post(client, model, url, json=payload, headers={"x-goog-api-key": key}, timeout=timeout)
+
+    for key in p.key_order():
+        index = keys.index(key) + 1
+        resp = await send(key)
         if resp.status_code == 400 and "API_KEY_INVALID" in resp.text:
             refused.append(f"clé n°{index} refusée (API_KEY_INVALID)")
         elif resp.status_code in (401, 403):
             refused.append(f"clé n°{index} : accès refusé (HTTP {resp.status_code}) {_detail(resp)}")
         elif resp.status_code == 429:
+            KEYS.pause(key, 429)
             exhausted.append(f"clé n°{index}")
+        elif resp.status_code in _GEMINI_RETRY:
+            KEYS.pause(key, resp.status_code)
+            overloaded.append(key)
         else:
             return resp
+    if overloaded:  # surcharge sur chaque clé encore valable : une dernière tentative, sur la moins occupée
+        await asyncio.sleep(p.options.get("retry_delay", 2.0))
+        return await send(KEYS.order(overloaded)[0])
     if exhausted:  # quota d'un modèle atteint sur toutes les clés : un autre modèle a peut-être le sien
         raise GenerationError(f"{model}: quota atteint (HTTP 429) — {', '.join(exhausted)}" + (f" ; {'; '.join(refused)}" if refused else ""))
     raise FatalGenerationError("Clé Gemini refusée : " + " ; ".join(refused) + ". Vérifiez GEMINI_API_KEY.")

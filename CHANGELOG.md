@@ -1,5 +1,20 @@
 # Changelog
 
+## 5.0.0-alpha.3 — 2026-09-27 (les clés Gemini se partagent le travail)
+
+- **Répartition de charge entre les clés Gemini** (serveur `providers.KeyPool`, et même règle dans le moteur du
+  navigateur) : chaque appel part sur la clé la moins occupée — un Engramme, qui garde sa clé près d'une minute, ne
+  bloque plus la suivante : l'Engramme d'après part sur une autre clé ; à égalité, la clé restée au repos le plus
+  longtemps. Une clé surchargée (500/503 « high demand ») ou au quota (429) passe **aussitôt** la main à une autre
+  (avant : deux essais sur la même clé) et se repose (20 s après une surcharge, 1 min après un quota) ; si toutes sont
+  surchargées, une dernière tentative après un court délai, puis le modèle suivant.
+- `/api/health` donne le **nombre** de clés réparties (`gemini_keys`, jamais les clés) ; affiché dans Paramètres →
+  Moteur et vérifié par `tools/check_deploy.py`.
+- **PROJET.md** : nouvelle section « Nouveautés » en tête (les dernières versions en langage simple), tenue à jour à
+  chaque livraison ; branches précisées (`v3` = site, `v4` = branche déployée par Render).
+- Tests : répartition (tourniquet, clé occupée évitée, pause après surcharge), relais immédiat sur 503, appels
+  simultanés sur des clés différentes (Python et navigateur).
+
 ## 5.0.0-alpha.2 — 2026-09-27 (V5 « Écosystème vivant » : les trois missions)
 
 - **Singularité symbiotique** : glisser un Engramme (par sa barre de titre) sur un autre surligne la cible ; au lâcher,

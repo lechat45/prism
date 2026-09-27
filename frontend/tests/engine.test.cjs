@@ -145,6 +145,25 @@ test("plusieurs clés : quota ou clé refusée → clé suivante, même modèle 
   assert.deepEqual(turns.calls.map((c) => c.headers["x-goog-api-key"]).sort(), ["cle-a", "cle-b", "cle-c"], "quota réparti");
 });
 
+test("plusieurs clés : une clé surchargée (503) passe aussitôt la main, puis se repose", async () => {
+  const { engine, calls } = fakeGemini({ [PRIMARY]: [httpError(503), gemini(GOOD), gemini(GOOD), gemini(GOOD)] });
+  const r = await engine.generate("x", { key: "cle-a,cle-b,cle-c" });
+  assert.equal(r.model, PRIMARY);
+  const used = calls.map((c) => c.headers["x-goog-api-key"]);
+  assert.equal(used.length, 2);
+  assert.notEqual(used[0], used[1]);
+  calls.length = 0;
+  await engine.generate("x", { key: "cle-a,cle-b,cle-c" });
+  await engine.generate("x", { key: "cle-a,cle-b,cle-c" });
+  assert.ok(!calls.some((c) => c.headers["x-goog-api-key"] === used[0]), "la clé surchargée se repose");
+});
+
+test("plusieurs clés : des appels simultanés partent sur des clés différentes", async () => {
+  const { engine, calls } = fakeGemini({ [PRIMARY]: gemini(GOOD) });
+  await Promise.all([1, 2, 3].map(() => engine.generate("x", { key: "cle-a,cle-b,cle-c" })));
+  assert.deepEqual(calls.map((c) => c.headers["x-goog-api-key"]).sort(), ["cle-a", "cle-b", "cle-c"]);
+});
+
 test("plusieurs clés : toutes au quota → modèle suivant ; toutes refusées → arrêt", async () => {
   const quota = fakeGemini({ [PRIMARY]: httpError(429), [SECONDARY]: gemini(GOOD) });
   assert.equal((await quota.engine.generate("x", { key: "a,b" })).model, SECONDARY);
