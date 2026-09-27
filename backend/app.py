@@ -58,7 +58,7 @@ from sanitize import (
     validate_document,
 )
 
-__version__ = "5.0.0a2"
+__version__ = "5.0.0a3"
 
 BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
@@ -407,6 +407,8 @@ async def health() -> dict:
         "mode": (providers[0].name if (providers := active_providers()) else "mock"),
         "models": [m for p in providers for m in p.models] or ["mock"],
         "providers": [p.name for p in providers],
+        # Nombre de clés Gemini réparties (jamais les clés elles-mêmes).
+        "gemini_keys": sum(len(p.keys) for p in providers if p.name == "gemini"),
         "auth": True,
         "pricing": {action: billing.as_sparks(cents) for action, cents in billing.PRICES.items()},
         "signup_sparks": billing.as_sparks(billing.SIGNUP_BONUS),

@@ -179,28 +179,54 @@
     }
 
     const retryDelayMs = options.retryDelayMs == null ? 2000 : options.retryDelayMs;
-    let turn = 0; // tourniquet des clés : chaque appel commence par la suivante (quota réparti)
+    // Répartition entre les clés (mêmes règles que KeyPool dans providers.py) : clés disponibles d'abord, puis
+    // la moins occupée (appels en cours), puis celle qui a servi le moins récemment ; pause après 429 ou 5xx.
+    const PAUSE_MS = { 429: 60000, 500: 20000, 503: 20000 };
+    const keyState = new Map(); // clé -> { busy, last, pausedUntil }
+    let tick = 0; // horloge d'usage (strictement croissante, même pour deux appels dans la même milliseconde)
+    const stateOf = (key) => {
+      if (!keyState.has(key)) keyState.set(key, { busy: 0, last: -Infinity, pausedUntil: 0 });
+      return keyState.get(key);
+    };
+    function keyOrder(list) {
+      const now = Date.now();
+      return list.map((key, i) => ({ key, i, s: stateOf(key) }))
+        .sort((a, b) => (a.s.pausedUntil > now) - (b.s.pausedUntil > now) || a.s.busy - b.s.busy || a.s.last - b.s.last || a.i - b.i)
+        .map((x) => x.key);
+    }
+    async function send(url, model, body, key, signal) {
+      const s = stateOf(key);
+      s.busy += 1;
+      s.last = ++tick;
+      try {
+        return await post(url, model, body, key, signal);
+      } finally {
+        s.busy -= 1;
+      }
+    }
 
-    /** Clés à tour de rôle (mêmes règles que _gemini_post() dans providers.py) : clé refusée ou quota
-     *  atteint (429) → clé suivante ; surcharge passagère (500/503) → une nouvelle tentative. */
+    /** Clés dans l'ordre de la répartition (mêmes règles que _gemini_post() dans providers.py) : clé refusée,
+     *  quota atteint (429) ou surcharge passagère (500/503) → la clé suivante prend le relais ; toutes
+     *  surchargées → une nouvelle tentative après un court délai. */
     async function postWithKeys(url, model, body, keys, signal) {
       const list = String(keys || "").split(",").map((k) => k.trim()).filter(Boolean);
-      const start = list.length ? turn++ % list.length : 0;
-      const order = list.slice(start).concat(list.slice(0, start));
       const refused = [];
       const exhausted = [];
-      for (let i = 0; i < order.length; i++) {
-        let reply = await post(url, model, body, order[i], signal);
-        if (reply.res.status === 500 || reply.res.status === 503) {
-          await pause(retryDelayMs, signal);
-          reply = await post(url, model, body, order[i], signal);
-        }
+      const overloaded = [];
+      for (const key of keyOrder(list)) {
+        const reply = await send(url, model, body, key, signal);
         const { res, text } = reply;
-        const index = list.indexOf(order[i]) + 1;
+        const index = list.indexOf(key) + 1;
         if (res.status === 400 && text.includes("API_KEY_INVALID")) refused.push(`clé n°${index} refusée (API_KEY_INVALID)`);
         else if (res.status === 401 || res.status === 403) refused.push(`clé n°${index} : accès refusé (HTTP ${res.status})`);
-        else if (res.status === 429) exhausted.push(`clé n°${index}`);
-        else return reply;
+        else if (res.status === 429 || res.status === 500 || res.status === 503) {
+          stateOf(key).pausedUntil = Date.now() + PAUSE_MS[res.status];
+          (res.status === 429 ? exhausted : overloaded).push(res.status === 429 ? `clé n°${index}` : key);
+        } else return reply;
+      }
+      if (overloaded.length) {
+        await pause(retryDelayMs, signal);
+        return send(url, model, body, keyOrder(overloaded)[0], signal);
       }
       if (exhausted.length) {
         throw new Error(`${model}: quota atteint (HTTP 429) — ${exhausted.join(", ")}${refused.length ? ` ; ${refused.join(" ; ")}` : ""}`);

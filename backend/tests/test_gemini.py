@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from helpers import DbTestCase
 
 import app as prism
+import providers
 
 GOOD = (
     '<!DOCTYPE html><html lang="fr" class="h-full" style="--accent:#7cc4ff"><head><title>Compteur</title>'
@@ -33,12 +34,48 @@ INVALID_KEY = httpx.Response(400, json={"error": {"code": 400, "message": "API k
                                                   "status": "INVALID_ARGUMENT", "details": [{"reason": "API_KEY_INVALID"}]}})
 
 
+class KeyPoolTests(unittest.TestCase):
+    """Répartition entre les clés : la moins occupée, puis la moins récemment servie ; pause après surcharge."""
+
+    def setUp(self):
+        self.now = 100.0
+        self.pool = providers.KeyPool(clock=lambda: self.now)
+
+    def test_round_robin_when_idle(self):
+        keys = ["a", "b", "c"]
+        served = []
+        for _ in range(6):
+            key = self.pool.order(keys)[0]
+            with self.pool.using(key):
+                served.append(key)
+        self.assertEqual(served, ["a", "b", "c", "a", "b", "c"])
+
+    def test_a_busy_key_does_not_take_the_next_long_call(self):
+        keys = ["a", "b", "c"]
+        with self.pool.using("a"):  # un Engramme en cours sur la clé a
+            with self.pool.using(self.pool.order(keys)[0]):  # et un autre sur la suivante
+                self.assertEqual(self.pool.order(keys)[0], "c", "le troisième part sur la clé libre")
+            self.assertNotEqual(self.pool.order(keys)[0], "a")
+        self.assertEqual(self.pool.busy, {"a": 0, "b": 0})
+
+    def test_paused_key_goes_last_until_its_pause_ends(self):
+        keys = ["a", "b"]
+        self.pool.pause("a", 503)
+        self.assertEqual(self.pool.order(keys), ["b", "a"])
+        self.now += providers.KeyPool.PAUSE[503] + 1
+        self.assertEqual(self.pool.order(keys), ["a", "b"])
+        self.pool.pause("b", 429)
+        self.now += providers.KeyPool.PAUSE[503] + 1
+        self.assertEqual(self.pool.order(keys)[-1], "b", "le quota dure plus longtemps qu'une surcharge")
+
+
 class GeminiTests(DbTestCase):
     def setUp(self):
         super().setUp()
         self._saved = (prism.GEMINI_MODELS, prism._http_client)
         prism.GEMINI_API_KEY = "cle-gemini-test"
         prism.GEMINI_MODELS = [M1, M2]
+        providers.KEYS.clear()
         self.answers: dict[str, list[httpx.Response]] = {}
         self.calls: list[tuple[str, dict, httpx.Headers]] = []
 
@@ -165,6 +202,36 @@ class GeminiTests(DbTestCase):
         for _ in range(3):
             self.assertEqual(self.generate().status_code, 200)
         self.assertEqual(sorted(c[2]["x-goog-api-key"] for c in self.calls), ["cle-a", "cle-b", "cle-c"], "tourniquet : quota réparti")
+
+    def test_overloaded_key_hands_over_to_another_key_at_once(self):
+        prism.GEMINI_API_KEY = "cle-a,cle-b,cle-c"
+        busy = httpx.Response(503, json={"error": {"status": "UNAVAILABLE", "message": "high demand"}})
+        self.answers = {M1: [busy]}
+        res = self.generate()
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json()["model"], M1, "même modèle, autre clé")
+        used = [c[2]["x-goog-api-key"] for c in self.calls]
+        self.assertEqual(len(used), 2)
+        self.assertNotEqual(used[0], used[1], "la clé surchargée passe la main")
+        # La clé surchargée se repose : les appels suivants partent sur les deux autres.
+        self.calls.clear()
+        for _ in range(2):
+            self.assertEqual(self.generate().status_code, 200)
+        self.assertNotIn(used[0], [c[2]["x-goog-api-key"] for c in self.calls])
+
+    def test_every_key_overloaded_gets_one_last_try(self):
+        prism.GEMINI_API_KEY = "cle-a,cle-b"
+        busy = httpx.Response(503, json={"error": {"status": "UNAVAILABLE", "message": "high demand"}})
+        self.answers = {M1: [busy, busy]}
+        res = self.generate()
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual([c[0] for c in self.calls], [M1, M1, M1], "chaque clé, puis une dernière tentative")
+
+    def test_health_gives_the_number_of_keys_never_the_keys(self):
+        prism.GEMINI_API_KEY = "cle-a, cle-b,cle-c"
+        health = self.client.get("/api/health")
+        self.assertEqual(health.json()["gemini_keys"], 3)
+        self.assertNotIn("cle-", health.text)
 
     def test_all_keys_exhausted_moves_to_the_next_model(self):
         prism.GEMINI_API_KEY = "cle-a,cle-b"

@@ -143,7 +143,9 @@ function enginePanel() {
     const info = engine.info || {};
     panel.push(fact("Moteur", info.mode === "mock" ? "Serveur Prism, mode démo (sans clé)" : "Serveur Prism"));
     panel.push(fact("Modèles", (info.models || []).join(" → ") || "—"));
-    panel.push(el("p", "fine", "Les clés Gemini sont celles du serveur : elles ne quittent jamais le serveur et servent à tour de rôle (une clé au quota passe la main à la suivante)."));
+    const keys = info.gemini_keys;
+    if (keys) panel.push(fact("Clés Gemini", `${keys} clé${keys > 1 ? "s" : ""} réparties`));
+    panel.push(el("p", "fine", "Les clés Gemini sont celles du serveur et ne le quittent jamais. Elles se partagent le travail : chaque demande part sur la clé la moins occupée (un Engramme en cours garde la sienne, le suivant en prend une autre) ; une clé surchargée ou au quota passe aussitôt la main et se repose un moment."));
   } else {
     const keys = readKey().split(",").map((k) => k.trim()).filter(Boolean);
     panel.push(fact("Moteur", engine.waking ? "Navigateur (serveur en cours de réveil)" : "Navigateur"));

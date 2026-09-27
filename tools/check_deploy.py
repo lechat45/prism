@@ -43,8 +43,10 @@ def main() -> int:
     info = json.loads(body or b"{}") if status == 200 else {}
     check("GET /api/health répond", status == 200 and info.get("status") == "ok",
           f"HTTP {status} en {elapsed:.1f} s — v{info.get('version')} · moteur {info.get('mode')} · {', '.join(info.get('providers') or []) or 'démo'}")
+    keys = info.get("gemini_keys")
     check("moteur réel configuré (GEMINI_API_KEY)", info.get("mode") not in (None, "mock") or (args.allow_demo and info.get("mode") == "mock"),
-          "mode démo : ajoutez GEMINI_API_KEY" if info.get("mode") == "mock" else info.get("mode", ""))
+          "mode démo : ajoutez GEMINI_API_KEY" if info.get("mode") == "mock"
+          else f"{info.get('mode', '')}" + (f", {keys} clé(s) Gemini réparties" if keys is not None else ""))
     check("comptes activés", info.get("auth") is True)
 
     for name, expected in (("x-content-type-options", "nosniff"), ("x-frame-options", "DENY"), ("referrer-policy", "no-referrer")):

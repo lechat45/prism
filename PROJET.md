@@ -1,8 +1,25 @@
 # Prism — description complète du projet
 
-> Version décrite : **4.0.0-alpha.7** (26 septembre 2026). En ligne : <https://lechat45.github.io/prism/>,
-> API : <https://prism-api-0x4z.onrender.com>. Code : <https://github.com/lechat45/prism> (branches `v3` = site public,
-> `v4` = développement, identiques à chaque publication).
+> Version décrite : **5.0.0-alpha.3** (27 septembre 2026). En ligne : <https://lechat45.github.io/prism/>,
+> API : <https://prism-api-0x4z.onrender.com>. Code : <https://github.com/lechat45/prism> (branches `v3` = site public
+> sur GitHub Pages, `v4` = branche déployée par Render pour l'API, `v5` = développement ; identiques à chaque publication).
+> Ce document est mis à jour à chaque livraison ; le détail technique de chaque version est dans `CHANGELOG.md`.
+
+## Nouveautés
+
+Les dernières mises à jour, de la plus récente à la plus ancienne.
+
+- **5.0.0-alpha.3 — 27 septembre 2026 · les clés Gemini travaillent ensemble.** Les trois clés du serveur se partagent
+  les demandes : chacune part sur la clé la moins occupée, si bien qu'un Engramme en cours (près d'une minute) ne
+  retient pas les suivants, qui partent sur les autres clés. Une clé surchargée ou au quota passe aussitôt la main et se
+  repose un moment. Le nombre de clés s'affiche dans Paramètres → Moteur.
+- **5.0.0-alpha.2 — 27 septembre 2026 · l'écosystème vivant.** Glisser un Engramme sur un autre les fusionne en un
+  Hyper-Engramme (animation de fusion, provenance de chaque bulle) ; un pointeur qui tourne en rond sur un widget fait
+  proposer « Simplifier » (jamais de dépense sans votre clic) ; « Dissoudre » brise une carte en particules dont les
+  mots-clés nourrissent, visiblement, les widgets créés ensuite au même endroit. Nouvel onglet Paramètres → Écosystème.
+- **5.0.0-alpha.1 — 26 septembre 2026 · fusion côté serveur.** Route `POST /api/engram/fusion` (3 Sparks).
+- **4.0.0-alpha.7 — 26 septembre 2026 · mise en ligne réelle.** API sur Render avec base Neon et clés Gemini du
+  serveur, bouton « Tester » (compte d'essai), ce document.
 
 ## 1. L'idée
 
@@ -101,8 +118,11 @@ colère, peur, angoisse, solitude). L'ensemble porte le **tempérament** (le car
    (artefacts triés), émotions reconnues, palette hexadécimale, liens entre bulles existantes. Les surplus sont écartés
    (les moins intenses d'abord) ; un Engramme incomplet fait passer au modèle suivant ; le climat absent est déduit des
    émotions des bulles.
-3. Clés et quotas : plusieurs clés servies à tour de rôle (quota ou refus → clé suivante), surcharge (503) → nouvelle
-   tentative puis modèle suivant ; un modèle « lite » en dernier recours quand Google est saturé.
+3. Clés et quotas : les clés se **partagent le travail** — chaque appel part sur la clé la moins occupée (un Engramme
+   garde sa clé près d'une minute ; le suivant en prend une autre), à égalité sur celle restée au repos le plus
+   longtemps ; une clé surchargée (503) ou au quota (429) passe aussitôt la main et se repose (20 s, 1 min) ; toutes
+   surchargées → une dernière tentative, puis modèle suivant ; un modèle « lite » en dernier recours quand Google est
+   saturé.
 
 ### 4.4 Rendu et mouvement : logique d'abord, organique ensuite
 
@@ -192,7 +212,7 @@ backend/   (FastAPI, Python 3.13)
   app.py        génération, santé, CORS, en-têtes de sécurité, garde-fous de production
   engram.py     Engramme, conversation, fusion      auth.py   comptes, sessions JWT, compte d'essai
   billing.py    Sparks (réservation, confirmation, remboursement, grand livre)
-  widgets.py    Mon Hub      providers.py   Gemini (clés en tourniquet, relais) et Groq en secours
+  widgets.py    Mon Hub      providers.py   Gemini (répartition entre les clés, relais) et Groq en secours
   db.py, models.py   SQLAlchemy : SQLite en local, PostgreSQL (Neon) en production
 tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesures de performance
 ```
@@ -200,7 +220,7 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
 - **Déploiement** : API + frontend sur **Render** (image Docker, offre gratuite, déploiement seulement après une CI
   verte), base **PostgreSQL sur Neon**, site public sur **GitHub Pages** (branche `v3`) branché sur l'API par la balise
   `<meta name="prism-api">`. Secrets (clés Gemini, base, secret de session) uniquement dans le tableau de bord de Render.
-- **Qualité** : 135 tests Python (sur SQLite et PostgreSQL), 81 tests Node, parité Python ↔ navigateur sur des cas
+- **Qualité** : 141 tests Python (sur SQLite et PostgreSQL), 83 tests Node, parité Python ↔ navigateur sur des cas
   partagés, six scénarios E2E dans Chrome (site statique, serveur de démo, faux Gemini, GitHub Pages → API, Engramme en
   mode serveur et statique), contrôle de l'image Docker ; tout est rejoué par la CI GitHub à chaque envoi. Aucun test ne
   touche la production.
@@ -219,6 +239,7 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
 | alpha.7 | mise en ligne réelle (Render + Neon), bouton « Tester » (compte d'essai), ce document |
 | 5.0.0-alpha.1 | V5 « Écosystème vivant » : route de fusion d'Engrammes (serveur) |
 | alpha.2 | fusion par glisser-déposer et Hyper-Engramme animé, darwinisme d'interface, sédimentation, Paramètres → Écosystème |
+| alpha.3 | répartition de charge entre les clés Gemini, section « Nouveautés » de ce document |
 
 ## 8. Limites connues
 

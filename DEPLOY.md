@@ -39,8 +39,12 @@ aussi, automatiquement (rien n'est jamais supprimé).
 3. Renseignez les deux secrets demandés :
    - `PRISM_DATABASE_URL` : la chaîne Neon de l'étape 1 ;
    - `GEMINI_API_KEY` : votre clé Google AI Studio (<https://aistudio.google.com/apikey>) ; plusieurs clés
-     possibles, séparées par des virgules (servies à tour de rôle, relais sur quota) : copiez la valeur de
-     `backend/.env`.
+     possibles, séparées par des virgules : elles se partagent le travail (chaque appel sur la moins occupée,
+     relais immédiat sur surcharge ou quota) ; copiez la valeur de `backend/.env`. `/api/health` indique leur
+     nombre (`gemini_keys`).
+
+   > Branche déployée : celle choisie à la création du service (ici **`v4`**), pas forcément celle du site
+   > (`v3`, GitHub Pages). Une publication pousse donc les deux branches, ou réglez la branche du service Render.
 
    `PRISM_JWT_SECRET` est généré par Render ; les autres réglages sont dans `render.yaml`.
 4. **Apply**. Premier déploiement : quelques minutes (construction de l'image). Adresse du service :
