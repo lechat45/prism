@@ -649,6 +649,16 @@ async function runEngram(card) {
   }
 }
 
+/**
+ * Budget commun des Engrammes au repos : leurs fils de rendu se partagent environ 60 % d'un cœur (30 % au plus
+ * chacun) ; la carte manipulée garde la pleine vitesse. Envoyé à chaque carte Engramme prête ou retirée.
+ */
+function shareEngramBudget() {
+  const frames = [...cards.values()].filter((c) => isEngram(c)).map((c) => canvas.frame(c.id)).filter(Boolean);
+  const share = Math.min(0.3, 0.6 / Math.max(1, frames.length));
+  for (const frame of frames) frame.contentWindow?.postMessage({ prism: "engram-budget", share }, "*");
+}
+
 /** Montre dans l'Engramme la bulle choisie comme filtre (ou aucune). */
 function pinInViewer(cardId, nodeId) {
   canvas.frame(cardId)?.contentWindow?.postMessage({ prism: "engram-pin", nodeId }, "*");
@@ -939,6 +949,7 @@ function discard(card) {
   redrawLinks();
   if (inspector.card?.id === card.id) inspector.close();
   updateEmpty();
+  if (isEngram(card)) setTimeout(shareEngramBudget, 0);
 }
 
 function closeCard(card, { message = `« ${card.title} » fermée`, undo = () => restoreCard(card) } = {}) {
@@ -1213,6 +1224,7 @@ window.addEventListener("message", (event) => {
     canvas.wheelZoom(r.left + x * scale, r.top + y * scale, Math.max(-500, Math.min(500, dy)));
   } else if (data.prism === "ready") {
     revealFrame(card);
+    if (isEngram(card)) shareEngramBudget();
     const runtimeTitle = typeof data.title === "string" ? data.title.trim().slice(0, 80) : "";
     if (runtimeTitle && runtimeTitle !== card.title) {
       card.title = runtimeTitle;

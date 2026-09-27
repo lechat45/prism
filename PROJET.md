@@ -1,6 +1,6 @@
 # Prism — description complète du projet
 
-> Version décrite : **5.0.0-alpha.3** (27 septembre 2026). En ligne : <https://lechat45.github.io/prism/>,
+> Version décrite : **5.0.0-alpha.4** (27 septembre 2026). En ligne : <https://lechat45.github.io/prism/>,
 > API : <https://prism-api-0x4z.onrender.com>. Code : <https://github.com/lechat45/prism> (branches `v3` = site public
 > sur GitHub Pages, `v4` = branche déployée par Render pour l'API, `v5` = développement ; identiques à chaque publication).
 > Ce document est mis à jour à chaque livraison ; le détail technique de chaque version est dans `CHANGELOG.md`.
@@ -9,6 +9,11 @@
 
 Les dernières mises à jour, de la plus récente à la plus ancienne.
 
+- **5.0.0-alpha.4 — 27 septembre 2026 · les Engrammes calculent et dessinent à part.** Chaque Engramme fait tourner sa
+  physique et son dessin sur un fil séparé (Web Worker) : la carte reste réactive même quand plusieurs Engrammes
+  vivent en même temps (avec cinq Engrammes, le pointeur répond en ~10 ms au lieu de 100 à 300 ms). La physique ne
+  s'emballe plus quand la machine ralentit, et les Engrammes au repos se partagent un budget de calcul pour ne jamais
+  priver le reste de Prism. Première étape de la phase 1 de la V5 « Écosystème sensitif ».
 - **5.0.0-alpha.3 — 27 septembre 2026 · les clés Gemini travaillent ensemble.** Les trois clés du serveur se partagent
   les demandes : chacune part sur la clé la moins occupée, si bien qu'un Engramme en cours (près d'une minute) ne
   retient pas les suivants, qui partent sur les autres clés. Une clé surchargée ou au quota passe aussitôt la main et se
@@ -144,6 +149,14 @@ décrivent de petits épicycles avec une traînée. Le **climat émotionnel** te
 Au survol, la bulle s'arrête, grossit et affiche une **fiche en verre** (catégorie, type, émotion, contenu, directive
 ADN, base et source, date et impact, palette, mots-clés).
 
+**Sur un fil à part.** Depuis la 5.0.0-alpha.4, la physique et le dessin tournent dans un **Web Worker** avec une toile
+`OffscreenCanvas` : la carte crée ce fil depuis son propre code (sa CSP n'autorise que ces Workers, sans réseau), puis
+lui confie sa toile. Elle ne garde que ce qui touche au document (fiche, légende, dépôts, pointeur) et une réplique de
+la simulation, mise à jour par des instantanés compacts (positions et tailles des bulles, transférés sans copie). Les
+cartes au repos se partagent un budget de calcul (environ 60 % d'un cœur au total, 30 images/s au plus chacune) ; celle
+que l'on manipule tourne à pleine vitesse ; une carte hors de l'écran s'arrête. Si le navigateur ne sait pas faire,
+tout se passe comme avant, sur le fil de la carte.
+
 ### 4.5 Utiliser un Engramme
 
 - **Filtre ADN** : un clic sur une bulle en fait le filtre de la prochaine demande ; déposer un fichier ou un texte sur
@@ -207,7 +220,7 @@ frontend/  (site statique : GitHub Pages, ou servi par l'API)
                                     V5 : confusion.js (pointeur), sediment.js (sédiments), ecosystem.js (réglages)
   engine/                           partagé par les deux moteurs : prompts, gabarits, schémas, validation JS,
                                     moteur navigateur (local.js) ; engram/ : Engramme (schéma, prompts, validation,
-                                    fusion, physique, document de carte, démos Marie Curie et Ada Lovelace)
+                                    fusion, physique, rendu (render.js, dans un Worker), document de carte, démos Marie Curie et Ada Lovelace)
 backend/   (FastAPI, Python 3.13)
   app.py        génération, santé, CORS, en-têtes de sécurité, garde-fous de production
   engram.py     Engramme, conversation, fusion      auth.py   comptes, sessions JWT, compte d'essai
@@ -220,7 +233,7 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
 - **Déploiement** : API + frontend sur **Render** (image Docker, offre gratuite, déploiement seulement après une CI
   verte), base **PostgreSQL sur Neon**, site public sur **GitHub Pages** (branche `v3`) branché sur l'API par la balise
   `<meta name="prism-api">`. Secrets (clés Gemini, base, secret de session) uniquement dans le tableau de bord de Render.
-- **Qualité** : 141 tests Python (sur SQLite et PostgreSQL), 83 tests Node, parité Python ↔ navigateur sur des cas
+- **Qualité** : 141 tests Python (sur SQLite et PostgreSQL), 89 tests Node, parité Python ↔ navigateur sur des cas
   partagés, six scénarios E2E dans Chrome (site statique, serveur de démo, faux Gemini, GitHub Pages → API, Engramme en
   mode serveur et statique), contrôle de l'image Docker ; tout est rejoué par la CI GitHub à chaque envoi. Aucun test ne
   touche la production.
@@ -240,9 +253,12 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
 | 5.0.0-alpha.1 | V5 « Écosystème vivant » : route de fusion d'Engrammes (serveur) |
 | alpha.2 | fusion par glisser-déposer et Hyper-Engramme animé, darwinisme d'interface, sédimentation, Paramètres → Écosystème |
 | alpha.3 | répartition de charge entre les clés Gemini, section « Nouveautés » de ce document |
+| alpha.4 | phase 1 : physique et dessin des Engrammes dans un Web Worker (OffscreenCanvas), physique v2, budget de calcul |
 
 ## 8. Limites connues
 
+- Un Engramme créé avant la 5.0.0-alpha.4 garde le moteur inscrit dans sa carte (rendu sur le fil de la carte) ; les
+  nouveaux Engrammes profitent du Worker.
 - Quand Google est saturé, les longues générations (Engramme) passent par le modèle « lite », moins riche ; un
   Engramme prend de 25 s à 1 min 30.
 - L'hébergement gratuit s'endort : première visite après 15 minutes d'inactivité, environ une minute de réveil (Prism

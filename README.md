@@ -109,6 +109,15 @@ Machine de mesure : 2 cœurs, souvent saturée ; les chiffres absolus varient, l
   dérive que canvas vide ; les cartes n'utilisent plus `backdrop-filter` (re-flou de chaque carte à chaque image
   d'un déplacement) ; le squelette holographique n'anime que `transform` et `opacity` (compositeur).
 
+### Engrammes : rendu dans un Web Worker (V5, phase 1)
+
+Physique et dessin de chaque Engramme tournent dans un Worker (OffscreenCanvas) créé par la carte depuis son propre
+code : le fil de la carte reste libre pour le pointeur et les autres cartes. `engine/engram/render.js` dessine sans
+DOM ; la page garde une réplique de la simulation, synchronisée par instantanés `Float32Array` transférés ; cadence
+régulée (pleine vitesse quand la carte est manipulée, budget commun au repos), pause hors de l'écran ; repli sur le fil
+de la carte si le Worker est indisponible. Mesures : `node tools/bench_engram.mjs [--inline]` (cartes réelles en iframes
+sandbox) et `node tools/bench_physics.cjs` (moteur seul).
+
 ## Mon Hub (mode serveur, compte connecté)
 
 - **Bibliothèque** (bouton « Mon Hub ») : tous vos widgets, du plus récent au plus ancien, avec miniature,
@@ -329,6 +338,7 @@ node tools/e2e_canvas.mjs --base http://127.0.0.1:8004
 .venv/Scripts/python tools/serve_static.py &                      # comme GitHub Pages
 node tools/e2e_canvas.mjs --base http://127.0.0.1:8001/
 node tools/perf_probe.mjs --base http://127.0.0.1:8001/           # fluidité (--profile dossier : profils CPU)
+node tools/bench_engram.mjs [--inline]                            # Engrammes : Worker ou fil de la carte, retard du pointeur
 .venv/Scripts/python tools/e2e_server.py &                        # faux Gemini : génération et refactorisation
 node tools/e2e_canvas.mjs --base http://127.0.0.1:8003 --refactor
 node tools/e2e_pages_api.mjs --api http://127.0.0.1:8004          # GitHub Pages → API (serveur démo lancé)

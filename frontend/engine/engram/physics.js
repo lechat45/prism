@@ -30,6 +30,9 @@
 
   const STEP = 1 / 120;
   const MAX_FRAME = 0.1; // au-delà (onglet en veille…), on ne rattrape pas le retard
+  // Au plus 4 pas par image (jusqu'à 30 images/s) : sous charge, le temps ralentit un instant au lieu de s'emballer
+  // (rattraper 12 pas d'une image lente rendait la suivante plus lente encore).
+  const MAX_STEPS = 4;
   const TAU = Math.PI * 2;
   const TOP = -Math.PI / 2; // midi (l'axe y de l'écran descend : les angles croissent dans le sens horaire)
 
@@ -144,7 +147,6 @@
     let acc = 0;
     const fusion = Boolean(options.fusion);
 
-    const center = () => ({ x: width / 2, y: height / 2 });
     /** Rayon de l'ellipse inscrite (demi-axes : demi-zone moins la marge) dans la direction (ux, uy). */
     const ellipse = (ux, uy) => {
       const a = Math.max(40, width / 2 - EDGE);
@@ -188,24 +190,38 @@
       if (a && b && a !== b) links.push({ a, b, kind: l.kind });
     }
     const slots = computeSlots(nodes, links);
+    const slotOf = nodes.map((n) => slots.get(n.id) || 0);
 
-    /** Point que la bulle doit suivre à l'instant présent. */
+    // Tampons du pas de calcul, alloués une fois (aucune allocation par image : pas de pause du ramasse-miettes).
+    const count = nodes.length;
+    const ax = new Float64Array(count);
+    const ay = new Float64Array(count);
+    const invMass = Float64Array.from(nodes, (n) => 1 / n.p.mass);
+    const isShadow = Uint8Array.from(nodes, (n) => (n.category === "shadow" ? 1 : 0));
+    // Grille de voisinage (cases de la portée de répulsion) : seules les bulles des cases voisines sont comparées.
+    const nextInCell = new Int32Array(count);
+    const cellOf = new Int32Array(count);
+    let cells = new Int32Array(1);
+    let tx = 0;
+    let ty = 0;
+
+    /** Point que la bulle doit suivre à l'instant présent (écrit dans tx, ty). */
     function target(n) {
       const p = n.p;
-      const c = core || center();
-      const angle = (slots.get(n.id) || 0) + DRIFT * time;
+      const cx = core ? core.x : width / 2;
+      const cy = core ? core.y : height / 2;
+      const angle = slotOf[n.index] + DRIFT * time;
       const ux = Math.cos(angle);
       const uy = Math.sin(angle);
       let radius = p.orbit * ellipse(ux, uy);
       if (p.breath) radius *= 1 + p.breath * Math.sin(time * 0.6 + n.phase);
-      let x = c.x + ux * radius;
-      let y = c.y + uy * radius;
+      tx = cx + ux * radius;
+      ty = cy + uy * radius;
       if (p.wobble) {
         const w = time * p.wobbleSpeed * n.spin + n.phase;
-        x += Math.cos(w) * p.wobble;
-        y += Math.sin(w) * p.wobble;
+        tx += Math.cos(w) * p.wobble;
+        ty += Math.sin(w) * p.wobble;
       }
-      return [x, y];
     }
 
     // Départ : chaque bulle à sa place, à quelques pixels près (le mouvement naît organiquement) ; en fusion,
@@ -223,28 +239,27 @@
         n.y = height * (side === 0.5 ? 0.18 : 0.5) + (random() - 0.5) * height * 0.3;
         continue;
       }
-      const [x, y] = target(n);
-      n.x = x + (random() - 0.5) * 12;
-      n.y = y + (random() - 0.5) * 12;
+      target(n);
+      n.x = tx + (random() - 0.5) * 12;
+      n.y = ty + (random() - 0.5) * 12;
     }
     /** 0 → 1 pendant la fusion (null hors fusion). */
     const progress = () => (fusion ? Math.min(1, time / INTRO) : null);
 
     function step(dt) {
       time += dt;
-      const ax = new Float64Array(nodes.length);
-      const ay = new Float64Array(nodes.length);
-      for (let i = 0; i < nodes.length; i++) {
+      const intro = fusion && time < INTRO;
+      const u = time / INTRO;
+      const pull = intro ? 0.04 + 3 * u * u * u : 1; // fusion : gravité en cube du temps
+      for (let i = 0; i < count; i++) {
         const n = nodes[i];
         if (n === core) {
-          const cc = center();
-          ax[i] = (cc.x - n.x) * 40;
-          ay[i] = (cc.y - n.y) * 40;
+          ax[i] = (width / 2 - n.x) * 40;
+          ay[i] = (height / 2 - n.y) * 40;
           continue;
         }
         // Ressort vers la place logique (qui tourne avec tout l'Engramme) ; en fusion, gravité croissante.
-        const [tx, ty] = target(n);
-        const pull = fusion && time < INTRO ? 0.04 + 3 * Math.pow(time / INTRO, 3) : 1;
+        target(n);
         ax[i] = n.p.k * pull * (tx - n.x);
         ay[i] = n.p.k * pull * (ty - n.y);
         // Ombres : bruit lissé asynchrone.
@@ -254,31 +269,52 @@
         }
       }
 
-      // Répulsion à courte portée entre toutes les bulles (le noyau, trop massif, ne bouge pas).
-      for (let i = 0; i < nodes.length; i++) {
+      // Répulsion à courte portée entre bulles voisines (le noyau, trop massif, ne bouge pas).
+      const shadowForce = SHADOW_REPULSION * (intro ? 0.08 : 1) * 40; // fusion : les ombres se heurtent au lieu de s'éviter
+      const plainForce = REPULSION * 40;
+      const range2 = REPULSION_RANGE * REPULSION_RANGE;
+      const cols = Math.max(1, Math.ceil(width / REPULSION_RANGE));
+      const rows = Math.max(1, Math.ceil(height / REPULSION_RANGE));
+      if (cells.length < cols * rows) cells = new Int32Array(cols * rows);
+      cells.fill(-1, 0, cols * rows);
+      for (let i = 0; i < count; i++) {
+        const gx = Math.min(cols - 1, Math.max(0, Math.floor(nodes[i].x / REPULSION_RANGE)));
+        const gy = Math.min(rows - 1, Math.max(0, Math.floor(nodes[i].y / REPULSION_RANGE)));
+        const k = gy * cols + gx;
+        cellOf[i] = k;
+        nextInCell[i] = cells[k];
+        cells[k] = i;
+      }
+      for (let i = 0; i < count; i++) {
         const a = nodes[i];
-        for (let j = i + 1; j < nodes.length; j++) {
-          const b = nodes[j];
-          const dx = b.x - a.x;
-          const dy = b.y - a.y;
-          const d2 = dx * dx + dy * dy;
-          if (d2 > REPULSION_RANGE * REPULSION_RANGE) continue;
-          const d = Math.sqrt(d2) || 0.01;
-          const contact = Math.max(d - (a.r + b.r) * 0.9, 4);
-          const clash = fusion && time < INTRO ? 0.08 : 1; // fusion : les ombres se heurtent au lieu de s'éviter
-          const strength = (a.category === "shadow" && b.category === "shadow" ? SHADOW_REPULSION * clash : REPULSION) / (contact * contact) * 40;
-          const fx = (dx / d) * strength;
-          const fy = (dy / d) * strength;
-          ax[i] -= fx / a.p.mass;
-          ay[i] -= fy / a.p.mass;
-          ax[j] += fx / b.p.mass;
-          ay[j] += fy / b.p.mass;
+        const gx = cellOf[i] % cols;
+        const gy = (cellOf[i] - gx) / cols;
+        for (let yy = Math.max(0, gy - 1); yy <= Math.min(rows - 1, gy + 1); yy++) {
+          for (let xx = Math.max(0, gx - 1); xx <= Math.min(cols - 1, gx + 1); xx++) {
+            for (let j = cells[yy * cols + xx]; j !== -1; j = nextInCell[j]) {
+              if (j <= i) continue; // chaque paire une seule fois
+              const b = nodes[j];
+              const dx = b.x - a.x;
+              const dy = b.y - a.y;
+              const d2 = dx * dx + dy * dy;
+              if (d2 > range2) continue;
+              const d = Math.sqrt(d2) || 0.01;
+              const contact = Math.max(d - (a.r + b.r) * 0.9, 4);
+              const strength = (isShadow[i] && isShadow[j] ? shadowForce : plainForce) / (contact * contact) / d;
+              const fx = dx * strength;
+              const fy = dy * strength;
+              ax[i] -= fx * invMass[i];
+              ay[i] -= fy * invMass[i];
+              ax[j] += fx * invMass[j];
+              ay[j] += fy * invMass[j];
+            }
+          }
         }
       }
 
       // Le pointeur repousse les ombres.
       if (pointer) {
-        for (let i = 0; i < nodes.length; i++) {
+        for (let i = 0; i < count; i++) {
           const n = nodes[i];
           if (n.category !== "shadow") continue;
           const dx = n.x - pointer.x;
@@ -291,7 +327,7 @@
         }
       }
 
-      for (let i = 0; i < nodes.length; i++) {
+      for (let i = 0; i < count; i++) {
         const n = nodes[i];
         const scale = n === core ? CORE_HOVER_SCALE : HOVER_SCALE;
         const goal = n.id === hoverId ? n.baseR * scale : n.baseR;
@@ -328,12 +364,37 @@
       get time() { return time; },
       /** Avancement de la fusion (0 → 1), null hors fusion. */
       get fusion() { return progress(); },
-      /** Avance de dt secondes (pas fixes internes). */
-      advance(dt) {
+      /** Avance de dt secondes (pas fixes internes, MAX_STEPS au plus par appel ; davantage quand l'appelant espace
+       *  volontairement ses images, cf. la cadence du rendu : le mouvement couvre alors tout le temps écoulé). */
+      advance(dt, maxSteps = MAX_STEPS) {
         acc += Math.min(Math.max(dt, 0), MAX_FRAME);
-        while (acc >= STEP) {
+        let steps = 0;
+        while (acc >= STEP && steps < maxSteps) {
           step(STEP);
           acc -= STEP;
+          steps += 1;
+        }
+        if (acc >= STEP) acc = 0; // retard non rattrapé : le mouvement ralentit un instant, sans à-coup
+      },
+      /** Instantané pour un autre fil (Worker → page) : [temps, puis x, y, r de chaque bulle]. */
+      snapshot(out) {
+        const buf = out && out.length >= 1 + count * 3 ? out : new Float32Array(1 + count * 3);
+        buf[0] = time;
+        for (let i = 0; i < count; i++) {
+          buf[1 + i * 3] = nodes[i].x;
+          buf[2 + i * 3] = nodes[i].y;
+          buf[3 + i * 3] = nodes[i].r;
+        }
+        return buf;
+      },
+      /** Réplique passive (page) : positions, rayons et temps repris d'un instantané du Worker. */
+      sync(buf) {
+        if (!buf || buf.length < 1 + count * 3) return;
+        time = buf[0];
+        for (let i = 0; i < count; i++) {
+          nodes[i].x = buf[1 + i * 3];
+          nodes[i].y = buf[2 + i * 3];
+          nodes[i].r = buf[3 + i * 3];
         }
       },
       resize(w, h) {
@@ -383,5 +444,5 @@
     };
   }
 
-  return { createSimulation, computeSlots, PHYSICS, AROUSAL, DRIFT, INTRO, rng };
+  return { createSimulation, computeSlots, PHYSICS, AROUSAL, DRIFT, INTRO, MAX_STEPS, rng };
 });

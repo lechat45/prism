@@ -11,9 +11,10 @@ const ENGINE = path.resolve(__dirname, "../engine");
 const read = (rel) => fs.readFileSync(path.join(ENGINE, rel), "utf8");
 const template = read("engram/viewer.html");
 const physics = read("engram/physics.js");
+const render = read("engram/render.js");
 const libs = JSON.parse(read("libs.json"));
 const demo = E.normalize(JSON.parse(read("engram/demo-marie-curie.json")));
-const build = (engram) => E.buildViewer(template, physics, engram, libs, "fr");
+const build = (engram) => E.buildViewer(template, { physics, render }, engram, libs, "fr");
 
 test("document complet : gabarit rempli, Tailwind épinglé (SRI), données relisibles", () => {
   const html = build(demo);
@@ -43,10 +44,11 @@ test("données hostiles : rien ne sort du bloc JSON inerte", () => {
 
 test("les scripts du document sont du JavaScript valide", () => {
   const html = build(demo);
-  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
-  assert.equal(scripts.length, 2, "moteur physique + rendu");
+  const scripts = [...html.matchAll(/<script(?: id="[\w-]+"| type="text\/plain" id="engram-worker")?>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  assert.equal(scripts.length, 4, "physique, rendu, fil de rendu (Worker), page");
   for (const code of scripts) assert.doesNotThrow(() => new Function(code));
-  assert.throws(() => E.buildViewer(template, "x = '</script>'", demo, libs), /<\/script/);
+  assert.throws(() => E.buildViewer(template, { physics: "x = '</script>'", render }, demo, libs), /<\/script/);
+  assert.throws(() => E.buildViewer(template, { physics, render: "" }, demo, libs), /render\.js/);
 });
 
 test("trait ADN d'une bulle : champs du filtre, palette et vocabulaire", () => {

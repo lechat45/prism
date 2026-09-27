@@ -72,8 +72,112 @@
 <ul id="nodes-list" class="sr-only"></ul>
 
 <script type="application/json" id="prism-engram">{{engram}}</script>
-<script>
+<script id="engram-physics">
 {{physics}}
+</script>
+<script id="engram-render">
+{{render}}
+</script>
+<!-- Code du fil de rendu (Worker créé depuis ce document, avec la physique et le rendu ci-dessus). -->
+<script type="text/plain" id="engram-worker">
+// Fil de rendu de la carte (Worker créé depuis ce document) : physique et dessin sur l'OffscreenCanvas confié
+// par la page. Messages reçus : init, resize, set, hover, pointer, flash, interactive, budget, visible, buf, pixels ;
+// envoyés : alive (démarrage), frame (instantané des positions, fusion, mesures), pixels, error.
+(function () {
+  "use strict";
+  var P = self.PrismEngramPhysics;
+  var R = self.PrismEngramRender;
+  var sim = null;
+  var r = null;
+  var running = false;
+  var visible = true;
+  var interactive = false;
+  var broken = false;
+  var pool = []; // tampons d'instantanés rendus par la page (réutilisés : aucune allocation en régime établi)
+  var frameNo = 0;
+  var perfAt = 0;
+  var lastFusing = null;
+  var pacer = R.createPacer();
+  var pixelRequests = []; // lus juste après le dessin d'une image (ensuite, la toile part à l'écran)
+  var nextFrame = typeof self.requestAnimationFrame === "function"
+    ? function (f) { self.requestAnimationFrame(f); }
+    : function (f) { setTimeout(function () { f(performance.now()); }, 16); };
+
+  function frame(now) {
+    if (!visible || broken) { running = false; return; }
+    if (!pacer.due(now, interactive)) { nextFrame(frame); return; }
+    var out;
+    try {
+      var t0 = performance.now();
+      out = r.tick(now, pacer.steps(now));
+      pacer.done(now, performance.now() - t0);
+      while (pixelRequests.length) {
+        var q = pixelRequests.shift();
+        self.postMessage({ type: "pixels", id: q.id, values: r.pixels(q.points) });
+      }
+    } catch (err) {
+      broken = true;
+      running = false;
+      self.postMessage({ type: "error", message: String((err && err.message) || err) });
+      return;
+    }
+    frameNo += 1;
+    var perf = null;
+    if (now - perfAt > 1000) { perf = r.stats(); perfAt = now; }
+    // Instantané à chaque image quand la carte est manipulée, sinon une image sur quatre (la page n'en a besoin
+    // que pour le survol, la fiche et les tests).
+    if (interactive || out.merged || perf || out.fusing !== lastFusing || frameNo % 4 === 0) {
+      lastFusing = out.fusing;
+      var buf = sim.snapshot(pool.pop());
+      self.postMessage({ type: "frame", buf: buf, fusing: out.fusing, merged: out.merged, perf: perf }, [buf.buffer]);
+    }
+    nextFrame(frame);
+  }
+
+  function start() {
+    if (running || !visible || !r || broken) return;
+    running = true;
+    r.resume();
+    pacer.reset();
+    nextFrame(frame);
+  }
+
+  self.onmessage = function (e) {
+    var m = e.data;
+    if (m.type === "init") {
+      sim = P.createSimulation(m.data, m.sim);
+      r = R.createRenderer({
+        canvas: m.canvas, ctx: m.canvas.getContext("2d"), sim: sim, data: m.data, reduced: m.reduced,
+        makeCanvas: function (w, h) { return new OffscreenCanvas(Math.max(1, w), Math.max(1, h)); }, rng: P.rng, seed: m.sim.seed
+      });
+      r.resize(m.width, m.height, m.dpr);
+      r.set(m.view);
+      if (m.hover != null) sim.setHover(m.hover);
+      if (m.pointer) sim.setPointer(m.pointer[0], m.pointer[1]);
+      interactive = Boolean(m.interactive);
+      pacer.share(m.share);
+      visible = m.visible !== false;
+      start();
+      return;
+    }
+    if (!r) return;
+    if (m.type === "resize") r.resize(m.width, m.height, m.dpr);
+    else if (m.type === "set") r.set(m.patch);
+    else if (m.type === "hover") sim.setHover(m.id);
+    else if (m.type === "pointer") sim.setPointer(m.x, m.y);
+    else if (m.type === "flash") r.flash(m.id);
+    else if (m.type === "interactive") interactive = Boolean(m.on);
+    else if (m.type === "budget") pacer.share(m.share);
+    else if (m.type === "buf") pool.push(m.buf);
+    else if (m.type === "pixels") pixelRequests.push({ id: m.id, points: m.points });
+    else if (m.type === "visible") {
+      visible = Boolean(m.on);
+      start();
+    }
+  };
+
+  self.postMessage({ type: "alive" });
+})();
 </script>
 <script>
 (function () {
@@ -146,35 +250,19 @@
   }[LANG];
   var fill = function (s, a, b) { return s.replace("%s", a).replace("%d", b); };
 
-  // Couleurs [r, g, b] par catégorie (et par type pour les ombres et les artefacts).
-  var COLOR = {
-    core: [214, 232, 255], heart: [251, 113, 133], engine: [34, 211, 238],
-    paradoxe: [168, 85, 247], peur_primaire: [244, 63, 94], biais_cognitif: [139, 92, 246],
-    succes: [251, 191, 36], echec: [251, 146, 60], tournant: [253, 230, 138]
-  };
-  // Couleur de chaque émotion : halos des bulles, aura du climat, puces de l'en-tête et de la fiche.
-  var EMOTION_COLOR = {
-    joie: [253, 224, 71], emerveillement: [125, 211, 252], passion: [251, 113, 133], tendresse: [249, 168, 212],
-    serenite: [94, 234, 212], fierte: [251, 191, 36], melancolie: [129, 140, 248], tristesse: [96, 165, 250],
-    colere: [239, 68, 68], peur: [167, 139, 250], angoisse: [192, 132, 252], solitude: [148, 163, 184]
-  };
-  var emotionOf = function (n) { return EMOTION_COLOR[n.data.emotion] || null; };
-  var colorOf = function (n) {
-    if (n.category === "heart") return emotionOf(n) || COLOR.heart;
-    return COLOR[n.category === "core" || n.category === "engine" ? n.category : n.data.type] || COLOR.engine;
-  };
-  var rgba = function (c, a) { return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a + ")"; };
-  var LEGEND = { core: [255, 255, 255], heart: COLOR.heart, engine: COLOR.engine, shadow: [192, 38, 211], artifact: COLOR.succes };
-
   var P = window.PrismEngramPhysics;
+  var R = window.PrismEngramRender;
+  var EMOTION_COLOR = R.EMOTION_COLOR;
+  var LEGEND = R.LEGEND;
+  var colorOf = R.colorOf;
+  var rgba = R.rgba;
   var stage = document.getElementById("stage");
-  var ctx = stage.getContext("2d");
   var glass = document.getElementById("glass");
   var dropTag = document.getElementById("drop");
   var reduced = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   var W = Math.max(1, innerWidth);
   var H = Math.max(1, innerHeight);
-  var dpr = 1;
+  var dpr = Math.min(2, window.devicePixelRatio || 1);
 
   function hash(s) {
     var h = 2166136261;
@@ -186,18 +274,12 @@
   var PARENTS = Array.isArray(DATA.parents) && DATA.parents.length === 2 ? DATA.parents : null;
   var introSeen = false;
   try { introSeen = localStorage.getItem("prism:fusion-seen") === "1"; } catch (e) { /* stockage indisponible */ }
-  var sim = P.createSimulation(DATA, { width: W, height: H, seed: seed, fusion: Boolean(PARENTS) && !introSeen });
-  var mergedAt = null; // instant de la fusion des deux noyaux (éclair)
+  var simOptions = { width: W, height: H, seed: seed, fusion: Boolean(PARENTS) && !introSeen };
+  // La simulation de cette page est soit la vraie (rendu sur ce fil), soit une réplique passive dont les positions
+  // viennent des instantanés du Worker : survol, fiche, dépôts et tests la lisent de la même façon.
+  var sim = P.createSimulation(DATA, simOptions);
   var byId = {};
-  var neighbours = {};
-  sim.nodes.forEach(function (n) { byId[n.id] = n; neighbours[n.id] = {}; });
-  sim.links.forEach(function (l) { neighbours[l.a.id][l.b.id] = true; neighbours[l.b.id][l.a.id] = true; });
-  // État d'affichage propre à chaque bulle : traînée (artefacts), glitch (ombres).
-  sim.nodes.forEach(function (n) {
-    n.trail = [];
-    n.glitchAt = 1 + Math.random() * 4;
-    n.glitchUntil = 0;
-  });
+  sim.nodes.forEach(function (n) { byId[n.id] = n; });
 
   // ---------------------------------------------------------------- textes fixes
   document.querySelectorAll("[data-t]").forEach(function (el) { el.textContent = TEXT[el.getAttribute("data-t")]; });
@@ -209,10 +291,9 @@
   document.querySelector('[data-t="chat"]').textContent = fill(TEXT.chat, DATA.person || "?");
   stage.setAttribute("aria-label", fill(TEXT.aria, DATA.person || "?", sim.nodes.length));
   // Climat émotionnel : puces colorées et pondérées dans l'en-tête.
-  var climate = (DATA.climate || []).filter(function (c) { return EMOTION_COLOR[c.emotion]; });
   var climateList = document.getElementById("climate");
   climateList.setAttribute("aria-label", TEXT.climate);
-  climate.forEach(function (c) {
+  (DATA.climate || []).filter(function (c) { return EMOTION_COLOR[c.emotion]; }).forEach(function (c) {
     var li = document.createElement("li");
     li.className = "flex items-center gap-1 rounded-full border border-white/10 bg-black/30 px-2 py-px text-[10.5px] text-white/75";
     var dot = document.createElement("span");
@@ -225,7 +306,6 @@
     climateList.append(li);
   });
   var legend = document.getElementById("legend");
-  var focusCategory = null;
   ["core", "heart", "engine", "shadow", "artifact"].forEach(function (cat) {
     var count = sim.nodes.filter(function (n) { return n.category === cat; }).length;
     var li = document.createElement("li");
@@ -241,8 +321,8 @@
     num.className = "tabular-nums text-white/40";
     num.textContent = String(count);
     li.append(dot, label, num);
-    li.addEventListener("pointerenter", function () { focusCategory = cat; });
-    li.addEventListener("pointerleave", function () { focusCategory = null; });
+    li.addEventListener("pointerenter", function () { engine.set({ focus: cat }); });
+    li.addEventListener("pointerleave", function () { engine.set({ focus: null }); });
     legend.append(li);
   });
   var list = document.getElementById("nodes-list");
@@ -252,66 +332,209 @@
     list.append(li);
   });
 
-  // ---------------------------------------------------------------- ciel (pré-rendu)
-  var sky = document.createElement("canvas");
-  var stars = [];
-  (function () {
-    var r = P.rng(seed ^ 0x9e3779b9);
-    for (var i = 0; i < 170; i++) stars.push({ x: r(), y: r(), s: 0.25 + r() * r() * 1.3, a: 0.15 + r() * 0.6 });
-  })();
+  // ---------------------------------------------------------------- moteur de rendu
+  // Worker + OffscreenCanvas quand c'est possible : physique et dessin sur un fil séparé, ce fil ne garde que le
+  // DOM et le pointeur. Sinon (pas d'OffscreenCanvas, Worker refusé par la page hôte), même code sur ce fil.
+  var setSimHover = sim.setHover;
+  var setSimPointer = sim.setPointer;
+  var fusing = false;
+  var interactive = false;
+  var share = 0.3; // part d'un cœur accordée au repos (fixée par la page : budget commun des Engrammes)
+  var engine = null;
 
-  function paintSky() {
-    sky.width = Math.round(W * dpr);
-    sky.height = Math.round(H * dpr);
-    var g = sky.getContext("2d");
-    g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    var bg = g.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.hypot(W, H) / 2);
-    bg.addColorStop(0, "#0c1024");
-    bg.addColorStop(0.55, "#070814");
-    bg.addColorStop(1, "#020206");
-    g.fillStyle = bg;
-    g.fillRect(0, 0, W, H);
-    stars.forEach(function (s) {
-      g.fillStyle = "rgba(220,230,255," + s.a + ")";
-      g.beginPath();
-      g.arc(s.x * W, s.y * H, s.s, 0, Math.PI * 2);
-      g.fill();
+  /** Après chaque image (ou instantané du Worker) : animation de fusion, mémoire de l'introduction, fiche. */
+  function afterFrame(out) {
+    if (out.fusing !== fusing) {
+      fusing = out.fusing;
+      stage.classList.toggle("is-fusing", fusing);
+    }
+    if (out.merged) {
+      try { localStorage.setItem("prism:fusion-seen", "1"); } catch (e) { /* stockage indisponible */ }
+    }
+    placeGlass();
+  }
+
+  function inlineEngine() {
+    var r = R.createRenderer({
+      canvas: stage, ctx: stage.getContext("2d"), sim: sim, data: DATA, reduced: reduced,
+      makeCanvas: function () { return document.createElement("canvas"); }, rng: P.rng, seed: seed
     });
-    // Anneaux des catégories : l'architecture de l'esprit, à peine visible.
-    var a = Math.max(40, W / 2 - 26);
-    var b = Math.max(40, H / 2 - 26);
-    [[0.27, "rgba(251,113,133,0.07)"], [0.44, "rgba(34,211,238,0.07)"], [0.68, "rgba(168,85,247,0.06)"], [0.92, "rgba(251,191,36,0.05)"]].forEach(function (ring) {
-      g.strokeStyle = ring[1];
-      g.lineWidth = 1;
-      g.setLineDash([2, 6]);
-      g.beginPath();
-      g.ellipse(W / 2, H / 2, a * ring[0], b * ring[0], 0, 0, Math.PI * 2);
-      g.stroke();
-    });
+    var raf = 0;
+    var running = false;
+    var perf = null;
+    var perfAt = 0;
+    var pacer = R.createPacer();
+    pacer.share(share);
+    function frame(now) {
+      raf = requestAnimationFrame(frame);
+      if (!pacer.due(now, interactive)) return;
+      var t0 = performance.now();
+      afterFrame(r.tick(now, pacer.steps(now)));
+      pacer.done(now, performance.now() - t0);
+      if (now - perfAt > 1000) { perf = r.stats(); perfAt = now; }
+    }
+    r.resize(W, H, dpr);
+    return {
+      mode: "inline",
+      visible: function (on) {
+        if (on === running) return;
+        running = on;
+        cancelAnimationFrame(raf);
+        if (on) { r.resume(); pacer.reset(); raf = requestAnimationFrame(frame); }
+      },
+      resize: function () { r.resize(W, H, dpr); },
+      set: r.set,
+      flash: r.flash,
+      hover: function (id) { setSimHover(id); },
+      pointer: function (x, y) { setSimPointer(x, y); },
+      interactive: function () {},
+      budget: function (value) { pacer.share(value); },
+      pixels: function (points) { return Promise.resolve(r.pixels(points)); },
+      perf: function () { return perf; }
+    };
+  }
+
+  function workerEngine(onFail) {
+    if (typeof stage.transferControlToOffscreen !== "function" || typeof Worker !== "function" || typeof OffscreenCanvas !== "function") return null;
+    var source = ["engram-physics", "engram-render", "engram-worker"].map(function (id) {
+      return document.getElementById(id).textContent;
+    }).join("\n;\n");
+    var url;
+    var worker;
+    try {
+      url = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+      worker = new Worker(url);
+    } catch (e) {
+      return null;
+    }
+    var state = "starting"; // starting → running | failed
+    var view = {}; // état d'affichage accumulé avant le démarrage, remis au Worker à l'initialisation
+    var hoverId = null;
+    var pointer = null;
+    var perf = null;
+    var waiting = {};
+    var early = []; // lectures de pixels demandées avant le démarrage du Worker
+    var seq = 0;
+    var timer = setTimeout(fail, 4000);
+    function fail() {
+      if (state !== "starting") return;
+      state = "failed";
+      clearTimeout(timer);
+      try { worker.terminate(); } catch (e) { /* déjà arrêté */ }
+      URL.revokeObjectURL(url);
+      onFail();
+      early.forEach(function (q) { engine.pixels(q.points).then(q.resolve); }); // repli : lues sur ce fil
+      early = [];
+    }
+    function ask(points, resolve) {
+      var id = ++seq;
+      waiting[id] = resolve;
+      worker.postMessage({ type: "pixels", id: id, points: points });
+    }
+    function post(message) {
+      if (state === "running") worker.postMessage(message);
+    }
+    worker.onerror = function (e) {
+      if (state === "starting") { e.preventDefault(); fail(); }
+    };
+    worker.onmessage = function (e) {
+      var m = e.data;
+      if (m.type === "alive" && state === "starting") {
+        // Le Worker tourne (la page hôte l'autorise) : la toile lui est confiée, sans retour possible.
+        state = "running";
+        clearTimeout(timer);
+        URL.revokeObjectURL(url);
+        var off = stage.transferControlToOffscreen();
+        worker.postMessage({
+          type: "init", canvas: off, data: DATA, sim: simOptions, reduced: reduced, width: W, height: H, dpr: dpr,
+          view: view, hover: hoverId, pointer: pointer, interactive: interactive, share: share, visible: visibleNow()
+        }, [off]);
+        early.forEach(function (q) { ask(q.points, q.resolve); });
+        early = [];
+      } else if (m.type === "frame") {
+        sim.sync(m.buf);
+        if (m.perf) perf = m.perf;
+        afterFrame(m);
+        worker.postMessage({ type: "buf", buf: m.buf }, [m.buf.buffer]); // tampon rendu au Worker (réutilisé)
+      } else if (m.type === "pixels") {
+        var done = waiting[m.id];
+        delete waiting[m.id];
+        if (done) done(m.values);
+      } else if (m.type === "error") {
+        console.warn("Engramme : rendu interrompu —", m.message);
+      }
+    };
+    return {
+      get mode() { return state === "running" ? "worker" : state; },
+      visible: function (on) { post({ type: "visible", on: on }); },
+      resize: function () { post({ type: "resize", width: W, height: H, dpr: dpr }); },
+      set: function (patch) {
+        for (var k in patch) view[k] = patch[k];
+        post({ type: "set", patch: patch });
+      },
+      flash: function (id) { post({ type: "flash", id: id }); },
+      hover: function (id) { hoverId = id; setSimHover(id); post({ type: "hover", id: id }); },
+      pointer: function (x, y) { pointer = x == null ? null : [x, y]; post({ type: "pointer", x: x, y: y }); },
+      interactive: function (on) { post({ type: "interactive", on: on }); },
+      budget: function (value) { post({ type: "budget", share: value }); },
+      pixels: function (points) {
+        return new Promise(function (resolve) {
+          if (state === "starting") early.push({ points: points, resolve: resolve });
+          else if (state === "running") ask(points, resolve);
+          else resolve([]);
+        });
+      },
+      perf: function () { return perf; }
+    };
+  }
+
+  // Les appels à la simulation passent par le moteur actif (vraie simulation ou Worker).
+  sim.setHover = function (id) { engine.hover(id); };
+  sim.setPointer = function (x, y) { engine.pointer(x, y); };
+  // Pause hors de l'écran (carte défilée, onglet caché) : ni physique ni dessin pour rien.
+  var onScreen = true;
+  function visibleNow() { return onScreen && !document.hidden; }
+  function updateVisible() { engine.visible(visibleNow()); }
+  function useInline() { engine = inlineEngine(); engine.visible(visibleNow()); }
+  engine = workerEngine(useInline);
+  if (!engine) useInline();
+  document.addEventListener("visibilitychange", updateVisible);
+  if (typeof IntersectionObserver === "function") {
+    new IntersectionObserver(function (entries) {
+      onScreen = entries[entries.length - 1].isIntersecting;
+      updateVisible();
+    }).observe(stage);
   }
 
   function resize() {
-    var w = Math.max(1, innerWidth);
-    var h = Math.max(1, innerHeight);
+    W = Math.max(1, innerWidth);
+    H = Math.max(1, innerHeight);
     dpr = Math.min(2, window.devicePixelRatio || 1);
-    stage.width = Math.round(w * dpr);
-    stage.height = Math.round(h * dpr);
-    if (w !== W || h !== H) sim.resize(w, h);
-    W = w;
-    H = h;
-    paintSky();
+    engine.resize();
   }
   window.addEventListener("resize", resize);
-  resize();
 
   // ---------------------------------------------------------------- interaction
   var hover = null;   // bulle sous le pointeur
   var pinned = null;  // bulle choisie comme filtre ADN (clic)
   var dropTarget = null;
   var pointerIn = false;
+  var traceIds = [];
   var send = function (message) { try { parent.postMessage(message, "*"); } catch (e) { /* hors de Prism */ } };
 
-  function syncHover() { sim.setHover(dropTarget ? dropTarget.id : hover ? hover.id : pinned ? pinned.id : null); }
+  /** Instantanés du Worker à chaque image quand la carte est manipulée (survol, fiche, dépôt), sinon plus rares. */
+  function syncInteractive() {
+    var on = pointerIn || Boolean(pinned) || Boolean(dropTarget);
+    if (on !== interactive) {
+      interactive = on;
+      engine.interactive(on);
+    }
+  }
+  function syncHover() {
+    sim.setHover(dropTarget ? dropTarget.id : hover ? hover.id : pinned ? pinned.id : null);
+    engine.set({ hover: hover ? hover.id : null, pinned: pinned ? pinned.id : null, drop: dropTarget ? dropTarget.id : null });
+    syncInteractive();
+  }
 
   stage.addEventListener("pointermove", function (e) {
     pointerIn = true;
@@ -322,6 +545,7 @@
       stage.classList.toggle("is-node", Boolean(n));
       syncHover();
     }
+    syncInteractive();
   });
   stage.addEventListener("pointerleave", function () {
     pointerIn = false;
@@ -350,31 +574,27 @@
     }
   }
 
+  // Trace logique d'une réponse : des ronds numérotés, posés un à un sur les bulles qui ont guidé la réponse,
+  // reliés par un fil lumineux dans l'ordre du raisonnement ; chacun écrit ce que sa bulle apporte.
+  function setTrace(steps) {
+    var clean = (Array.isArray(steps) ? steps : []).filter(function (s) { return s && byId[s.id]; }).slice(0, 4)
+      .map(function (s) { return { id: s.id, why: String(s.why || "").slice(0, 120) }; });
+    traceIds = clean.map(function (s) { return s.id; });
+    engine.set({ trace: clean.length ? clean : null });
+  }
+
   window.addEventListener("message", function (e) {
     if (e.source !== parent || !e.data) return;
     if (e.data.prism === "engram-pin") pin(byId[e.data.nodeId] || null, false);
     else if (e.data.prism === "engram-trace") setTrace(e.data.steps);
+    else if (e.data.prism === "engram-budget" && typeof e.data.share === "number") {
+      share = e.data.share;
+      engine.budget(share);
+    }
   });
 
   // « Discuter avec … » : la conversation s'ouvre dans la page (elle seule parle au modèle).
   document.getElementById("chat-btn").addEventListener("click", function () { send({ prism: "engram-chat" }); });
-
-  // Trace logique d'une réponse : des ronds numérotés, posés un à un sur les bulles qui ont guidé la réponse,
-  // reliés par un fil lumineux dans l'ordre du raisonnement ; chacun écrit ce que sa bulle apporte.
-  var trace = null; // { steps: [{ node, why }], start }
-  var STEP_S = 0.9; // délai entre deux ronds
-  var TYPE_RATE = 45; // caractères écrits par seconde
-  function setTrace(steps) {
-    var list = (Array.isArray(steps) ? steps : []).map(function (s) {
-      return s && byId[s.id] ? { node: byId[s.id], why: String(s.why || "").slice(0, 120) } : null;
-    }).filter(Boolean).slice(0, 4);
-    trace = list.length ? { steps: list, start: performance.now() / 1000 } : null;
-  }
-  function traced(n) {
-    if (!trace) return false;
-    for (var i = 0; i < trace.steps.length; i++) if (trace.steps[i].node === n) return true;
-    return false;
-  }
 
   // « Injection d'ADN » : un fichier ou un texte déposé sur une bulle part vers la page.
   function dropAt(e) {
@@ -402,7 +622,7 @@
     var file = e.dataTransfer.files && e.dataTransfer.files[0];
     var text = file ? "" : String(e.dataTransfer.getData("text/plain") || "").slice(0, 12000);
     if (!file && !text.trim()) return;
-    n.flash = performance.now();
+    engine.flash(n.id);
     send({ prism: "engram-drop", nodeId: n.id, file: file || null, text: text });
   });
 
@@ -485,516 +705,20 @@
     glass.style.transform = "translate(" + Math.round(x) + "px," + Math.round(y) + "px)";
   }
 
-  // ---------------------------------------------------------------- rendu
-  function glow(x, y, radius, c, alpha) {
-    var g = ctx.createRadialGradient(x, y, 0, x, y, radius);
-    g.addColorStop(0, rgba(c, alpha));
-    g.addColorStop(0.4, rgba(c, alpha * 0.35));
-    g.addColorStop(1, rgba(c, 0));
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  function focusAlpha(n) {
-    if (focusCategory) return n.category === focusCategory ? 1 : 0.18;
-    if (trace && !hover) return traced(n) || n.category === "core" ? 1 : 0.32;
-    var f = hover || pinned;
-    if (!f || f === n) return 1;
-    return neighbours[f.id][n.id] ? 1 : 0.42;
-  }
-
-  var LINKS = {
-    forge: { c: [255, 255, 255], a: 0.2, w: 1.1, dash: null },
-    nourrit: { c: [34, 211, 238], a: 0.3, w: 1.3, dash: null },
-    contredit: { c: [244, 63, 94], a: 0.35, w: 1.1, dash: [4, 4] }
+  // Accès pour les tests de bout en bout et le banc de mesure (lecture seule en pratique : rien d'autre ne s'y fie).
+  window.__engram = {
+    sim: sim, data: DATA,
+    get mode() { return engine.mode; },
+    pin: function (id) { pin(byId[id] || null, true); },
+    /** Couleurs [r, g, b, a] de la toile aux points CSS donnés (le Worker les lit dans sa toile). */
+    pixels: function (points) { return engine.pixels(points); },
+    /** Images/s, physique et dessin (ms par image) de la dernière seconde, mesurés sur le fil qui dessine. */
+    perf: function () { return engine.perf(); },
+    state: function () {
+      return { hover: hover && hover.id, pinned: pinned && pinned.id, drop: dropTarget && dropTarget.id, glass: shown && shown.id, pointerIn: pointerIn,
+        trace: traceIds.slice(), fusion: sim.fusion, parents: PARENTS, mode: engine.mode };
+    }
   };
-
-  function drawLinks() {
-    var f = hover || pinned;
-    sim.links.forEach(function (l) {
-      var a = l.a;
-      var b = l.b;
-      var lit = f && (a === f || b === f);
-      var fade = Math.min(focusAlpha(a), focusAlpha(b));
-      ctx.setLineDash([]);
-      if (l.kind === "core") {
-        if (b.category === "engine") {
-          var g = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
-          g.addColorStop(0, "rgba(255,255,255," + (lit ? 0.7 : 0.26) * fade + ")");
-          g.addColorStop(1, "rgba(34,211,238," + (lit ? 0.9 : 0.38) * fade + ")");
-          ctx.strokeStyle = g;
-          ctx.lineWidth = lit ? 3.4 : 2.4;
-        } else if (b.category === "heart") {
-          // Liens du cœur : courts, chauds, teintés par l'émotion de la bulle.
-          ctx.strokeStyle = rgba(colorOf(b), (lit ? 0.85 : 0.42) * fade);
-          ctx.lineWidth = lit ? 2.6 : 1.8;
-        } else if (b.category === "shadow") {
-          ctx.strokeStyle = rgba(colorOf(b), (lit ? 0.5 : 0.1) * fade);
-          ctx.lineWidth = 0.8;
-          ctx.setLineDash([3, 5]);
-        } else {
-          if (!lit) return;
-          ctx.strokeStyle = rgba(COLOR.succes, 0.35);
-          ctx.lineWidth = 0.6;
-        }
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
-        return;
-      }
-      var s = LINKS[l.kind] || LINKS.forge;
-      var dx = b.x - a.x;
-      var dy = b.y - a.y;
-      // Liens thématiques : légère courbe, pour se distinguer des rayons du noyau.
-      var mx = (a.x + b.x) / 2 - dy * 0.14;
-      var my = (a.y + b.y) / 2 + dx * 0.14;
-      ctx.strokeStyle = rgba(s.c, Math.min(0.95, s.a * (lit ? 2.6 : 1)) * fade);
-      ctx.lineWidth = s.w + (lit ? 0.7 : 0);
-      if (s.dash) ctx.setLineDash(s.dash);
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.quadraticCurveTo(mx, my, b.x, b.y);
-      ctx.stroke();
-    });
-    ctx.setLineDash([]);
-  }
-
-  /** Fusion : deux noyaux fantômes (A à gauche, B à droite) précipités l'un vers l'autre, puis un éclair. */
-  function drawFusion(core, t) {
-    var f = sim.fusion;
-    if (f === null) return;
-    if (f < 1) {
-      var e = f * f * f; // accélération gravitationnelle
-      [[W * 0.16, [191, 227, 255], PARENTS[0]], [W * 0.84, [255, 217, 160], PARENTS[1]]].forEach(function (g) {
-        var x = g[0] + (core.x - g[0]) * e;
-        var y = core.y + Math.sin(t * 9 + g[0]) * (1 - e) * 6;
-        var r = 26 + 10 * e;
-        ctx.globalCompositeOperation = "lighter";
-        glow(x, y, r * 3.2, g[1], 0.35 + 0.4 * e);
-        ctx.globalCompositeOperation = "source-over";
-        var body = ctx.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.1, x, y, r);
-        body.addColorStop(0, "#ffffff");
-        body.addColorStop(1, rgba(g[1], 1));
-        ctx.fillStyle = body;
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
-        label(g[2], x, y + r + 6, 11.5, "rgba(255,255,255,0.85)", 600);
-      });
-    } else if (mergedAt === null) {
-      mergedAt = t;
-      try { localStorage.setItem("prism:fusion-seen", "1"); } catch (err) { /* stockage indisponible */ }
-    }
-    if (mergedAt !== null && t - mergedAt < 0.9) {
-      var age = (t - mergedAt) / 0.9;
-      ctx.strokeStyle = "rgba(255,255,255," + (1 - age) + ")";
-      ctx.lineWidth = 3 * (1 - age) + 1;
-      ctx.beginPath();
-      ctx.arc(core.x, core.y, 30 + age * Math.min(W, H) * 0.45, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-  }
-
-  function drawCore(n, t, alpha) {
-    if (sim.fusion !== null && sim.fusion < 1) alpha *= Math.max(0, (sim.fusion - 0.85) / 0.15); // né de la fusion
-    var r = n.r * sim.pulseOf(n);
-    ctx.globalCompositeOperation = "lighter";
-    glow(n.x, n.y, r * 3.4, [150, 190, 255], 0.3 * alpha);
-    glow(n.x, n.y, r * 1.9, [235, 245, 255], 0.35 * alpha);
-    ctx.globalCompositeOperation = "source-over";
-    var g = ctx.createRadialGradient(n.x - r * 0.3, n.y - r * 0.35, r * 0.1, n.x, n.y, r);
-    g.addColorStop(0, "#ffffff");
-    g.addColorStop(0.6, "#e0ecff");
-    g.addColorStop(1, "#9cc2ff");
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.45)";
-    ctx.lineWidth = 1;
-    ctx.setLineDash([2, 7]);
-    ctx.beginPath();
-    ctx.ellipse(n.x, n.y, r * 1.45, r * 1.45, reduced ? 0 : t * 0.25, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
-  }
-
-  function drawEngine(n, alpha) {
-    var r = n.r * sim.pulseOf(n);
-    ctx.globalCompositeOperation = "lighter";
-    glow(n.x, n.y, r * 2.7, COLOR.engine, 0.32 * alpha);
-    ctx.globalCompositeOperation = "source-over";
-    var g = ctx.createRadialGradient(n.x - r * 0.35, n.y - r * 0.4, r * 0.1, n.x, n.y, r);
-    g.addColorStop(0, "rgba(236,254,255," + alpha + ")");
-    g.addColorStop(0.55, "rgba(34,211,238," + alpha + ")");
-    g.addColorStop(1, "rgba(14,116,144," + alpha + ")");
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(165,243,252," + 0.85 * alpha + ")";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  }
-
-  /** E. Cœur : orbe chaud qui bat (« lub-dub », rythme de l'émotion), teinté par son émotion. */
-  function drawHeart(n, alpha) {
-    var c = colorOf(n);
-    var pulse = sim.pulseOf(n);
-    var r = n.r * pulse;
-    ctx.globalCompositeOperation = "lighter";
-    glow(n.x, n.y, r * (2.4 + (pulse - 1) * 4), c, (0.3 + (pulse - 1) * 1.2) * alpha);
-    ctx.globalCompositeOperation = "source-over";
-    var g = ctx.createRadialGradient(n.x - r * 0.3, n.y - r * 0.35, r * 0.1, n.x, n.y, r);
-    g.addColorStop(0, "rgba(255,241,242," + alpha + ")");
-    g.addColorStop(0.5, rgba(c, alpha));
-    g.addColorStop(1, rgba([Math.round(c[0] * 0.55), Math.round(c[1] * 0.35), Math.round(c[2] * 0.45)], alpha));
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,228,230," + 0.8 * alpha + ")";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  }
-
-  /** Charge émotionnelle d'une bulle d'une autre catégorie : fin halo de la couleur de l'émotion. */
-  function drawEmotionHalo(n, t, alpha) {
-    var em = emotionOf(n);
-    if (!em || n.category === "heart") return;
-    ctx.strokeStyle = rgba(em, (0.45 + 0.2 * Math.sin(t * 1.7 + n.phase)) * alpha);
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, n.r * sim.pulseOf(n) + 3.5, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  /** Aura du climat émotionnel : un voile par émotion, pondéré, qui tourne et respire lentement autour du noyau. */
-  function drawAura(core, t) {
-    var base = Math.min(W, H);
-    if (!climate.length) {
-      glow(core.x, core.y, base * 0.5, [70, 110, 255], 0.09);
-      return;
-    }
-    climate.forEach(function (c, i) {
-      var angle = (reduced ? 0 : t * 0.06) + (i * Math.PI * 2) / climate.length;
-      var breath = reduced ? 1 : 1 + 0.06 * Math.sin(t * 0.5 + i * 1.3);
-      var x = core.x + Math.cos(angle) * base * 0.1;
-      var y = core.y + Math.sin(angle) * base * 0.08;
-      glow(x, y, base * (0.32 + 0.3 * c.weight) * breath, EMOTION_COLOR[c.emotion], 0.05 + 0.12 * c.weight);
-    });
-  }
-
-  function drawShadow(n, t, alpha) {
-    var c = colorOf(n);
-    var pulse = sim.pulseOf(n);
-    var r = n.r * pulse;
-    var glitching = !reduced && t < n.glitchUntil;
-    ctx.globalCompositeOperation = "lighter";
-    glow(n.x, n.y, r * 2.5, c, (0.18 + 0.2 * (pulse - 0.86) / 0.28) * alpha);
-    if (glitching) {
-      // Aberration chromatique : copies décalées rouge et cyan.
-      ctx.strokeStyle = "rgba(255,40,90," + 0.75 * alpha + ")";
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.arc(n.x - 3, n.y, r, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.strokeStyle = "rgba(40,240,255," + 0.6 * alpha + ")";
-      ctx.beginPath();
-      ctx.arc(n.x + 3, n.y + 1, r, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.globalCompositeOperation = "source-over";
-    var g = ctx.createRadialGradient(n.x, n.y, r * 0.15, n.x, n.y, r);
-    g.addColorStop(0, "rgba(6,2,12," + alpha + ")");
-    g.addColorStop(0.7, rgba([Math.round(c[0] * 0.35), Math.round(c[1] * 0.2), Math.round(c[2] * 0.4)], 0.95 * alpha));
-    g.addColorStop(1, rgba(c, 0.9 * alpha));
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = rgba(c, alpha);
-    ctx.lineWidth = 1.3;
-    ctx.stroke();
-  }
-
-  function drawArtifact(n, alpha) {
-    var c = colorOf(n);
-    var trail = n.trail;
-    if (trail.length > 1) {
-      for (var i = 1; i < trail.length; i++) {
-        ctx.strokeStyle = rgba(c, (i / trail.length) * 0.4 * alpha);
-        ctx.lineWidth = n.r * 0.9 * (i / trail.length);
-        ctx.beginPath();
-        ctx.moveTo(trail[i - 1][0], trail[i - 1][1]);
-        ctx.lineTo(trail[i][0], trail[i][1]);
-        ctx.stroke();
-      }
-    }
-    ctx.globalCompositeOperation = "lighter";
-    glow(n.x, n.y, n.r * 3.4, c, 0.5 * alpha);
-    ctx.globalCompositeOperation = "source-over";
-    var g = ctx.createRadialGradient(n.x - n.r * 0.3, n.y - n.r * 0.3, 0, n.x, n.y, n.r);
-    g.addColorStop(0, "rgba(255,251,235," + alpha + ")");
-    g.addColorStop(1, rgba(c, alpha));
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  /** Glitch des ombres : tranches horizontales du rendu décalées (copie de la toile sur elle-même). */
-  function glitchSlices(n) {
-    var r = n.r * 1.9;
-    for (var k = 0; k < 3; k++) {
-      var y = n.y - r + Math.random() * r * 2;
-      var h = 1.5 + Math.random() * 4;
-      var x = n.x - r;
-      var off = (Math.random() - 0.5) * 16;
-      ctx.drawImage(stage, x * dpr, y * dpr, r * 2 * dpr, h * dpr, x + off, y, r * 2, h);
-    }
-  }
-
-  var RANK = { core: 0, heart: 1, engine: 2, artifact: 3, shadow: 4 };
-  var LABEL_ORDER = sim.nodes.slice().sort(function (a, b) {
-    return RANK[a.category] - RANK[b.category] || (b.data.intensity || 0) - (a.data.intensity || 0);
-  });
-
-  /** Libellé détouré ; placed : rectangles déjà posés (un chevauchement l'omet). */
-  function label(textValue, x, y, size, color, weight, placed) {
-    ctx.font = (weight || 500) + " " + size + "px Inter, ui-sans-serif, system-ui, sans-serif";
-    if (placed) {
-      var half = ctx.measureText(textValue).width / 2 + 3;
-      var box = [x - half, y - 1, x + half, y + size + 2];
-      for (var i = 0; i < placed.length; i++) {
-        var p = placed[i];
-        if (box[0] < p[2] && box[2] > p[0] && box[1] < p[3] && box[3] > p[1]) return;
-      }
-      placed.push(box);
-    }
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "rgba(2,2,8,0.75)";
-    ctx.strokeText(textValue, x, y);
-    ctx.fillStyle = color;
-    ctx.fillText(textValue, x, y);
-  }
-  var short = function (s, max) { return s.length > max ? s.slice(0, max - 1) + "…" : s; };
-
-  /** Texte coupé en lignes d'au plus maxWidth pixels (trois lignes au plus). */
-  function wrapLines(textValue, maxWidth) {
-    var lines = [];
-    var line = "";
-    textValue.split(" ").forEach(function (word) {
-      var probe = line ? line + " " + word : word;
-      if (line && ctx.measureText(probe).width > maxWidth) {
-        lines.push(line);
-        line = word;
-      } else line = probe;
-    });
-    if (line) lines.push(line);
-    return lines.slice(0, 3);
-  }
-
-  /** Ronds de la logique : fil tracé de bulle en bulle, rond numéroté, puis explication écrite lettre à lettre. */
-  function drawTrace(now) {
-    if (!trace) return;
-    var elapsed = now - trace.start;
-    var steps = trace.steps;
-    ctx.lineCap = "round";
-    ctx.setLineDash([]);
-    for (var i = 1; i < steps.length; i++) {
-      var p = Math.min(1, Math.max(0, (elapsed - i * STEP_S + 0.5) / 0.5));
-      if (p <= 0) break;
-      var a = steps[i - 1].node;
-      var b = steps[i].node;
-      var x = a.x + (b.x - a.x) * p;
-      var y = a.y + (b.y - a.y) * p;
-      ctx.globalCompositeOperation = "lighter";
-      ctx.strokeStyle = "rgba(255,214,120,0.22)";
-      ctx.lineWidth = 7;
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(x, y);
-      ctx.stroke();
-      ctx.globalCompositeOperation = "source-over";
-      ctx.strokeStyle = "rgba(255,244,214,0.9)";
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(x, y);
-      ctx.stroke();
-    }
-    steps.forEach(function (s, i) {
-      var appear = elapsed - i * STEP_S;
-      if (appear < 0) return;
-      var n = s.node;
-      var grow = Math.min(1, appear / 0.35);
-      ctx.strokeStyle = "rgba(255,236,179," + (0.45 + 0.3 * Math.sin(now * 4 + i)) + ")";
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, n.r * sim.pulseOf(n) + 5, 0, Math.PI * 2);
-      ctx.stroke();
-      // Rond numéroté, en haut à droite de la bulle.
-      var rx = n.x + (n.r + 12) * Math.SQRT1_2;
-      var ry = n.y - (n.r + 12) * Math.SQRT1_2;
-      var g = ctx.createRadialGradient(rx - 3, ry - 3, 1, rx, ry, 10);
-      g.addColorStop(0, "#fff7e0");
-      g.addColorStop(1, "#f5b544");
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(rx, ry, 9 * grow, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.9)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      if (grow < 1) return;
-      ctx.font = "700 10.5px Inter, ui-sans-serif, system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = "#3a2600";
-      ctx.fillText(String(i + 1), rx, ry + 0.5);
-      // L'explication s'écrit lettre à lettre.
-      var written = s.why.slice(0, Math.floor(Math.max(0, appear - 0.3) * TYPE_RATE));
-      if (!written) return;
-      ctx.font = "500 10.5px Inter, ui-sans-serif, system-ui, sans-serif";
-      var lines = wrapLines(written, 170);
-      var bw = 12;
-      lines.forEach(function (l) { bw = Math.max(bw, ctx.measureText(l).width + 14); });
-      var bh = lines.length * 13 + 8;
-      var bx = rx + 13 + bw > W - 6 ? rx - 13 - bw : rx + 13;
-      var by = Math.max(6, Math.min(H - bh - 6, ry - bh / 2));
-      ctx.fillStyle = "rgba(10,10,20,0.8)";
-      ctx.strokeStyle = "rgba(255,236,179,0.55)";
-      ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 7);
-      else ctx.rect(bx, by, bw, bh);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = "rgba(255,244,214,0.96)";
-      ctx.textAlign = "left";
-      ctx.textBaseline = "top";
-      lines.forEach(function (l, k) { ctx.fillText(l, bx + 7, by + 4 + k * 13); });
-    });
-  }
-
-  function drawRing(n, t, color, extra) {
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.4;
-    ctx.setLineDash([5, 5]);
-    ctx.lineDashOffset = reduced ? 0 : -t * 18;
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, n.r + extra, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.lineDashOffset = 0;
-  }
-
-  function draw(t) {
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.globalCompositeOperation = "source-over";
-    ctx.drawImage(sky, 0, 0, W, H);
-    var core = null;
-    sim.nodes.forEach(function (n) { if (n.category === "core") core = n; });
-    if (core) {
-      ctx.globalCompositeOperation = "lighter";
-      drawAura(core, t);
-      ctx.globalCompositeOperation = "source-over";
-    }
-    drawLinks();
-    var order = ["artifact", "shadow", "engine", "heart", "core"];
-    var glitching = [];
-    order.forEach(function (cat) {
-      sim.nodes.forEach(function (n) {
-        if (n.category !== cat) return;
-        var alpha = focusAlpha(n);
-        if (cat === "core") drawCore(n, t, alpha);
-        else if (cat === "heart") drawHeart(n, alpha);
-        else if (cat === "engine") drawEngine(n, alpha);
-        else if (cat === "shadow") {
-          drawShadow(n, t, alpha);
-          if (!reduced && t < n.glitchUntil) glitching.push(n);
-        } else drawArtifact(n, alpha);
-        drawEmotionHalo(n, t, alpha);
-      });
-    });
-    glitching.forEach(glitchSlices);
-    // Libellés : noyau, puis cœur et moteurs (du plus intense au moins intense, si la carte est assez grande),
-    // puis années des artefacts ; un libellé qui en chevaucherait un autre déjà posé est omis.
-    var roomy = W >= 560 && H >= 400;
-    var placed = [];
-    LABEL_ORDER.forEach(function (n) {
-      var a = focusAlpha(n);
-      if (n.category === "core") label(short(n.data.title, 34), n.x, n.y + n.r * 1.55 + 4, 12.5, "rgba(255,255,255," + 0.92 * a + ")", 600, placed);
-      else if (n.category === "heart" && roomy) label(short(n.data.title, 22), n.x, n.y + n.r + 4, 10, "rgba(255,228,230," + 0.85 * a + ")", 500, placed);
-      else if (n.category === "engine" && roomy) label(short(n.data.title, 24), n.x, n.y + n.r + 5, 10.5, "rgba(207,250,254," + 0.8 * a + ")", 500, placed);
-      else if (n.category === "artifact" && W >= 640 && n.data.date) {
-        var year = n.data.date.charAt(0) === "-" ? n.data.date.split("-")[1] : n.data.date.split("-")[0];
-        label(year, n.x, n.y + n.r + 3, 9, "rgba(253,230,138," + 0.6 * a + ")", 500, placed);
-      }
-    });
-    if (pinned) drawRing(pinned, t, "rgba(255,255,255,0.85)", 7);
-    if (dropTarget) {
-      var beat = 0.5 + 0.5 * Math.sin(t * 8);
-      drawRing(dropTarget, t, "rgba(125,249,255," + (0.6 + 0.4 * beat) + ")", 9 + beat * 4);
-    }
-    sim.nodes.forEach(function (n) {
-      if (!n.flash) return;
-      var age = (performance.now() - n.flash) / 700;
-      if (age >= 1) { n.flash = 0; return; }
-      ctx.strokeStyle = "rgba(125,249,255," + (1 - age) + ")";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, n.r + 6 + age * 40, 0, Math.PI * 2);
-      ctx.stroke();
-    });
-    if (core) drawFusion(core, t);
-    drawTrace(t);
-  }
-
-  // ---------------------------------------------------------------- boucle
-  var last = performance.now();
-  var raf = 0;
-  function frame(now) {
-    var dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
-    last = now;
-    sim.advance(reduced ? dt * 0.35 : dt);
-    var t = now / 1000;
-    sim.nodes.forEach(function (n) {
-      if (n.category === "artifact") {
-        n.trail.push([n.x, n.y]);
-        if (n.trail.length > 12) n.trail.shift();
-      } else if (n.category === "shadow" && sim.fusion !== null && sim.fusion < 1) {
-        n.glitchUntil = t + 0.12; // fusion : les ombres se heurtent et glitchent sans répit
-      } else if (n.category === "shadow" && t >= n.glitchAt) {
-        n.glitchUntil = t + 0.08 + Math.random() * 0.2;
-        n.glitchAt = t + 1.5 + Math.random() * 4.5;
-      }
-    });
-    stage.classList.toggle("is-fusing", sim.fusion !== null && sim.fusion < 1);
-    draw(t);
-    placeGlass();
-    raf = requestAnimationFrame(frame);
-  }
-  document.addEventListener("visibilitychange", function () {
-    cancelAnimationFrame(raf);
-    if (document.hidden) return;
-    last = performance.now();
-    raf = requestAnimationFrame(frame);
-  });
-  raf = requestAnimationFrame(frame);
-
-  // Accès pour les tests de bout en bout (lecture seule en pratique : rien d'autre ne s'y fie).
-  window.__engram = { sim: sim, data: DATA, pin: function (id) { pin(byId[id] || null, true); }, state: function () {
-    return { hover: hover && hover.id, pinned: pinned && pinned.id, drop: dropTarget && dropTarget.id, glass: shown && shown.id, pointerIn: pointerIn,
-      trace: trace ? trace.steps.map(function (s) { return s.node.id; }) : [], fusion: sim.fusion, parents: PARENTS };
-  } };
 })();
 </script>
 </body>

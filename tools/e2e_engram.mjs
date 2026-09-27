@@ -239,11 +239,14 @@ async function main() {
       const sparks = await evaluate(`document.getElementById("sparks-count").textContent`);
       check("2 Sparks débités (50 → 48)", /^48/.test(sparks), sparks);
     }
-    // Rendu réel : des pixels lumineux au centre (noyau), le fond ailleurs.
-    const pixels = await evaluate(`(() => { const c = document.getElementById("stage"); const g = c.getContext("2d");
-      const px = (x, y) => Array.from(g.getImageData(Math.round(x * c.width / innerWidth), Math.round(y * c.height / innerHeight), 1, 1).data);
-      const core = window.__engram.sim.nodes[0]; return { core: px(core.x, core.y), corner: px(3, innerHeight - 3) }; })()`, EF);
+    // Rendu réel : des pixels lumineux au centre (noyau), le fond ailleurs — lus par le fil qui dessine.
+    const pixels = await evaluate(`(async () => { const core = window.__engram.sim.nodes[0];
+      const [c, corner] = await window.__engram.pixels([[core.x, core.y], [3, innerHeight - 3]]); return { core: c, corner }; })()`, EF);
     check("rendu Canvas : noyau blanc lumineux, fond sombre", pixels.core[0] > 200 && pixels.core[2] > 200 && pixels.corner[0] < 40, JSON.stringify(pixels));
+    // Phase 1 (V5) : physique et dessin dans un Worker (OffscreenCanvas) ; le fil de la carte reste libre.
+    const perf = await waitFor(() => evaluate(`window.__engram.perf()`, EF), "mesures du fil de rendu", 5000).catch(() => null);
+    check("rendu dans un Worker (OffscreenCanvas), mesures publiées", (await evaluate(`window.__engram.mode`, EF)) === "worker" && perf && perf.fps > 0,
+      perf ? `${perf.fps.toFixed(0)} img/s · physique ${perf.physics.toFixed(2)} ms · dessin ${perf.draw.toFixed(2)} ms` : "aucune mesure");
     await sleep(1500);
     const motion = await evaluate(`(async () => { const n = window.__engram.sim.nodes; const a = n.map((m) => [m.x, m.y]);
       await new Promise((r) => setTimeout(r, 500));
@@ -557,6 +560,8 @@ async function main() {
       const { data } = await cdp.send("Page.captureScreenshot", { format: "png" }, S);
       writeFileSync(SHOT_FUSION.replace(/\.png$/i, "") + `-${suffix}.png`, Buffer.from(data, "base64"));
     };
+    // Le fil de rendu démarre de façon asynchrone : lire l'état une fois le premier instantané arrivé.
+    await waitFor(() => evaluate(`window.__engram.state().fusion > 0`, HF), "premier instantané de l'Hyper-Engramme", 8000).catch(() => null);
     await shotFusion("intro");
     const early = await evaluate(`({ fusion: window.__engram.state().fusion, fusing: document.getElementById("stage").classList.contains("is-fusing"),
       kicker: document.querySelector('[data-t="kicker"]').textContent, parents: window.__engram.data.parents })`, HF);
@@ -596,9 +601,9 @@ async function main() {
     // logiciel de Chrome headless et espacerait les évènements du pointeur.
     // Zoom (Ctrl + molette) sur le widget : les Engrammes animés sortent de l'écran, où Chrome bride leurs iframes.
     const [aimed] = await visibleWidgets();
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 20; i++) {
       const w = await evaluate(`document.querySelector('.card[data-id="${aimed.id}"]').getBoundingClientRect().width`);
-      if (w > 560) break;
+      if (w > 860) break; // les Engrammes animés sortent de l'écran (leur fil de rendu se met en pause)
       const at = await evaluate(`(() => { const r = document.querySelector('.card[data-id="${aimed.id}"] .card-bar').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
       await cdp.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: at.x, y: at.y, deltaX: 0, deltaY: -240, modifiers: 2 }, S);
       await sleep(120);

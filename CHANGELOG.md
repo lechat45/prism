@@ -1,5 +1,28 @@
 # Changelog
 
+## 5.0.0-alpha.4 — 2026-09-27 (Phase 1 · moteur physique asynchrone)
+
+- **Rendu des Engrammes dans un Web Worker** (OffscreenCanvas) : physique et dessin tournent sur un fil séparé ; le fil
+  de la carte ne garde que le DOM (fiche, légende, dépôts) et le pointeur. `engine/engram/render.js` (nouveau) contient
+  tout le dessin, sans DOM ; `viewer.html` crée le Worker depuis son propre code (Blob), attend sa poignée de main,
+  puis lui confie la toile. La page garde une **réplique passive** de la simulation, synchronisée par des instantanés
+  `Float32Array` transférés (sans copie, tampons réutilisés) : survol, fiche, dépôts et tests la lisent comme avant.
+  Repli automatique sur le fil de la carte (navigateur sans OffscreenCanvas, Worker refusé).
+- **CSP des cartes** : `worker-src blob:` (seuls les Workers issus du code de la carte ; ils héritent de la CSP : ni
+  réseau, ni `importScripts` d'ailleurs — vérifié dans une iframe sandbox).
+- **physics.js v2** : aucune allocation par pas (tampons préalloués), grille de voisinage pour la répulsion (−28 à −43 %
+  sur une grande toile, neutre sur une carte), **rattrapage borné** à 4 pas par image (une image lente ne déclenche
+  plus 12 pas qui ralentissent la suivante : 31 ms de physique par image à 200 bulles sous charge, ~3-5 ms désormais) ;
+  `snapshot()` / `sync()` pour les échanges Worker ↔ page.
+- **Cadence et budget** : une carte manipulée tourne à pleine vitesse ; au repos, 30 images/s au plus et moins si ses
+  images coûtent cher ; la page répartit un budget commun (~60 % d'un cœur) entre les Engrammes au repos. Pause hors de
+  l'écran (IntersectionObserver) et onglet caché.
+- Mesures (`tools/bench_engram.mjs`, `tools/bench_physics.cjs`, machine de 2 cœurs chargée) : avec 5 Engrammes, retard
+  du pointeur sur une carte de 115-173 ms en moyenne (p95 190-290 ms) à 5-12 ms (p95 ~20 ms) ; 1 Engramme de 200 bulles
+  de 38 à 43-52 images/s.
+- Tests : rendu sans DOM, instantané → réplique, pas de physique, cadence (Node 89) ; E2E : rendu dans un Worker et
+  pixels lus par le fil de rendu.
+
 ## 5.0.0-alpha.3 — 2026-09-27 (les clés Gemini se partagent le travail)
 
 - **Répartition de charge entre les clés Gemini** (serveur `providers.KeyPool`, et même règle dans le moteur du
