@@ -1,6 +1,6 @@
 # Prism — description complète du projet
 
-> Version décrite : **6.0.0-alpha.2** (27 septembre 2026). En ligne : <https://lechat45.github.io/prism/>,
+> Version décrite : **6.0.0-alpha.3** (27 septembre 2026). En ligne : <https://lechat45.github.io/prism/>,
 > API : <https://prism-api-0x4z.onrender.com>. Code : <https://github.com/lechat45/prism> (branches `v3` = site public
 > sur GitHub Pages, `v4` = branche déployée par Render pour l'API, `v5` et `v6` = développement ; identiques à chaque publication).
 > Ce document est mis à jour à chaque livraison ; le détail technique de chaque version est dans `CHANGELOG.md`.
@@ -9,6 +9,9 @@
 
 Les dernières mises à jour, de la plus récente à la plus ancienne.
 
+- **6.0.0-alpha.3 — 27 septembre 2026 · le serveur suit.** Correctif de mise en ligne : un test automatique bloquait
+  depuis la V5 le déploiement de l'API ; il est réparé, et le serveur reçoit enfin les routes qui font penser le Nexus
+  avec Gemini. Au passage : un widget très utilisé puis fermé garde désormais sa miniature dans Mon Hub.
 - **6.0.0-alpha.2 — 27 septembre 2026 · le Nexus pense pour de vrai.** Le site s'ouvre désormais sur la porte
   d'entrée (Focus ou Nexus). Dans le Nexus, le menu « Intelligence » fait penser les Engrammes avec Gemini, avec votre
   compte Prism : le bouton « Penser » affiche son prix (0,25 Spark par esprit) avant toute dépense, et la War Room
@@ -388,6 +391,7 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
 | alpha.5 | phase 1 : nettoyage mémoire, bouclier API ; phase 2 : Mode Miroir, aura sonore et haptique, mode spatial |
 | 6.0.0-alpha.1 | V6 « Nexus » : logo (Lentille Continua), porte d'entrée Focus / Nexus, prototype du Mode Nexus (synapses, fil coupé, anatomie, War Rooms) |
 | alpha.2 | le Nexus pense avec Gemini (compte, Sparks au clic), autres esprits, scène gardée ; la porte d'entrée devient l'accueil du site |
+| alpha.3 | CI de nouveau verte (clics des tests à travers le toast), miniatures de Mon Hub, déploiement de l'API du Nexus |
 
 ## 9. Limites connues
 

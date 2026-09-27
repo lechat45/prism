@@ -371,6 +371,7 @@ function unmount(card) {
   card.scope?.clearTimeout(card.revealTimer);
   card.revealTimer = null;
   card.scope?.clearTimeout(card.thumbTimer);
+  card.thumbTimer = null;
 }
 
 // ----------------------------------------------------------------------------
@@ -378,8 +379,14 @@ function unmount(card) {
 // ----------------------------------------------------------------------------
 function scheduleThumbnail(card, delay) {
   if (!isLinked(card)) return;
+  const due = Date.now() + delay;
+  // Une miniature déjà prévue plus tôt n'est pas repoussée : sinon un widget sans cesse utilisé (chaque clic
+  // change son état) n'en recevait jamais, et arrivait sans image dans « Mon Hub » s'il était fermé entre-temps.
+  if (card.thumbTimer && card.thumbDue <= due) return;
   card.scope.clearTimeout(card.thumbTimer);
+  card.thumbDue = due;
   card.thumbTimer = card.scope.timeout(() => {
+    card.thumbTimer = null;
     const body = canvas.element(card.id)?.querySelector(".card-body");
     if (!cards.has(card.id) || body?.dataset.frame !== "live" || card.showCode) return;
     canvas.frame(card.id)?.contentWindow?.postMessage({ prism: "snapshot", width: 360 }, "*");

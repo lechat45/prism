@@ -99,8 +99,19 @@ async function main() {
     const frames = new Map(); // session de l'iframe -> session de la page qui la contient
     const downloadEvents = [];
     const inflight = new Map(); // requêtes réseau de la page non terminées (diagnostic)
+    const thumbsSent = []; // miniatures envoyées au Hub : « widget@seconde » (diagnostic)
+    const thumbLogs = []; // réponses « thumbnail » des widgets et avertissements de la page (diagnostic)
+    const t0 = Date.now();
     cdp.listeners.push((msg) => {
-      if (msg.sessionId === S && msg.method === "Network.requestWillBeSent") inflight.set(msg.params.requestId, msg.params.request.url);
+      if (msg.sessionId === S && msg.method === "Network.requestWillBeSent") {
+        inflight.set(msg.params.requestId, msg.params.request.url);
+        const r = msg.params.request;
+        // Un gros corps n'est pas inclus dans l'évènement : un PATCH volumineux est presque toujours une miniature (« ? »).
+        const big = r.postData === undefined && r.hasPostData;
+        if (r.method === "PATCH" && (big || /"thumbnail"/.test(r.postData || ""))) {
+          thumbsSent.push(`${r.url.split("/").pop().slice(0, 8)}@${Math.round((Date.now() - t0) / 1000)}s${big ? "?" : ""}`);
+        }
+      }
       if (msg.sessionId === S && (msg.method === "Network.loadingFinished" || msg.method === "Network.loadingFailed")) inflight.delete(msg.params.requestId);
       if (msg.method === "Browser.downloadWillBegin") downloadEvents.push(`début ${msg.params.suggestedFilename}`);
       if (msg.method === "Browser.downloadProgress" && msg.params.state !== "inProgress") downloadEvents.push(msg.params.state);
@@ -110,8 +121,19 @@ async function main() {
         const d = msg.params.exceptionDetails;
         pageErrors.push(`${d.exception?.description || d.text} @${d.url || ""}:${d.lineNumber}`);
       }
+      if (msg.method === "Runtime.consoleAPICalled" && msg.sessionId === S) {
+        const text = msg.params.args.map((a) => a.value ?? a.description ?? "").join(" ");
+        if (/e2e-thumb|miniature/.test(text)) thumbLogs.push(`${Math.round((Date.now() - t0) / 1000)}s ${text.slice(0, 140)}`);
+      }
     });
     await cdp.send("Runtime.enable", {}, S);
+    // Diagnostic des miniatures : chaque réponse « thumbnail » d'un widget (carte, taille ou erreur), rechargements compris.
+    await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: `addEventListener("message", (e) => {
+      const d = e.data; if (!d || d.prism !== "thumbnail") return;
+      const f = [...document.querySelectorAll("iframe")].find((x) => x.contentWindow === e.source);
+      const id = f && f.closest(".card") ? f.closest(".card").dataset.id.slice(0, 8) : "?";
+      console.debug("[e2e-thumb] " + id + " " + (d.data ? "ok " + d.data.length + " car." : "erreur " + d.error));
+    }, true);` }, S);
     await cdp.send("Network.enable", {}, S);
     await cdp.send("Page.enable", {}, S);
     await cdp.send("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true }, S);
@@ -156,7 +178,23 @@ async function main() {
       const b = await box(selector);
       return Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5 && Math.abs(a.w - b.w) < 0.5 && a.w > 0 ? b : null;
     }, `position stable de ${selector}`);
-    const clickSel = async (selector) => { const b = await stableBox(selector); await click(b.cx, b.cy); };
+    /** Attend que rien ne recouvre la cible (le toast s'affiche en haut au centre, par-dessus les cartes), puis clique.
+     *  Au-delà de 6 s, clique quand même (comportement d'origine) ; ce qui recouvrait la cible est signalé. */
+    const clearAt = async (selector, x, y) => {
+      const probe = `(() => { const el = document.querySelector(${JSON.stringify(selector)}); const hit = document.elementFromPoint(${x}, ${y});
+        if (el && hit && (el === hit || el.contains(hit))) return "";
+        return hit ? (hit.closest("#toast") ? "toast « " + hit.closest("#toast").textContent.slice(0, 80) + " »" : hit.tagName + "." + [...hit.classList].join(".")) : "rien"; })()`;
+      const first = await evaluate(probe);
+      if (!first) return;
+      const t0 = Date.now();
+      while (Date.now() - t0 < 6000) { await sleep(150); if (!(await evaluate(probe))) break; }
+      console.log(`  note  ${selector} recouvert par ${first} pendant ${Date.now() - t0} ms`);
+    };
+    const clickSel = async (selector) => {
+      const b = await stableBox(selector);
+      await clearAt(selector, b.cx, b.cy);
+      await click(b.cx, b.cy);
+    };
     const typeText = (text) => cdp.send("Input.insertText", { text }, S);
     const pressEnter = async () => {
       const key = { key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 };
@@ -214,6 +252,7 @@ async function main() {
       throw new Error(`${err.message} — cartes : ${state} — requêtes en attente : ${[...inflight.values()].join(", ") || "aucune"}`);
     });
     let [counterCard] = await cards();
+    const firstCounterId = counterCard.id; // diagnostic des miniatures (le bouclier remplace ce compteur par un autre)
     check("widget 1 généré (saisie clavier + bouton Générer)", counterCard.state === "ready", counterCard.title);
     if (serverMode) {
       const expected = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(health.signup_sparks - health.pricing.generate);
@@ -224,6 +263,9 @@ async function main() {
     if (hasModel && serverMode) {
       // V5, bouclier API : la même demande reformulée (canvas vide : même contexte) revient sans modèle ni Sparks.
       const sparksBefore = await sparksShown();
+      // Widget du compteur qu'on va fermer (le seul du compte à ce stade) : c'est lui, et lui seul, qu'on retirera du Hub.
+      const closedWidgets = await evaluate(`fetch("/api/widgets", { headers: { Authorization: "Bearer " + JSON.parse(localStorage.getItem("prism:session")).token } })
+        .then((r) => r.json()).then((page) => page.items.map((w) => w.id))`);
       await evaluate(`document.querySelector('.card [data-action="close"]').click()`);
       await waitFor(async () => (await cards()).length === 0, "carte fermée", 5000);
       await clickSel("#prompt");
@@ -236,12 +278,17 @@ async function main() {
       check("bouclier API : demande équivalente resservie sans modèle ni Sparks, « Générer à nouveau » proposé",
         shield.includes("0 Spark") && shield.includes("Générer à nouveau") && (await sparksShown()) === sparksBefore, `${shield} · ${await sparksShown()} Sparks`);
       [counterCard] = await cards();
-      // La carte fermée reste dans Mon Hub : retirée, pour que la suite du scénario parte du même état qu'avant.
-      await evaluate(`(async () => { const token = JSON.parse(localStorage.getItem("prism:session")).token; const h = { Authorization: "Bearer " + token };
-        for (let i = 0; i < 40; i++) { // le retrait du canvas est synchronisé en différé
-          const page = await fetch("/api/widgets?on_canvas=false", { headers: h }).then((r) => r.json());
-          if (page.items.length) { await Promise.all(page.items.map((w) => fetch("/api/widgets/" + w.id, { method: "DELETE", headers: h }))); return; }
-          await new Promise((r) => setTimeout(r, 250));
+      // La carte fermée reste dans Mon Hub : retirée, pour que la suite du scénario parte du même état qu'avant. Seulement
+      // elle : le widget tout juste repris par le bouclier n'est pas encore marqué « sur le canvas » (synchronisation
+      // différée), un filtre « hors canvas » l'emporterait aussi (en CI, la carte perdait alors son widget et sa miniature).
+      await evaluate(`(async () => { const h = { Authorization: "Bearer " + JSON.parse(localStorage.getItem("prism:session")).token };
+        for (const id of ${JSON.stringify(closedWidgets)}) {
+          for (let i = 0; i < 40; i++) { // la fermeture est synchronisée en différé : attendre qu'elle soit connue du serveur
+            const w = await fetch("/api/widgets/" + id, { headers: h }).then((r) => r.ok ? r.json() : null);
+            if (!w || !w.on_canvas) break;
+            await new Promise((r) => setTimeout(r, 250));
+          }
+          await fetch("/api/widgets/" + id, { method: "DELETE", headers: h });
         } })()`);
     }
 
@@ -372,8 +419,23 @@ async function main() {
       `${Math.round(c2.width)}×${Math.round(c2.height)} → ${Math.round(resized.width)}×${Math.round(resized.height)}`);
 
     // ------------------------------------------------------------------ 7. Inspecteur : accent et export
-    await clickSel(`.card[data-id="${c2.id}"] .card-title`);
-    await waitFor(() => evaluate(`!document.getElementById("inspector").hidden`), "inspecteur");
+    const titleBox = await stableBox(`.card[data-id="${c2.id}"] .card-title`);
+    await clearAt(`.card[data-id="${c2.id}"] .card-title`, titleBox.cx, titleBox.cy);
+    // Journal des évènements du clic (diagnostic en cas d'échec).
+    await evaluate(`(() => { window.__clicks = []; for (const t of ["pointerdown", "pointerup", "click"]) addEventListener(t, (e) => {
+      const card = e.target.closest && e.target.closest(".card"); window.__clicks.push(t + ":" + e.target.tagName + (card ? "@" + card.dataset.id.slice(0, 8) : "")); }, true); })()`);
+    await click(titleBox.cx, titleBox.cy);
+    await waitFor(() => evaluate(`!document.getElementById("inspector").hidden`), "inspecteur").catch(async (err) => {
+      // Diagnostic : ce qui se trouvait sous le clic (un toast, une pastille, une autre carte…).
+      const under = await evaluate(`(() => { const e = document.elementFromPoint(${titleBox.cx}, ${titleBox.cy}); const t = document.getElementById("toast");
+        const card = e && e.closest(".card");
+        return (e ? e.tagName + "." + [...e.classList].join(".") + (card ? " dans la carte " + card.dataset.id : "") : "rien")
+          + " · toast : " + (t.hidden ? "caché" : t.textContent.slice(0, 90))
+          + " · évènements : " + (window.__clicks || []).join(",")
+          + " · cartes " + document.querySelectorAll('.card[data-id="${c2.id}"]').length + " (" + [...(document.querySelector('.card[data-id="${c2.id}"]') || {}).classList || []].join(".") + ")"
+          + " · body : " + document.body.className + " · chat : " + (document.getElementById("chat") ? document.getElementById("chat").hidden : "-"); })()`).catch((e) => "? " + e.message);
+      throw new Error(`${err.message} (sous le clic en ${Math.round(titleBox.cx)}, ${Math.round(titleBox.cy)} : ${under} ; exceptions JS : ${pageErrors.slice(-3).join(" | ").slice(0, 600) || "aucune"})`);
+    });
     check("clic sur la carte : inspecteur ouvert", (await evaluate(`document.getElementById("insp-title").textContent`)) === resized.title);
     // Fin réelle du glissement d'entrée du volet (sous charge, l'animation peut démarrer tard et
     // une position mesurée « stable » être celle de départ).
@@ -498,7 +560,9 @@ async function main() {
       const hub = await evaluate(`[...document.querySelectorAll(".hub-item")].map((el) => ({ id: el.dataset.id, title: el.querySelector(".hub-title").textContent,
         meta: el.querySelector(".hub-meta").textContent, onCanvas: !!el.querySelector(".hub-badge"), thumb: !!el.querySelector(".hub-thumb img") }))`);
       check("Mon Hub : 2 widgets avec miniatures fabriquées dans la sandbox, carte fermée hors canvas",
-        hub.every((h) => h.thumb) && hub.filter((h) => h.onCanvas).length === 1, hub.map((h) => `${h.title}${h.onCanvas ? " (canvas)" : ""}${h.thumb ? " 🖼" : ""}`).join(", "));
+        hub.every((h) => h.thumb) && hub.filter((h) => h.onCanvas).length === 1,
+        hub.map((h) => `${h.title} [${h.id.slice(0, 8)}]${h.onCanvas ? " (canvas)" : ""}${h.thumb ? " 🖼" : ""}`).join(", ") + ` · miniatures envoyées : ${thumbsSent.join(", ") || "aucune"} · réponses des widgets : ${thumbLogs.join(" | ") || "aucune"}`
+          + ` · cartes : 1er compteur ${firstCounterId.slice(0, 8)}, compteur ${counterCard.id.slice(0, 8)}, CSV ${c2.id.slice(0, 8)}`);
 
       // Réouverture de la carte fermée : code et état du widget repris du serveur.
       const closedItem = hub.find((h) => !h.onCanvas);
