@@ -156,7 +156,23 @@ async function main() {
       const b = await box(selector);
       return Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5 && Math.abs(a.w - b.w) < 0.5 && a.w > 0 ? b : null;
     }, `position stable de ${selector}`);
-    const clickSel = async (selector) => { const b = await stableBox(selector); await click(b.cx, b.cy); };
+    /** Attend que rien ne recouvre la cible (le toast s'affiche en haut au centre, par-dessus les cartes), puis clique.
+     *  Au-delà de 6 s, clique quand même (comportement d'origine) ; ce qui recouvrait la cible est signalé. */
+    const clearAt = async (selector, x, y) => {
+      const probe = `(() => { const el = document.querySelector(${JSON.stringify(selector)}); const hit = document.elementFromPoint(${x}, ${y});
+        if (el && hit && (el === hit || el.contains(hit))) return "";
+        return hit ? (hit.closest("#toast") ? "toast « " + hit.closest("#toast").textContent.slice(0, 80) + " »" : hit.tagName + "." + [...hit.classList].join(".")) : "rien"; })()`;
+      const first = await evaluate(probe);
+      if (!first) return;
+      const t0 = Date.now();
+      while (Date.now() - t0 < 6000) { await sleep(150); if (!(await evaluate(probe))) break; }
+      console.log(`  note  ${selector} recouvert par ${first} pendant ${Date.now() - t0} ms`);
+    };
+    const clickSel = async (selector) => {
+      const b = await stableBox(selector);
+      await clearAt(selector, b.cx, b.cy);
+      await click(b.cx, b.cy);
+    };
     const typeText = (text) => cdp.send("Input.insertText", { text }, S);
     const pressEnter = async () => {
       const key = { key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 };
@@ -373,6 +389,7 @@ async function main() {
 
     // ------------------------------------------------------------------ 7. Inspecteur : accent et export
     const titleBox = await stableBox(`.card[data-id="${c2.id}"] .card-title`);
+    await clearAt(`.card[data-id="${c2.id}"] .card-title`, titleBox.cx, titleBox.cy);
     // Journal des évènements du clic (diagnostic en cas d'échec).
     await evaluate(`(() => { window.__clicks = []; for (const t of ["pointerdown", "pointerup", "click"]) addEventListener(t, (e) => {
       const card = e.target.closest && e.target.closest(".card"); window.__clicks.push(t + ":" + e.target.tagName + (card ? "@" + card.dataset.id.slice(0, 8) : "")); }, true); })()`);
