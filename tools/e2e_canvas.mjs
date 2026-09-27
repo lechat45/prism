@@ -263,6 +263,9 @@ async function main() {
     if (hasModel && serverMode) {
       // V5, bouclier API : la même demande reformulée (canvas vide : même contexte) revient sans modèle ni Sparks.
       const sparksBefore = await sparksShown();
+      // Widget du compteur qu'on va fermer (le seul du compte à ce stade) : c'est lui, et lui seul, qu'on retirera du Hub.
+      const closedWidgets = await evaluate(`fetch("/api/widgets", { headers: { Authorization: "Bearer " + JSON.parse(localStorage.getItem("prism:session")).token } })
+        .then((r) => r.json()).then((page) => page.items.map((w) => w.id))`);
       await evaluate(`document.querySelector('.card [data-action="close"]').click()`);
       await waitFor(async () => (await cards()).length === 0, "carte fermée", 5000);
       await clickSel("#prompt");
@@ -275,12 +278,17 @@ async function main() {
       check("bouclier API : demande équivalente resservie sans modèle ni Sparks, « Générer à nouveau » proposé",
         shield.includes("0 Spark") && shield.includes("Générer à nouveau") && (await sparksShown()) === sparksBefore, `${shield} · ${await sparksShown()} Sparks`);
       [counterCard] = await cards();
-      // La carte fermée reste dans Mon Hub : retirée, pour que la suite du scénario parte du même état qu'avant.
-      await evaluate(`(async () => { const token = JSON.parse(localStorage.getItem("prism:session")).token; const h = { Authorization: "Bearer " + token };
-        for (let i = 0; i < 40; i++) { // le retrait du canvas est synchronisé en différé
-          const page = await fetch("/api/widgets?on_canvas=false", { headers: h }).then((r) => r.json());
-          if (page.items.length) { await Promise.all(page.items.map((w) => fetch("/api/widgets/" + w.id, { method: "DELETE", headers: h }))); return; }
-          await new Promise((r) => setTimeout(r, 250));
+      // La carte fermée reste dans Mon Hub : retirée, pour que la suite du scénario parte du même état qu'avant. Seulement
+      // elle : le widget tout juste repris par le bouclier n'est pas encore marqué « sur le canvas » (synchronisation
+      // différée), un filtre « hors canvas » l'emporterait aussi (en CI, la carte perdait alors son widget et sa miniature).
+      await evaluate(`(async () => { const h = { Authorization: "Bearer " + JSON.parse(localStorage.getItem("prism:session")).token };
+        for (const id of ${JSON.stringify(closedWidgets)}) {
+          for (let i = 0; i < 40; i++) { // la fermeture est synchronisée en différé : attendre qu'elle soit connue du serveur
+            const w = await fetch("/api/widgets/" + id, { headers: h }).then((r) => r.ok ? r.json() : null);
+            if (!w || !w.on_canvas) break;
+            await new Promise((r) => setTimeout(r, 250));
+          }
+          await fetch("/api/widgets/" + id, { method: "DELETE", headers: h });
         } })()`);
     }
 
