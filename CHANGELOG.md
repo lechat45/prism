@@ -1,5 +1,13 @@
 # Changelog
 
+## 6.0.0-alpha.4 — 2026-09-27 (Nexus : solde exact après « Penser »)
+
+- **Nexus** : les esprits pensent en parallèle, et leurs réponses (avec le solde qu'elles annoncent) peuvent arriver
+  dans le désordre ; le solde affiché pouvait rester un quart de Spark trop haut. À la fin de « Penser », le vrai solde
+  est relu une fois auprès du serveur.
+- E2E : l'export `.html` est choisi par le nom annoncé par Chrome (Chrome headless dépose parfois aussi un
+  `downloads.html` étranger) ; l'E2E du Nexus attend que l'écran de rendu soit redessiné avant de le lire.
+
 ## 6.0.0-alpha.3 — 2026-09-27 (CI de nouveau verte : l'API du Nexus peut être déployée)
 
 - **CI** : l'étape E2E « Serveur avec faux Gemini » échouait depuis la V5 (le clic sur le titre d'une carte n'ouvrait
