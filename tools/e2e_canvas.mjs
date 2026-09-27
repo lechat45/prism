@@ -372,8 +372,16 @@ async function main() {
       `${Math.round(c2.width)}×${Math.round(c2.height)} → ${Math.round(resized.width)}×${Math.round(resized.height)}`);
 
     // ------------------------------------------------------------------ 7. Inspecteur : accent et export
-    await clickSel(`.card[data-id="${c2.id}"] .card-title`);
-    await waitFor(() => evaluate(`!document.getElementById("inspector").hidden`), "inspecteur");
+    const titleBox = await stableBox(`.card[data-id="${c2.id}"] .card-title`);
+    await click(titleBox.cx, titleBox.cy);
+    await waitFor(() => evaluate(`!document.getElementById("inspector").hidden`), "inspecteur").catch(async (err) => {
+      // Diagnostic : ce qui se trouvait sous le clic (un toast, une pastille, une autre carte…).
+      const under = await evaluate(`(() => { const e = document.elementFromPoint(${titleBox.cx}, ${titleBox.cy}); const t = document.getElementById("toast");
+        const card = e && e.closest(".card");
+        return (e ? e.tagName + "." + [...e.classList].join(".") + (card ? " dans la carte " + card.dataset.id : "") : "rien")
+          + " · toast : " + (t.hidden ? "caché" : t.textContent.slice(0, 90)); })()`).catch(() => "?");
+      throw new Error(`${err.message} (sous le clic en ${Math.round(titleBox.cx)}, ${Math.round(titleBox.cy)} : ${under})`);
+    });
     check("clic sur la carte : inspecteur ouvert", (await evaluate(`document.getElementById("insp-title").textContent`)) === resized.title);
     // Fin réelle du glissement d'entrée du volet (sous charge, l'animation peut démarrer tard et
     // une position mesurée « stable » être celle de départ).
