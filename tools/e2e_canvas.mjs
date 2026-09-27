@@ -99,8 +99,18 @@ async function main() {
     const frames = new Map(); // session de l'iframe -> session de la page qui la contient
     const downloadEvents = [];
     const inflight = new Map(); // requêtes réseau de la page non terminées (diagnostic)
+    const thumbsSent = []; // miniatures envoyées au Hub : « widget@seconde » (diagnostic)
+    const t0 = Date.now();
     cdp.listeners.push((msg) => {
-      if (msg.sessionId === S && msg.method === "Network.requestWillBeSent") inflight.set(msg.params.requestId, msg.params.request.url);
+      if (msg.sessionId === S && msg.method === "Network.requestWillBeSent") {
+        inflight.set(msg.params.requestId, msg.params.request.url);
+        const r = msg.params.request;
+        // Un gros corps n'est pas inclus dans l'évènement : un PATCH volumineux est presque toujours une miniature (« ? »).
+        const big = r.postData === undefined && r.hasPostData;
+        if (r.method === "PATCH" && (big || /"thumbnail"/.test(r.postData || ""))) {
+          thumbsSent.push(`${r.url.split("/").pop().slice(0, 8)}@${Math.round((Date.now() - t0) / 1000)}s${big ? "?" : ""}`);
+        }
+      }
       if (msg.sessionId === S && (msg.method === "Network.loadingFinished" || msg.method === "Network.loadingFailed")) inflight.delete(msg.params.requestId);
       if (msg.method === "Browser.downloadWillBegin") downloadEvents.push(`début ${msg.params.suggestedFilename}`);
       if (msg.method === "Browser.downloadProgress" && msg.params.state !== "inProgress") downloadEvents.push(msg.params.state);
@@ -529,7 +539,8 @@ async function main() {
       const hub = await evaluate(`[...document.querySelectorAll(".hub-item")].map((el) => ({ id: el.dataset.id, title: el.querySelector(".hub-title").textContent,
         meta: el.querySelector(".hub-meta").textContent, onCanvas: !!el.querySelector(".hub-badge"), thumb: !!el.querySelector(".hub-thumb img") }))`);
       check("Mon Hub : 2 widgets avec miniatures fabriquées dans la sandbox, carte fermée hors canvas",
-        hub.every((h) => h.thumb) && hub.filter((h) => h.onCanvas).length === 1, hub.map((h) => `${h.title}${h.onCanvas ? " (canvas)" : ""}${h.thumb ? " 🖼" : ""}`).join(", "));
+        hub.every((h) => h.thumb) && hub.filter((h) => h.onCanvas).length === 1,
+        hub.map((h) => `${h.title} [${h.id.slice(0, 8)}]${h.onCanvas ? " (canvas)" : ""}${h.thumb ? " 🖼" : ""}`).join(", ") + ` · miniatures envoyées : ${thumbsSent.join(", ") || "aucune"}`);
 
       // Réouverture de la carte fermée : code et état du widget repris du serveur.
       const closedItem = hub.find((h) => !h.onCanvas);
