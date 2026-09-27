@@ -39,6 +39,8 @@ os.environ.update(
     # Avec modèle, 5 Sparks : quatre générations + une refactorisation (4,5) laissent 0,5 → l'E2E
     # atteint « Prism Pro ». En démo : le cadeau habituel.
     PRISM_SIGNUP_SPARKS=os.getenv("PRISM_SIGNUP_SPARKS", "50" if DEMO else "5"),
+    # V5, Mode Miroir : ouvert dès 5 Sparks dépensés (50 en production), pour que l'E2E l'atteigne.
+    PRISM_MIRROR_SPARKS=os.getenv("PRISM_MIRROR_SPARKS", "5"),
 )
 
 
@@ -74,12 +76,30 @@ def fake_widget(user_message: str) -> str:
     return html.replace("<title>Bouton caméléon</title>", "<title>Compteur (faux Gemini)</title>")
 
 
+def fake_nexus(system: str, user: str) -> str:
+    """V6 : pensée d'un esprit du Nexus, ou débat d'une War Room (JSON du schéma, noms repris du message)."""
+    names = re.findall(r"^name: (.+)$", user, re.M)
+    if "War Room" in system:
+        return json.dumps({
+            "positions": [{"author": n, "text": f"{n} (faux Gemini) prend position."} for n in names],
+            "replies": [{"author": n, "to": names[(i + 1) % len(names)], "text": f"{n} répond (faux Gemini)."} for i, n in enumerate(names)],
+            "synthesis": {"summary": "Synthèse du faux Gemini.", "points": [f"{n} — son apport" for n in names], "first_step": "Premier pas."},
+        }, ensure_ascii=False)
+    name = names[0] if names else "?"
+    return json.dumps({"lines": [f"{name} pense avec le faux Gemini.", "Deuxième phrase de la pensée."],
+                       "keys": ["CO₂", "température"], "title": "Titre du faux Gemini", "action": "Agir maintenant",
+                       "memory": ""}, ensure_ascii=False)
+
+
 class FakeGemini(BaseHTTPRequestHandler):
     def do_POST(self):  # noqa: N802
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
         user = body["contents"][0]["parts"][0]["text"]
+        system = ((body.get("systemInstruction") or {}).get("parts") or [{}])[0].get("text", "")
         # Réponse « à la LLM » : prose + bloc Markdown, que Prism doit nettoyer.
         content = "Voici le widget demandé :\n```html\n" + fake_widget(user) + "\n```\nBonne utilisation !"
+        if "Prism's Nexus" in system:
+            content = fake_nexus(system, user)
         # Réponse au format generateContent, avec une partie « réflexion » que Prism doit ignorer.
         parts = [{"text": "Je conçois le widget…", "thought": True}, {"text": content}]
         payload = json.dumps({"candidates": [{"content": {"role": "model", "parts": parts}, "finishReason": "STOP"}]}).encode()

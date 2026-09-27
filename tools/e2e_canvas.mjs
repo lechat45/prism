@@ -213,13 +213,36 @@ async function main() {
       const state = await evaluate(`JSON.stringify([...document.querySelectorAll(".card")].map((c) => [c.dataset.state, c.querySelector(".card-error-text").textContent, c.querySelector(".card-elapsed").textContent]))`);
       throw new Error(`${err.message} — cartes : ${state} — requêtes en attente : ${[...inflight.values()].join(", ") || "aucune"}`);
     });
-    const [counterCard] = await cards();
+    let [counterCard] = await cards();
     check("widget 1 généré (saisie clavier + bouton Générer)", counterCard.state === "ready", counterCard.title);
     if (serverMode) {
       const expected = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(health.signup_sparks - health.pricing.generate);
       const shown = await waitFor(async () => ((await sparksShown()) === expected ? expected : null), "solde après génération", 10000)
         .catch(async () => sparksShown());
       check("génération débitée : anneau mis à jour", shown === expected, `${shown} (attendu ${expected})`);
+    }
+    if (hasModel && serverMode) {
+      // V5, bouclier API : la même demande reformulée (canvas vide : même contexte) revient sans modèle ni Sparks.
+      const sparksBefore = await sparksShown();
+      await evaluate(`document.querySelector('.card [data-action="close"]').click()`);
+      await waitFor(async () => (await cards()).length === 0, "carte fermée", 5000);
+      await clickSel("#prompt");
+      await evaluate(`document.getElementById("prompt").value = ""`);
+      await typeText("crée-moi un bouton interactif qui change de couleur au clic et compte le nombre de clics !");
+      await clickSel("#generate");
+      await waitFor(async () => (await readyCount()) === 1, "widget repris", 30000);
+      const shield = await waitFor(() => evaluate(`(() => { const t = document.getElementById("toast");
+        return !t.hidden && t.textContent.includes("repris") ? t.textContent : null; })()`), "message du bouclier", 8000).catch(() => "");
+      check("bouclier API : demande équivalente resservie sans modèle ni Sparks, « Générer à nouveau » proposé",
+        shield.includes("0 Spark") && shield.includes("Générer à nouveau") && (await sparksShown()) === sparksBefore, `${shield} · ${await sparksShown()} Sparks`);
+      [counterCard] = await cards();
+      // La carte fermée reste dans Mon Hub : retirée, pour que la suite du scénario parte du même état qu'avant.
+      await evaluate(`(async () => { const token = JSON.parse(localStorage.getItem("prism:session")).token; const h = { Authorization: "Bearer " + token };
+        for (let i = 0; i < 40; i++) { // le retrait du canvas est synchronisé en différé
+          const page = await fetch("/api/widgets?on_canvas=false", { headers: h }).then((r) => r.json());
+          if (page.items.length) { await Promise.all(page.items.map((w) => fetch("/api/widgets/" + w.id, { method: "DELETE", headers: h }))); return; }
+          await new Promise((r) => setTimeout(r, 250));
+        } })()`);
     }
 
     // ------------------------------------------------------------------ 3. Widget 2 : CSV glissé-déposé
@@ -318,7 +341,7 @@ async function main() {
     await mouse("mouseWheel", overWidget.x + 40, overWidget.y + 40, { deltaX: 0, deltaY: -300, modifiers: 2 });
     const z1 = await waitFor(async () => { const v = await zoom(); return v !== z0 && v; }, "zoom au-dessus d'un widget", 3000).catch(() => z0);
     check("Ctrl + molette au-dessus d'un widget : zoom du canvas (relayé par la sandbox)", z1 !== z0, `${z0} → ${z1}`);
-    const topbar = await stableBox(".topbar .tagline");
+    const topbar = await stableBox(".topbar .brand-version"); // zone de la barre toujours visible
     await mouse("mouseWheel", topbar.cx, topbar.cy, { deltaX: 0, deltaY: 200, modifiers: 2 });
     await sleep(150);
     const z2 = await zoom();
@@ -397,7 +420,11 @@ async function main() {
       await typeText("Ajoute un sous-titre qui indique que le widget a été refactorisé");
       await clickSel("#refactor-btn");
       await waitFor(() => evaluate(`document.querySelector('.card[data-id="${c1.id}"]').dataset.state === "ready"`), "refactorisation", 60000);
-      const refFrame = await findFrame(`!!document.getElementById("refactored")`, "widget refactorisé");
+      const refFrame = await findFrame(`!!document.getElementById("refactored")`, "widget refactorisé").catch(async (err) => {
+        throw new Error(`${err.message} — ${await evaluate(`JSON.stringify((() => { const f = document.querySelector('.card[data-id="${c1.id}"] iframe.card-frame');
+          return { frame: Boolean(f), srcdoc: f ? f.srcdoc.includes("refactored") : null, boot: f ? f.srcdoc.length : 0, frames: document.querySelectorAll("iframe").length,
+            state: document.querySelector('.card[data-id="${c1.id}"]').dataset.state, body: document.querySelector('.card[data-id="${c1.id}"] .card-body').dataset.frame }; })())`)}`);
+      });
       check("refactorisation : seule la carte ciblée change", !(await evaluate(`!!document.getElementById("refactored")`, csvFrame)));
       check("refactorisation : les données du widget sont conservées", (await evaluate(`document.getElementById("count").textContent`, refFrame)) === "3");
       await clickSel("#undo-btn");

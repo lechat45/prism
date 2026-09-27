@@ -34,12 +34,12 @@ function pagesResponse(url) {
   const file = normalize(join(ROOT, rel));
   if (!file.startsWith(ROOT) || !existsSync(file) || statSync(file).isDirectory()) return { status: 404, type: "text/plain", body: Buffer.from("introuvable") };
   let body = readFileSync(file);
-  if (rel === "frontend/index.html") {
-    // Quelle que soit l'API inscrite dans le dépôt (le serveur de production, par exemple), la page de test vise
-    // l'API locale : un test ne doit jamais toucher la production.
+  if (rel.endsWith(".html")) {
+    // Quelle que soit l'API inscrite dans le dépôt (le serveur de production, par exemple), TOUTE page de test vise
+    // l'API locale (Mode Focus, porte d'entrée et Nexus) : un test ne doit jamais toucher la production.
     const html = body.toString("utf8");
-    const pointed = html.replace(/<meta name="prism-api" content="[^"]*">/, `<meta name="prism-api" content="${API}">`);
-    if (pointed === html) throw new Error("balise prism-api introuvable dans frontend/index.html");
+    const pointed = html.replace(/<meta name="prism-api" content="[^"]*">/g, `<meta name="prism-api" content="${API}">`);
+    if (rel === "frontend/index.html" && pointed === html) throw new Error("balise prism-api introuvable dans frontend/index.html");
     body = Buffer.from(pointed);
   }
   return { status: 200, type: TYPES[extname(file)] || "application/octet-stream", body };
@@ -72,8 +72,9 @@ try {
   const send = (method, params = {}, sessionId) => new Promise((r, j) => { const id = ++seq; pending.set(id, { r, j }); ws.send(JSON.stringify({ id, method, params, sessionId })); });
 
   const t0 = Date.now();
-  const stats = { pages: 0, healthRefused: 0, apiCalls: new Set() };
-  const patterns = [{ urlPattern: "https://lechat45.github.io/*" }, { urlPattern: `${API}/*` }];
+  const stats = { pages: 0, healthRefused: 0, apiCalls: new Set(), production: [] };
+  // Filet de sécurité : toute requête vers l'hébergeur de l'API de production est bloquée et signalée (échec du test).
+  const patterns = [{ urlPattern: "https://lechat45.github.io/*" }, { urlPattern: `${API}/*` }, { urlPattern: "https://*.onrender.com/*" }];
   const consoleErrors = [];
   handlers.push(async (m) => {
     if (m.method === "Log.entryAdded" && m.params.entry.level === "error") consoleErrors.push(m.params.entry.text.slice(0, 160));
@@ -88,7 +89,10 @@ try {
     const { requestId, request } = m.params;
     const s = m.sessionId;
     try {
-      if (request.url.startsWith("https://lechat45.github.io/")) {
+      if (/^https:\/\/[^/]*\.onrender\.com\//.test(request.url)) {
+        stats.production.push(`${request.method} ${new URL(request.url).pathname}`);
+        await send("Fetch.failRequest", { requestId, errorReason: "BlockedByClient" }, s);
+      } else if (request.url.startsWith("https://lechat45.github.io/")) {
         stats.pages += 1;
         const r = pagesResponse(request.url);
         await send("Fetch.fulfillRequest", { requestId, responseCode: r.status, body: r.body.toString("base64"),
@@ -122,8 +126,12 @@ try {
     throw new Error(`délai dépassé : ${label}`);
   };
 
+  // V6 : la racine du site ouvre la porte d'entrée ; la porte Focus mène à l'application.
   await send("Page.navigate", { url: PAGES }, S);
-  await until(`location.pathname === "/prism/frontend/" && document.body && document.body.classList.contains("is-ready")`, "Prism chargé sur GitHub Pages");
+  await until(`location.pathname === "/prism/frontend/nexus.html" && !!document.getElementById("door-focus")`, "porte d'entrée sur GitHub Pages");
+  check("racine du site → porte d'entrée (Focus, Nexus)", true);
+  await ev(`document.getElementById("door-focus").click()`);
+  await until(`location.pathname === "/prism/frontend/index.html" && document.body && document.body.classList.contains("is-ready")`, "Prism chargé sur GitHub Pages");
   const origin = await ev("location.origin");
   const waking = await until(`document.getElementById("engine-text").textContent === "Réveil du serveur…" && document.getElementById("engine-text").textContent`, "badge de réveil", 20000).catch(() => null);
   check("page servie comme GitHub Pages, API configurée par la balise prism-api", origin === "https://lechat45.github.io", origin);
@@ -143,6 +151,15 @@ try {
   const calls = [...stats.apiCalls];
   check("appels partis vers l'API configurée, pas vers GitHub Pages",
     ["POST /api/auth/register", "POST /api/generate"].every((c) => calls.includes(c)), calls.join(", "));
+
+  // V6 : le Nexus, sur github.io, pense à travers la même API et la même session (Gemini au clic, 0,25 Spark par esprit).
+  await send("Page.navigate", { url: `${PAGES}frontend/nexus.html#nexus` }, S);
+  await until(`window.__nexus && window.__prismLink && window.__prismLink.ready && window.__prismLink.account.user && __nexus.links.size === 4`, "Nexus relié au compte", 30000);
+  await ev(`__nexus.setIntel("gemini")`);
+  const thought = await ev(`__nexus.thinkAll().then(() => [...__nexus.nodes.values()].filter((n) => n.type === "engram").every((n) => n.memory && n.memory.source === "api") && __prismLink.account.user.sparks)`);
+  check("Nexus sur github.io : les Engrammes pensent par l'API (2 × 0,25 Spark)", thought === 48.5, `${thought} Sparks`);
+  check("appel du Nexus parti vers l'API", [...stats.apiCalls].includes("POST /api/nexus/think"), [...stats.apiCalls].join(", "));
+  check("aucune requête vers la production (API réécrite dans toutes les pages)", stats.production.length === 0, stats.production.join(", "));
 } catch (err) {
   check("scénario complet", false, err.message);
 } finally {

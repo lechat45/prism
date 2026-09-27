@@ -7,7 +7,7 @@ dans une carte que l'on déplace, redimensionne, refactorise, recolore et export
 **En ligne : <https://lechat45.github.io/prism/>** · description complète du projet et de la recréation de
 personne : **[PROJET.md](PROJET.md)**
 
-![Logo Prism](frontend/assets/prism-logo.png)
+![Logo Prism : la Lentille Continua](frontend/assets/logo_prism.svg)
 
 ## Fonctionnalités
 
@@ -30,6 +30,9 @@ personne : **[PROJET.md](PROJET.md)**
 | **Incantation** (V4) | maintenir Espace et parler : la demande dictée devient une carte sous le pointeur ; pendant l'écoute, le **verre organique** respire avec la voix |
 | **Hyper-Engramme** (V5) | glisser un Engramme sur un autre : fusion des deux esprits (noyaux attirés, ombres en collision), chaque bulle garde sa provenance |
 | **Darwinisme d'interface** (V5) | un pointeur qui tourne en rond sur un widget : Prism propose de le simplifier (jamais de dépense sans votre clic) |
+| **Mode Miroir** (V5) | après 50 Sparks dépensés, votre propre Engramme de créateur, tiré de vos usages (avec votre accord), comme filtre ADN |
+| **Aura et mode spatial** (V5) | sons discrets et vibrations (au choix) ; cartes en arc, et réalité mixte WebXR si l'appareil le permet |
+| **Bouclier API** (V5) | une demande déjà servie revient sans appel au modèle ni Sparks (« Générer à nouveau » pour une vraie génération) |
 | **Sédimentation** (V5) | « Dissoudre » brise une carte en particules ; ses mots-clés restent dans le sol et nourrissent, visiblement, les widgets créés au même endroit |
 
 ## Deux façons de l'utiliser
@@ -108,6 +111,15 @@ Machine de mesure : 2 cœurs, souvent saturée ; les chiffres absolus varient, l
 - **Rendu** : plus de `filter: blur()` animé ni de `hue-rotate` plein écran ; l'aurore (dégradés radiaux) ne
   dérive que canvas vide ; les cartes n'utilisent plus `backdrop-filter` (re-flou de chaque carte à chaque image
   d'un déplacement) ; le squelette holographique n'anime que `transform` et `opacity` (compositeur).
+
+### Engrammes : rendu dans un Web Worker (V5, phase 1)
+
+Physique et dessin de chaque Engramme tournent dans un Worker (OffscreenCanvas) créé par la carte depuis son propre
+code : le fil de la carte reste libre pour le pointeur et les autres cartes. `engine/engram/render.js` dessine sans
+DOM ; la page garde une réplique de la simulation, synchronisée par instantanés `Float32Array` transférés ; cadence
+régulée (pleine vitesse quand la carte est manipulée, budget commun au repos), pause hors de l'écran ; repli sur le fil
+de la carte si le Worker est indisponible. Mesures : `node tools/bench_engram.mjs [--inline]` (cartes réelles en iframes
+sandbox) et `node tools/bench_physics.cjs` (moteur seul).
 
 ## Mon Hub (mode serveur, compte connecté)
 
@@ -245,6 +257,32 @@ Le canvas devient un milieu : les cartes fusionnent, s'adaptent à ceux qui les 
   même case reçoit `ghost` (gabarit `engine/ghost-template.txt`), affiché dans l'inspecteur ; trois usages par case ;
   désactivable et effaçable dans les Paramètres.
 
+### V5 « Écosystème sensitif » : socle et sens
+
+- **Nettoyage mémoire** (`js/scope.js`) : une portée par carte (écouteurs via AbortController, minuteurs, observateurs,
+  URL de Blob) défaite d'un coup à la fermeture ; iframes détruites. `node tools/bench_memory.mjs --assert` (dans la CI)
+  vérifie qu'ouvrir et fermer des widgets ne laisse rien derrière.
+- **Bouclier API** (`backend/cache.py`) : demande équivalente déjà servie au même compte et dans le même contexte → même
+  widget, sans modèle ni Sparks (cosinus ≥ 0,90 sur trigrammes hachés, mêmes nombres, mêmes mots porteurs).
+- **Mode Miroir** (`backend/mirror.py`) : votre Engramme de créateur (seuil `PRISM_MIRROR_SPARKS`, accord explicite,
+  gratuit, jalons réels).
+- **Aura** (`js/aura.js`) et **mode spatial** (`js/spatial.js`) : sons synthétisés, vibrations ; arc 3D, WebXR
+  `immersive-ar` + superposition DOM.
+
+## Prism V6 « Nexus »
+
+`frontend/nexus.html`, accueil du site (la racine y redirige) : un seul fichier HTML, CSS et JS. Porte d'entrée (logo
+`assets/logo_prism.svg`, la Lentille Continua ; portes Focus → `index.html` et Nexus), puis le Mode Nexus : bulles de
+Contexte, d'Engramme et de Rendu, synapses tirées de port à port (flux Contexte → Engramme → Rendu, sans boucle),
+impulsions le long des fils, fil coupé au clic qui efface à l'instant la mémoire en aval, anatomie d'un Engramme au
+double-clic (Core, State, Memories), Hubs au lasso (Alt + glisser) et War Room où les Engrammes débattent. Détails :
+[PROJET.md, section 6](PROJET.md). `window.__nexus` expose l'état pour les tests.
+
+Avec le serveur, les esprits pensent avec Gemini (`backend/nexus.py`) : `POST /api/nexus/think` (0,25 Spark) et
+`POST /api/nexus/debate` (1 Spark), prompts et schémas dans `frontend/engine/nexus/`, réponse du modèle vérifiée,
+Sparks rendus en cas d'échec. La page réutilise la session du Mode Focus (module `js/account.js`) ; rien n'est débité
+sans un clic sur « Penser » ou « Débattre », qui affichent leur prix. La scène est gardée en `localStorage`.
+
 ## Architecture
 
 ```
@@ -256,9 +294,11 @@ backend/
   sanitize.py           nettoyage de la sortie LLM, épinglage de Tailwind et Chart.js, validation HTML/JS
   mocks.py              mode démo (lit les gabarits partagés)
   engram.py             V4 : /api/engram, validation de l'Engramme, repli JSON simple
+  nexus.py              V6 : /api/nexus/think et /api/nexus/debate (le Nexus pense avec Gemini)
   tests/                unittest : nettoyage, API avec faux Gemini, comptes, Sparks, parité Python ↔ JS
 frontend/
-  index.html            barre du haut, canvas, dock de saisie, inspecteur, réglages
+  index.html            barre du haut, canvas, dock de saisie, inspecteur, réglages (Mode Focus)
+  nexus.html            V6 : porte d'entrée et Mode Nexus (prototype autonome)
   style.css             « Liquid Glass », CSS pur
   js/main.js            orchestration : dock, cycle de vie des cartes, montage des widgets, messages
   js/canvas.js          vue infinie, cartes (glisser, redimensionner, clavier), placement, cadrage
@@ -329,6 +369,10 @@ node tools/e2e_canvas.mjs --base http://127.0.0.1:8004
 .venv/Scripts/python tools/serve_static.py &                      # comme GitHub Pages
 node tools/e2e_canvas.mjs --base http://127.0.0.1:8001/
 node tools/perf_probe.mjs --base http://127.0.0.1:8001/           # fluidité (--profile dossier : profils CPU)
+node tools/bench_engram.mjs [--inline]                            # Engrammes : Worker ou fil de la carte, retard du pointeur
+node tools/bench_memory.mjs --assert                              # V5 : ouvrir/fermer des cartes ne laisse rien en mémoire
+node tools/e2e_nexus.mjs --base http://127.0.0.1:8001/frontend/   # V6 : Mode Nexus (--shots dossier : captures)
+node tools/e2e_nexus.mjs --base http://127.0.0.1:8004/ --server    # V6 : Nexus + serveur (compte d'essai, Gemini, Sparks)
 .venv/Scripts/python tools/e2e_server.py &                        # faux Gemini : génération et refactorisation
 node tools/e2e_canvas.mjs --base http://127.0.0.1:8003 --refactor
 node tools/e2e_pages_api.mjs --api http://127.0.0.1:8004          # GitHub Pages → API (serveur démo lancé)
@@ -406,6 +450,8 @@ API ajoutée en phase 1 (jeton `Authorization: Bearer …` sauf `register`/`logi
 | `PRISM_ALLOW_SQLITE` | vide | `1` : SQLite tolérée en production (disque persistant seulement) |
 | `PRISM_MAX_FILE_DATA_MB` | `16` | données de fichier joint par widget |
 | `PRISM_SIGNUP_SPARKS` | `50` | Sparks offerts à l'inscription |
+| `PRISM_MIRROR_SPARKS` | `50` | Sparks dépensés qui ouvrent le Mode Miroir (V5) |
+| `PRISM_MIRROR_COOLDOWN_HOURS` | `24` | délai entre deux Engrammes miroirs d'un même compte |
 | `PRISM_TOKEN_TTL_HOURS` | `168` | durée d'une session |
 
 Régénérer le logo : `python tools/pixel_logo.py`.

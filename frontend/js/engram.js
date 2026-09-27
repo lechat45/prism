@@ -27,8 +27,8 @@ function text(path) {
 
 /** Document autonome d'une carte Engramme. */
 export async function engramHtml(engram, libs) {
-  const [template, physics] = await Promise.all([text("viewer.html"), text("physics.js")]);
-  return E.buildViewer(template, physics, engram, libs, "fr");
+  const [template, physics, render] = await Promise.all([text("viewer.html"), text("physics.js"), text("render.js")]);
+  return E.buildViewer(template, { physics, render }, engram, libs, "fr");
 }
 
 /** Données de l'Engramme d'une carte (null pour un widget ordinaire), relues une fois par version du code. */
@@ -49,4 +49,4 @@ export const dnaFrom = (card, nodeId) => E.dnaOf(engramOf(card), nodeId);
 /** « Engramme : Marie Curie », « engramme de Marie Curie » → « Marie Curie » (sinon null). */
 export const engramRequest = (text) => E.engramRequest(text);
 
-export const CATEGORY_LABELS = { core: "Noyau", engine: "Moteur", shadow: "Ombre", artifact: "Artefact" };
+export const CATEGORY_LABELS = { core: "Noyau", heart: "Caractère", engine: "Moteur", shadow: "Ombre", artifact: "Artefact" };

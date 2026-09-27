@@ -47,6 +47,7 @@ export class Links {
     world.prepend(this.svg);
     this.entries = new Map(); // "idA>idB" -> { g, line, glow, title }
     this.frame = 0;
+    this.onNew = () => {}; // V5 : deux idées viennent de se lier (aura sonore)
   }
 
   /** Redessin au prochain rafraîchissement ; source() rend la liste des liaisons. */
@@ -73,6 +74,7 @@ export class Links {
         this.svg.append(g);
         entry = { g, line, glow, title };
         this.entries.set(key, entry);
+        this.onNew(key);
       }
       const d = curve(link.from, link.to);
       if (entry.d !== d) {

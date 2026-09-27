@@ -298,6 +298,9 @@ function csp(libs) {
     "img-src data: blob:",
     "font-src data:",
     "media-src data: blob:",
+    // Workers créés par le widget depuis son propre code (Blob) : les Engrammes y dessinent (OffscreenCanvas).
+    // Ils héritent de cette CSP : ni réseau (default-src 'none'), ni importScripts d'ailleurs.
+    "worker-src blob:",
     "base-uri 'none'",
     "form-action 'none'",
   ].join("; ");

@@ -4,7 +4,8 @@
  * normalize() est la réplique exacte de backend/engram.py (parité vérifiée par
  * backend/tests/test_parity.py) : même tri, mêmes coupes, mêmes refus.
  * buildViewer() assemble le document autonome d'une carte Engramme : gabarit viewer.html, moteur
- * physique (physics.js) et données, inscrites en JSON inerte (<script type="application/json">).
+ * physique (physics.js), rendu (render.js, exécuté dans un Worker quand c'est possible) et données, inscrites
+ * en JSON inerte (<script type="application/json">).
  */
 (function (root, factory) {
   const api = factory();
@@ -231,20 +232,25 @@
   const DATA_RE = /<script type="application\/json" id="prism-engram">([\s\S]*?)<\/script>/;
 
   /**
-   * Document autonome de la carte. template : viewer.html ; physics : source de physics.js ;
-   * libs : engine/libs.json (Tailwind épinglé, avec SRI) ; lang : "fr" | "en".
+   * Document autonome de la carte. template : viewer.html ; code : { physics, render }, sources de physics.js et
+   * render.js ; libs : engine/libs.json (Tailwind épinglé, avec SRI) ; lang : "fr" | "en".
    */
-  function buildViewer(template, physics, engram, libs, lang = "fr") {
-    if (/<\/script/i.test(physics)) throw new Error("physics.js ne peut pas contenir « </script »");
+  function buildViewer(template, code, engram, libs, lang = "fr") {
+    const { physics, render } = code;
+    for (const [name, source] of [["physics.js", physics], ["render.js", render]]) {
+      if (typeof source !== "string" || !source) throw new Error(`${name} manquant`);
+      if (/<\/script/i.test(source)) throw new Error(`${name} ne peut pas contenir « </script »`);
+    }
     const values = {
       lang: lang === "en" ? "en" : "fr",
-      title: escapeHtml(`${Array.isArray(engram.parents) ? "Hyper-Engramme" : "Engramme"} · ${engram.person || "?"}`),
+      title: escapeHtml(`${engram.mirror ? "Miroir" : Array.isArray(engram.parents) ? "Hyper-Engramme" : "Engramme"} · ${engram.person || "?"}`),
       tailwind: `<script src="${escapeHtml(libs.tailwind.url)}" integrity="${escapeHtml(libs.tailwind.integrity)}" crossorigin="anonymous"><\/script>`,
       physics,
+      render,
       engram: scriptJson(engram),
     };
     // Une seule passe : rien de ce qui est inséré (données, moteur) n'est réinterprété comme gabarit.
-    return template.replace(/\{\{(lang|title|tailwind|physics|engram)\}\}/g, (_, key) => values[key]);
+    return template.replace(/\{\{(lang|title|tailwind|physics|render|engram)\}\}/g, (_, key) => values[key]);
   }
 
   /** Données d'une carte Engramme, relues dans son document (null pour un widget ordinaire). */

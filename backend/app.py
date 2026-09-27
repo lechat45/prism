@@ -40,8 +40,11 @@ from pydantic import BaseModel, Field, StringConstraints, ValidationError, field
 
 import auth
 import billing
+import cache
 import db
 import engram
+import mirror
+import nexus
 import security
 import widgets
 from mocks import mock_component
@@ -58,7 +61,7 @@ from sanitize import (
     validate_document,
 )
 
-__version__ = "5.0.0a3"
+__version__ = "6.0.0a2"
 
 BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
@@ -209,6 +212,8 @@ class GenerateRequest(BaseModel):
     # V5, sédimentation : mots-clés de widgets dissous à cet endroit du canvas (contexte fantôme, visible dans
     # l'inspecteur ; génération seulement).
     ghost: list[Annotated[str, StringConstraints(min_length=1, max_length=40)]] = Field([], max_length=12)
+    # V5, bouclier API : vrai = générer vraiment, même si une demande équivalente a déjà été servie (« Générer à nouveau »).
+    fresh: bool = False
 
 
 def dna_block(dna: DnaTrait | None) -> str:
@@ -277,6 +282,9 @@ class GenerateResponse(BaseModel):
     widget: WidgetSummary  # enregistré dans « Mon Hub »
     sparks: float  # solde après débit
     cost: float
+    # V5, bouclier API : widget resservi sans appel au modèle (demande équivalente déjà servie) : sa demande d'origine,
+    # sa date, la similarité.
+    cached: dict | None = None
 
 
 async def read_generate_request(request: Request) -> GenerateRequest:
@@ -330,6 +338,8 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(widgets.router)
 app.include_router(engram.router)
+app.include_router(mirror.router)
+app.include_router(nexus.router)
 
 
 SECURITY_HEADERS = {
@@ -338,7 +348,7 @@ SECURITY_HEADERS = {
     # Prism ne s'affiche jamais dans le cadre d'un autre site (clic détourné). En-tête de réponse :
     # sans effet sur les widgets, documents srcdoc sans réponse HTTP.
     "X-Frame-Options": "DENY",
-    "Permissions-Policy": "camera=(), microphone=(self), geolocation=(), payment=(), usb=()",
+    "Permissions-Policy": "camera=(), microphone=(self), geolocation=(), payment=(), usb=(), xr-spatial-tracking=(self)",
 }
 
 
@@ -413,6 +423,7 @@ async def health() -> dict:
         "pricing": {action: billing.as_sparks(cents) for action, cents in billing.PRICES.items()},
         "signup_sparks": billing.as_sparks(billing.SIGNUP_BONUS),
         "guest_sparks": billing.as_sparks(billing.GUEST_BONUS),
+        "mirror_sparks": mirror.MIRROR_SPARKS,  # V5 : Sparks dépensés qui ouvrent le Mode Miroir
     }
 
 
@@ -523,6 +534,22 @@ async def generate(
                 detail="La refactorisation a besoin d'un modèle : ajoutez GEMINI_API_KEY (mode démo actif).",
             )
 
+    # V5, bouclier API : demande équivalente déjà servie à ce compte, dans le même contexte → même widget, sans modèle
+    # ni Sparks. Jamais avec un fichier joint, jamais en refactorisation ; « fresh » force une vraie génération.
+    context = None
+    if action == "generate" and not req.file and active_providers():
+        context = cache.context_key(req.dna.model_dump() if req.dna else None, req.ghost,
+                                    [c.model_dump() for c in req.canvas])
+        hit = None if req.fresh else await asyncio.to_thread(cache.lookup, user.id, prompt, context)
+        if hit:
+            widget = await asyncio.to_thread(_save_widget, user, req, hit.html, hit.mode, hit.model)
+            await asyncio.to_thread(cache.served, hit.id)
+            return GenerateResponse(
+                html=hit.html, mode=hit.mode, model=hit.model, elapsed_ms=round((time.perf_counter() - started) * 1000),
+                widget=widget, sparks=billing.as_sparks(await asyncio.to_thread(billing.balance, user.id)), cost=0.0,
+                cached={"prompt": hit.prompt[:200], "at": hit.created_at.isoformat(), "similarity": round(hit.similarity, 3)},
+            )
+
     # Réserver avant d'appeler le modèle : aucune génération parallèle ne peut dépasser le solde.
     try:
         reservation = await asyncio.to_thread(billing.reserve, user.id, action)
@@ -539,6 +566,8 @@ async def generate(
         await asyncio.shield(asyncio.to_thread(billing.refund, reservation))
         raise
     await asyncio.to_thread(billing.confirm, reservation, widget.id)
+    if context is not None and not issues:
+        await asyncio.to_thread(cache.remember, user.id, prompt, context, document, mode, model)
     return GenerateResponse(
         html=document,
         mode=mode,

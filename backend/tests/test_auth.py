@@ -139,7 +139,8 @@ class AuthTests(DbTestCase):
     def test_health_announces_auth_and_pricing(self):
         health = self.client.get("/api/health").json()
         self.assertTrue(health["auth"])
-        self.assertEqual(health["pricing"], {"generate": 1, "refactor": 0.5, "engram": 2, "engram_chat": 0.25, "engram_fusion": 3})
+        self.assertEqual(health["pricing"], {"generate": 1, "refactor": 0.5, "engram": 2, "engram_chat": 0.25, "engram_fusion": 3,
+                                             "nexus_think": 0.25, "nexus_debate": 1})
         self.assertEqual(health["signup_sparks"], 50)
 
 

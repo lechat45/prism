@@ -69,6 +69,8 @@ function accountPanel() {
     prices.engram !== undefined ? `Engramme : ${sparks(prices.engram)}` : "",
     prices.engram_chat !== undefined ? `message à un Engramme : ${sparks(prices.engram_chat)}` : "",
     prices.engram_fusion !== undefined ? `fusion d'Engrammes : ${sparks(prices.engram_fusion)}` : "",
+    prices.nexus_think !== undefined ? `pensée d'un esprit du Nexus : ${sparks(prices.nexus_think)}` : "",
+    prices.nexus_debate !== undefined ? `débat de War Room : ${sparks(prices.nexus_debate)}` : "",
   ].filter(Boolean).join(" · ")));
   panel.push(row(
     button("Mon Hub", () => { close(); hooks.openHub(); }),
@@ -188,7 +190,39 @@ function ecosystemPanel() {
   const words = [...new Set(list.flatMap((s) => s.words))];
   panel.push(fact("Sédiments", list.length ? `${list.length} · ${words.slice(0, 14).join(", ")}${words.length > 14 ? "…" : ""}` : "aucun"));
   if (list.length) panel.push(row(button("Effacer les sédiments", () => { hooks.clearSediments(); render(); }, "tool danger")));
+  panel.push(el("h3", "prefs-sub", "Aura sonore et haptique"));
+  panel.push(el("p", "fine", "Des sons discrets, synthétisés sur place : un tintement quand deux idées se lient, un son grave quand une ombre fuit le pointeur, une montée quand deux esprits fusionnent, un souffle quand une carte se dissout. Sur mobile, de brèves vibrations."));
+  panel.push(toggle("Activer l'aura sonore et haptique", eco.aura, (on) => { eco.aura = on; hooks.auraChanged(on); }));
+  panel.push(mirrorSection());
   return panel;
+}
+
+/** Mode Miroir : progression, données utilisées, création (le clic vaut accord). */
+function mirrorSection() {
+  const box = el("div", "prefs-mirror");
+  box.append(el("h3", "prefs-sub", "Mode Miroir"));
+  box.append(el("p", "fine", "Prism peut dresser votre propre Engramme de créateur à partir de vos usages : vos demandes, les couleurs que vous choisissez, vos refactorisations, les Engrammes que vous explorez et vos fusions. Jamais votre adresse, jamais les données de vos fichiers, aucune déduction sur votre personne : un style de création, que vous utilisez ensuite comme filtre ADN. Gratuit, une fois par jour au plus."));
+  const line = el("p", "fine", "…");
+  box.append(line);
+  if (engine.kind !== "server" || !account.user) {
+    line.textContent = "Disponible avec un compte (mode serveur) : il se fonde sur vos créations enregistrées.";
+    return box;
+  }
+  hooks.mirrorStatus().then((state) => {
+    if (!state) return;
+    line.replaceChildren();
+    if (!state.unlocked) {
+      line.textContent = `S'ouvre après ${sparks(state.threshold)} dépensés : ${sparks(state.spent)} pour l'instant.`;
+      return;
+    }
+    if (!state.available) {
+      line.textContent = `Votre Engramme a été dressé récemment ; le prochain sera possible le ${new Date(state.next_at).toLocaleString("fr-FR")}.`;
+      return;
+    }
+    line.textContent = `Débloqué : ${sparks(state.spent)} dépensés.`;
+    box.append(row(button("Créer mon Engramme", () => { close(); hooks.startMirror(); }, "cta cta-small")));
+  }).catch(() => { line.textContent = "État du Mode Miroir indisponible."; });
+  return box;
 }
 
 const PANELS = { account: accountPanel, writings: writingsPanel, engine: enginePanel, ecosystem: ecosystemPanel, about: aboutPanel };

@@ -9,7 +9,7 @@
   <meta name="prism-api" content="https://prism-api-0x4z.onrender.com">
   <meta name="description" content="Prism génère des micro-applications éphémères et les dispose sur un canvas spatial : déplacez, redimensionnez, refactorez, exportez.">
   <title>Prism — canvas d'interfaces éphémères</title>
-  <link rel="icon" href="assets/prism-logo.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/logo_prism.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -23,11 +23,11 @@
   </div>
 
   <header class="topbar glass">
-    <a class="brand" href="./" aria-label="Prism, accueil">
-      <img class="logo" src="assets/prism-logo.svg" width="38" height="38" alt="">
+    <a class="brand" href="nexus.html" aria-label="Prism : porte d'entrée (Mode Focus, Mode Nexus)">
+      <img class="logo" src="assets/logo_prism.svg" width="38" height="38" alt="">
       <span class="brand-name">Prism</span>
       <!-- Version de l'interface : doit suivre backend/app.py et CHANGELOG.md (test_version.py). -->
-      <span class="brand-version" id="app-version" title="Version de Prism">v5.0.0-alpha.3</span>
+      <span class="brand-version" id="app-version" title="Version de Prism">v6.0.0-alpha.2</span>
     </a>
     <span class="tagline">Canvas d'interfaces éphémères</span>
     <span class="card-count" id="card-count" aria-live="polite"></span>
@@ -42,6 +42,9 @@
       <button type="button" class="tool icon" id="zoom-in" aria-label="Zoomer" title="Zoomer (Ctrl + molette)">+</button>
       <button type="button" class="tool" id="zoom-fit">Tout voir</button>
       <button type="button" class="tool" id="arrange">Ranger</button>
+      <button type="button" class="tool icon" id="spatial" aria-pressed="false" aria-label="Mode spatial" title="Mode spatial : les cartes en arc (et réalité mixte si l'appareil le permet)">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 6.2 6.5 5v10l-4-1.2zM8.2 4.5h3.6v11H8.2zM13.5 5l4 1.2v7.6l-4 1.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+      </button>
     </div>
     <button type="button" class="engine" id="engine" data-state="pending" title="Moteur de génération" aria-haspopup="dialog">
       <span class="dot"></span><span id="engine-text">Connexion…</span>
@@ -85,7 +88,7 @@
   <main class="workspace" id="workspace" aria-label="Canvas des widgets">
     <div class="world" id="world"></div>
     <div class="canvas-empty" id="canvas-empty">
-      <img src="assets/prism-logo.svg" width="88" height="88" alt="">
+      <img src="assets/logo_prism.svg" width="88" height="88" alt="">
       <p class="empty-title">Votre canvas est vide</p>
       <p class="empty-sub">Décrivez un outil ou glissez un fichier CSV, JSON ou TXT dans la barre du bas. Chaque demande devient une carte que vous pouvez déplacer, redimensionner, refactorer et exporter.</p>
       <p class="empty-hint">Glisser le fond : se déplacer · Ctrl + molette : zoomer · <kbd>/</kbd> : écrire · maintenir <kbd>Espace</kbd> : incanter</p>
@@ -261,7 +264,7 @@
   <dialog class="dialog glass auth-dialog" id="auth" aria-labelledby="auth-title">
     <form id="auth-form" novalidate>
       <div class="auth-hero">
-        <img src="assets/prism-logo.svg" width="52" height="52" alt="">
+        <img src="assets/logo_prism.svg" width="52" height="52" alt="">
         <h2 id="auth-title">Bienvenue sur Prism</h2>
         <p class="hint" id="auth-reason">Connectez-vous pour générer vos widgets.</p>
       </div>
@@ -290,7 +293,7 @@
 
   <dialog class="spotlight glass" id="spotlight" aria-label="Barre de commande">
     <div class="spot-field">
-      <img src="assets/prism-logo.svg" width="26" height="26" alt="">
+      <img src="assets/logo_prism.svg" width="26" height="26" alt="">
       <label class="sr-only" for="spotlight-input">Demande, carte ou commande</label>
       <input id="spotlight-input" type="text" role="combobox" aria-expanded="true" aria-controls="spotlight-list" aria-autocomplete="list"
         autocomplete="off" spellcheck="false" maxlength="12000" placeholder="Décrivez un widget, cherchez une carte ou une commande…">

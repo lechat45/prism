@@ -26,6 +26,8 @@ test("CSP en tête : aucun réseau sauf les bibliothèques épinglées (Tailwind
   const scriptSrc = /script-src ([^;]+);/.exec(head)[1].trim().split(/\s+/);
   assert.deepEqual(scriptSrc.sort(), ["'unsafe-inline'", libs.tailwind.url, libs.chartjs.url].sort());
   assert.doesNotMatch(head, /connect-src/);
+  // Seuls les Workers issus du code du widget (Blob), qui héritent de cette CSP : aucune adresse externe.
+  assert.equal(/worker-src ([^;"]+)/.exec(head)[1].trim(), "blob:");
 });
 
 test("style hôte : barres de défilement masquées et attribut hidden toujours respecté", () => {

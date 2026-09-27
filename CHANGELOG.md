@@ -1,5 +1,114 @@
 # Changelog
 
+## 6.0.0-alpha.2 — 2026-09-27 (V6 : le Nexus pense avec Gemini ; la porte d'entrée devient l'accueil)
+
+- **Le Nexus pense avec Gemini** (`backend/nexus.py`) : `POST /api/nexus/think` (un esprit pense à partir de ses
+  fils, 0,25 Spark) et `POST /api/nexus/debate` (War Room : positions, réponses, synthèse, 1 Spark) ; prompts et
+  schémas de réponse dans `frontend/engine/nexus/`. Tout ce qui vient du modèle est vérifié : 2 à 4 phrases, données
+  dédoublonnées, souvenir mobilisé seulement s'il fait partie des Memories de l'esprit, chaque esprit parle à chaque
+  tour du débat ; sinon le modèle suivant, et les Sparks sont rendus si rien n'aboutit. Sans modèle (démo) : une
+  pensée mécanique qui le dit.
+- **Menu « Intelligence »** du Nexus : simulation locale (gratuite, par règles) ou Gemini, avec le même compte et la
+  même session que le Mode Focus (module `js/account.js`, balise `prism-api` sur GitHub Pages), compte d'essai en un
+  clic. En Gemini, un esprit dont les entrées ou l'anatomie changent attend (« Prêt à penser ») ; le bouton
+  « Penser · x Spark » affiche le prix avant tout débit, et « Débattre · 1 Spark » dans la War Room. Les pensées
+  payées sont gardées pour exactement ces entrées : refaire un fil coupé ne coûte rien.
+- **Autre esprit** : n'importe quel nom depuis le menu Engramme (anatomie à régler au double-clic).
+- **Scène enregistrée sur l'appareil** (bulles, anatomies, fils, Hubs, vue, pensées payées) et retrouvée au retour ;
+  menu « ⋯ » : nouvelle scène vide ou scène de démonstration (second clic pour confirmer).
+- **La porte d'entrée devient l'accueil du site** : la racine de GitHub Pages ouvre `frontend/nexus.html` ; le logo
+  du Mode Focus y ramène, et la Lentille Continua remplace l'ancien logo dans toute l'application.
+- Mobile : le Nexus s'ouvre à un zoom lisible (50 % au moins). Paramètres → Compte : tarifs du Nexus.
+- Tests : 11 Python (`test_nexus.py`) ; E2E Nexus : scène retrouvée, autre esprit, et parcours avec serveur (compte
+  d'essai, prix affichés, 2 × 0,25 + 1 Spark, pensées gardées au retour) en démo et avec le faux Gemini ; E2E GitHub
+  Pages → API : porte d'entrée, puis Nexus qui pense par l'API.
+
+## 6.0.0-alpha.1 — 2026-09-27 (V6 « Nexus » : logo, porte d'entrée et prototype du Mode Nexus)
+
+- **Logo `logo_prism`, la Lentille Continua** (`frontend/assets/logo_prism.svg`) : trois rubans sans fin entrelacés en
+  anneaux borroméens (chacun passe sur un voisin et sous l'autre : ôtez-en un, les deux autres se libèrent), dégradés
+  cyan, magenta et ambre ; leur triple intersection, laissée vide, forme la lentille centrale, avec un point de lumière
+  en son foyer. Le dessus-dessous est obtenu par masques, sans aucun trait sombre ajouté.
+- **`frontend/nexus.html`**, prototype autonome (un seul fichier : HTML, CSS et JS purs, aucune dépendance ni requête) :
+  - **Porte d'entrée** : logo animé (image `data:` isolée), deux portes de verre : Mode Focus (l'application actuelle,
+    `index.html`) et Mode Nexus.
+  - **Canvas Nexus** : bulles de **Contexte** (texte brut), d'**Engramme** (orbe vivant dont la respiration suit
+    l'énergie, avec trois satellites : Core, State, Memories) et de **Rendu** (écran). Glisser les bulles, déplacer le
+    fond, zoomer à la molette ou en pinçant à deux doigts, « Tout voir » (F) ; double-clic dans le vide : nouveau
+    contexte ; Suppr, Échap.
+  - **Synapses** : on tire un fil de lumière d'un port de sortie vers une bulle ; dégradé aux couleurs des deux bulles,
+    impulsions qui parcourent le fil quand l'information passe. Le flux va toujours Contexte → Engramme → Rendu (fils
+    vers un Contexte ou depuis un Rendu refusés, aucune boucle).
+  - **Flux** : chaque bulle calcule sa mémoire à partir de ce qu'elle reçoit (tri topologique) ; un Engramme pense
+    selon son anatomie, et les données du brief (une énumération explicite passe avant la fréquence des mots) voyagent
+    le long des fils ; l'écran compose titre, données, voix de chaque esprit et action. **Couper un fil (un clic)
+    efface à l'instant la mémoire en aval**, sans attendre d'impulsion.
+  - **Anatomie** (double-clic sur un Engramme) : la caméra plonge dans l'orbe ; **Core** (cinq modes de raisonnement),
+    **State** (énergie, patience, créativité → humeur et jauge), **Memories** (ajouter, oublier). Sa pensée se met à
+    jour en direct ; à la remontée, le flux repart.
+  - **Hubs (War Rooms)** : Alt + glisser, ou l'outil Hub, pour entourer plusieurs Engrammes ; l'anneau du Hub les suit,
+    et sa War Room (la caméra le cadre) les fait débattre en deux tours, positions puis confrontation, avant une
+    synthèse. Débat simulé localement.
+  - Personnalités publiques (Marie Curie, Steve Jobs, Ada Lovelace) : faits publics datés, voix paraphrasée, aucune
+    citation inventée.
+- **`tools/e2e_nexus.mjs`** (dans la CI) : porte, flux, pincement, glisser, synapses et sens du flux, anatomie, fil
+  coupé, Hub et débat, par de vrais évènements souris et tactiles dans Chrome.
+
+## 5.0.0-alpha.5 — 2026-09-27 (V5 « Écosystème sensitif » : phases 1 et 2 terminées)
+
+- **Phase 1 · nettoyage mémoire** (`js/scope.js`) : chaque carte a une portée — écouteurs (AbortController), minuteurs,
+  images d'animation, observateurs, URL de Blob et nettoyages particuliers y sont rattachés, et `dispose()` défait tout
+  d'un coup à la fermeture ; les iframes sont détruites explicitement ; le toast « Rétablir » ne retient plus la carte
+  fermée (code, données, fichier) une fois caché. Mesuré (`tools/bench_memory.mjs`) : après trois cycles de 12 widgets
+  ouverts puis fermés, nœuds DOM et écouteurs reviennent exactement à leur valeur de départ, plus aucune iframe ni
+  document isolé, mémoire JS stable ; garde-fou ajouté à la CI (`--assert`).
+- **Phase 1 · bouclier API** (`backend/cache.py`, table `prompt_cache`) : une demande presque identique (cosinus ≥ 0,90
+  sur des trigrammes hachés, en pur Python) à une demande déjà servie au même compte, dans le même contexte, reçoit le
+  même widget sans appel au modèle et sans Sparks. Garde-fous : mêmes nombres, mêmes mots porteurs, même contexte (ADN,
+  contexte fantôme, widgets voisins) ; jamais entre comptes, jamais avec un fichier, jamais en refactorisation ni pour une
+  démo. La page le dit (« repris de votre demande du …, 0 Spark ») et propose « Générer à nouveau » (`fresh`).
+- **Halos pré-rendus** dans le fil de rendu des Engrammes (ImageBitmap par couleur) : 1,6 fois plus rapides que des
+  dégradés dans le Worker (mesuré) ; sur le fil de la page, où ils seraient plus lents, les dégradés restent.
+- **Phase 2 · Mode Miroir** (`backend/mirror.py`, `POST/GET /api/engram/mirror`) : après 50 Sparks dépensés
+  (`PRISM_MIRROR_SPARKS`), Paramètres → Écosystème propose « Créer mon Engramme » : un portrait de créateur tiré de vos
+  usages (demandes, couleurs, refactorisations, Engrammes explorés, fusions), jamais de votre adresse ni de vos fichiers,
+  sans aucune inférence sensible ; dix jalons réels et datés (premier widget, première refactorisation, première
+  fusion…). Accord explicite, gratuit, une fois par 24 h. La carte « Miroir · Vous » sert de filtre ADN (pas de
+  conversation). Mode démo : portrait mécanique mais valide.
+- **Phase 2 · aura sonore et haptique** (`js/aura.js`, désactivée par défaut) : sons synthétisés (Web Audio) — tintement
+  quand deux idées se lient (nouvelle liaison du bus, injection d'ADN), son grave quand une ombre fuit le pointeur, montée
+  pour une fusion, souffle pour une dissolution, « clic » pour un filtre ADN — et vibrations brèves sur mobile.
+- **Phase 2 · mode spatial** (`js/spatial.js`, bouton de la barre du haut, Spotlight) : aperçu en arc (perspective,
+  cartes inclinées vers vous et en profondeur) ; si l'appareil le permet, « Entrer en réalité mixte » ouvre une session
+  WebXR `immersive-ar` avec superposition DOM (l'interface Prism par-dessus la pièce). `Permissions-Policy` :
+  `xr-spatial-tracking=(self)`.
+- Corrigé : le filtre ADN tiré d'une bulle de caractère affichait « undefined » (libellé manquant depuis la 4.0.0-alpha.3).
+- Tests : 157 Python (bouclier, miroir), 93 Node (portée, aura, arc, halos) ; E2E : bouclier API (faux Gemini), Mode
+  Miroir, mode spatial, aura ; mémoire sans fuite.
+
+## 5.0.0-alpha.4 — 2026-09-27 (Phase 1 · moteur physique asynchrone)
+
+- **Rendu des Engrammes dans un Web Worker** (OffscreenCanvas) : physique et dessin tournent sur un fil séparé ; le fil
+  de la carte ne garde que le DOM (fiche, légende, dépôts) et le pointeur. `engine/engram/render.js` (nouveau) contient
+  tout le dessin, sans DOM ; `viewer.html` crée le Worker depuis son propre code (Blob), attend sa poignée de main,
+  puis lui confie la toile. La page garde une **réplique passive** de la simulation, synchronisée par des instantanés
+  `Float32Array` transférés (sans copie, tampons réutilisés) : survol, fiche, dépôts et tests la lisent comme avant.
+  Repli automatique sur le fil de la carte (navigateur sans OffscreenCanvas, Worker refusé).
+- **CSP des cartes** : `worker-src blob:` (seuls les Workers issus du code de la carte ; ils héritent de la CSP : ni
+  réseau, ni `importScripts` d'ailleurs — vérifié dans une iframe sandbox).
+- **physics.js v2** : aucune allocation par pas (tampons préalloués), grille de voisinage pour la répulsion (−28 à −43 %
+  sur une grande toile, neutre sur une carte), **rattrapage borné** à 4 pas par image (une image lente ne déclenche
+  plus 12 pas qui ralentissent la suivante : 31 ms de physique par image à 200 bulles sous charge, ~3-5 ms désormais) ;
+  `snapshot()` / `sync()` pour les échanges Worker ↔ page.
+- **Cadence et budget** : une carte manipulée tourne à pleine vitesse ; au repos, 30 images/s au plus et moins si ses
+  images coûtent cher ; la page répartit un budget commun (~60 % d'un cœur) entre les Engrammes au repos. Pause hors de
+  l'écran (IntersectionObserver) et onglet caché.
+- Mesures (`tools/bench_engram.mjs`, `tools/bench_physics.cjs`, machine de 2 cœurs chargée) : avec 5 Engrammes, retard
+  du pointeur sur une carte de 115-173 ms en moyenne (p95 190-290 ms) à 5-12 ms (p95 ~20 ms) ; 1 Engramme de 200 bulles
+  de 38 à 43-52 images/s.
+- Tests : rendu sans DOM, instantané → réplique, pas de physique, cadence (Node 89) ; E2E : rendu dans un Worker et
+  pixels lus par le fil de rendu.
+
 ## 5.0.0-alpha.3 — 2026-09-27 (les clés Gemini se partagent le travail)
 
 - **Répartition de charge entre les clés Gemini** (serveur `providers.KeyPool`, et même règle dans le moteur du

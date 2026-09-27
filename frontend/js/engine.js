@@ -179,6 +179,7 @@ export async function generate(request, signal) {
     if (request.canvas?.length) body.canvas = request.canvas;
     if (request.dna && !request.widgetId) body.dna = request.dna;
     if (request.ghost?.length && !request.widgetId) body.ghost = request.ghost;
+    if (request.fresh) body.fresh = true; // bouclier API : générer vraiment, même pour une demande déjà servie
     payload = await api("/api/generate", { method: "POST", body, signal });
   } else {
     const options = {
@@ -209,6 +210,21 @@ export async function createEngram(person, signal) {
  * V5, « Singularité symbiotique » : deux Engrammes → un Hyper-Engramme → { engram, mode, model, sparks?, cost? }.
  * Erreurs : ApiError code « fusion_invalid » (identiques, ancienne version), insufficient_sparks…
  */
+/** Mode Miroir (V5) : état (Sparks dépensés, seuil, disponibilité) — mode serveur et compte seulement. */
+export async function mirrorStatus() {
+  await engineReady;
+  if (engine.kind !== "server") return null;
+  return api("/api/engram/mirror");
+}
+
+/** Mode Miroir : votre Engramme de créateur, tiré de vos usages (accord explicite : consent). */
+export async function createMirror(signal) {
+  await engineReady;
+  const payload = await api("/api/engram/mirror", { method: "POST", body: { consent: true, language: "fr" }, signal });
+  if (!payload?.engram?.nodes?.length) throw new Error("réponse vide");
+  return payload;
+}
+
 export async function fuseEngrams(a, b, signal) {
   await engineReady;
   const payload = engine.kind === "server"

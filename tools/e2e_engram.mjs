@@ -239,11 +239,14 @@ async function main() {
       const sparks = await evaluate(`document.getElementById("sparks-count").textContent`);
       check("2 Sparks débités (50 → 48)", /^48/.test(sparks), sparks);
     }
-    // Rendu réel : des pixels lumineux au centre (noyau), le fond ailleurs.
-    const pixels = await evaluate(`(() => { const c = document.getElementById("stage"); const g = c.getContext("2d");
-      const px = (x, y) => Array.from(g.getImageData(Math.round(x * c.width / innerWidth), Math.round(y * c.height / innerHeight), 1, 1).data);
-      const core = window.__engram.sim.nodes[0]; return { core: px(core.x, core.y), corner: px(3, innerHeight - 3) }; })()`, EF);
+    // Rendu réel : des pixels lumineux au centre (noyau), le fond ailleurs — lus par le fil qui dessine.
+    const pixels = await evaluate(`(async () => { const core = window.__engram.sim.nodes[0];
+      const [c, corner] = await window.__engram.pixels([[core.x, core.y], [3, innerHeight - 3]]); return { core: c, corner }; })()`, EF);
     check("rendu Canvas : noyau blanc lumineux, fond sombre", pixels.core[0] > 200 && pixels.core[2] > 200 && pixels.corner[0] < 40, JSON.stringify(pixels));
+    // Phase 1 (V5) : physique et dessin dans un Worker (OffscreenCanvas) ; le fil de la carte reste libre.
+    const perf = await waitFor(() => evaluate(`window.__engram.perf()`, EF), "mesures du fil de rendu", 5000).catch(() => null);
+    check("rendu dans un Worker (OffscreenCanvas), mesures publiées", (await evaluate(`window.__engram.mode`, EF)) === "worker" && perf && perf.fps > 0,
+      perf ? `${perf.fps.toFixed(0)} img/s · physique ${perf.physics.toFixed(2)} ms · dessin ${perf.draw.toFixed(2)} ms` : "aucune mesure");
     await sleep(1500);
     const motion = await evaluate(`(async () => { const n = window.__engram.sim.nodes; const a = n.map((m) => [m.x, m.y]);
       await new Promise((r) => setTimeout(r, 500));
@@ -557,6 +560,8 @@ async function main() {
       const { data } = await cdp.send("Page.captureScreenshot", { format: "png" }, S);
       writeFileSync(SHOT_FUSION.replace(/\.png$/i, "") + `-${suffix}.png`, Buffer.from(data, "base64"));
     };
+    // Le fil de rendu démarre de façon asynchrone : lire l'état une fois le premier instantané arrivé.
+    await waitFor(() => evaluate(`window.__engram.state().fusion > 0`, HF), "premier instantané de l'Hyper-Engramme", 8000).catch(() => null);
     await shotFusion("intro");
     const early = await evaluate(`({ fusion: window.__engram.state().fusion, fusing: document.getElementById("stage").classList.contains("is-fusing"),
       kicker: document.querySelector('[data-t="kicker"]').textContent, parents: window.__engram.data.parents })`, HF);
@@ -596,9 +601,9 @@ async function main() {
     // logiciel de Chrome headless et espacerait les évènements du pointeur.
     // Zoom (Ctrl + molette) sur le widget : les Engrammes animés sortent de l'écran, où Chrome bride leurs iframes.
     const [aimed] = await visibleWidgets();
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 20; i++) {
       const w = await evaluate(`document.querySelector('.card[data-id="${aimed.id}"]').getBoundingClientRect().width`);
-      if (w > 560) break;
+      if (w > 860) break; // les Engrammes animés sortent de l'écran (leur fil de rendu se met en pause)
       const at = await evaluate(`(() => { const r = document.querySelector('.card[data-id="${aimed.id}"] .card-bar').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
       await cdp.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: at.x, y: at.y, deltaX: 0, deltaY: -240, modifiers: 2 }, S);
       await sleep(120);
@@ -715,6 +720,48 @@ async function main() {
     check("génération au même endroit : contexte fantôme envoyé et visible dans l'inspecteur", sediment.s.words.every((w) => ghostLine.includes(w)) && uses === 1
       && (!serverMode || JSON.stringify(ghostReq?.body.ghost) === JSON.stringify(sediment.s.words)), ghostLine);
     await evaluate(`document.getElementById("insp-close").click()`);
+
+    // ------------------------------------------------------------------ 14. V5 · Mode spatial (aperçu en arc)
+    await clickSel("#spatial");
+    const arc = await waitFor(() => evaluate(`(() => { const c = [...document.querySelectorAll(".card")].map((e) => e.style.getPropertyValue("--arc")).filter(Boolean);
+      return document.body.classList.contains("is-spatial") && c.length ? { arcs: c.length, first: c[0] } : null; })()`), "cartes en arc", 5000).catch(() => null);
+    const xrToast = await waitFor(() => evaluate(`(() => { const t = document.getElementById("toast").textContent; return /réalité mixte/.test(t) ? t : null; })()`),
+      "message du mode spatial", 5000).catch(() => "");
+    check("mode spatial : cartes en arc (perspective, inclinaison, profondeur), réalité mixte détectée ou non", Boolean(arc) && /réalité mixte/.test(xrToast),
+      arc ? `${arc.arcs} cartes · ${arc.first} · ${xrToast.slice(0, 70)}` : "aucun arc");
+    await clickSel("#spatial");
+    check("mode spatial quitté : cartes remises à plat", await evaluate(`!document.body.classList.contains("is-spatial") && [...document.querySelectorAll(".card")].every((e) => !e.style.getPropertyValue("--arc"))`));
+
+    // ------------------------------------------------------------------ 15. V5 · Aura sonore (réglage) et Mode Miroir (serveur)
+    await clickSel("#btn-prefs");
+    await waitFor(() => evaluate(`document.getElementById("prefs").open`), "paramètres", 5000);
+    await evaluate(`document.querySelector('#prefs [data-tab="ecosystem"]').click()`);
+    const auraBox = await waitFor(() => evaluate(`(() => { const l = [...document.querySelectorAll("#prefs-body label")].find((x) => x.textContent.includes("aura sonore"));
+      if (!l) return null; l.querySelector("input").click(); return { on: l.querySelector("input").checked, stored: localStorage.getItem("prism:aura") }; })()`), "réglage de l'aura", 5000);
+    check("aura sonore et haptique : désactivée par défaut, activée sur demande (mémorisé)", auraBox.on && auraBox.stored === "true", JSON.stringify(auraBox));
+    if (serverMode) {
+      const sparksMirror = await sparksNow();
+      const mirrorButton = await waitFor(() => evaluate(`[...document.querySelectorAll("#prefs-body button")].some((b) => b.textContent === "Créer mon Engramme")`), "Mode Miroir débloqué", 8000).catch(() => false);
+      const mirrorText = await evaluate(`document.querySelector("#prefs-body .prefs-mirror")?.textContent || ""`);
+      check("Mode Miroir : débloqué après les Sparks dépensés, données utilisées expliquées", mirrorButton && mirrorText.includes("Jamais votre adresse"), mirrorText.slice(0, 120));
+      const before = await cardCount();
+      await evaluate(`[...document.querySelectorAll("#prefs-body button")].find((b) => b.textContent === "Créer mon Engramme").click()`);
+      await waitFor(async () => (await cardCount()) === before + 1 && allReady(), "Engramme miroir prêt", 30000);
+      const MF = await findFrame(`Boolean(window.__engram) && window.__engram.data.mirror === true`, "document du miroir");
+      const mirrorDoc = await evaluate(`(() => { const d = window.__engram.data; return { person: d.person, kicker: document.querySelector('[data-t="kicker"]').textContent,
+        chat: document.getElementById("chat-btn").hidden, events: d.nodes.filter((n) => n.category === "artifact").length, total: d.nodes.length,
+        first: d.nodes.find((n) => n.category === "artifact").title }; })()`, MF);
+      check("Mode Miroir : « Miroir · Vous », dix jalons réels, pas de conversation, gratuit", mirrorDoc.person === "Vous" && mirrorDoc.kicker.startsWith("Miroir")
+        && mirrorDoc.chat && mirrorDoc.events === 10 && mirrorDoc.total >= 36 && (await sparksNow()) === sparksMirror, JSON.stringify(mirrorDoc));
+      const heart = await evaluate(`window.__engram.sim.nodes.find((n) => n.category === "heart").id`, MF);
+      await evaluate(`window.__engram.pin(${JSON.stringify(heart)})`, MF);
+      const dnaMeta = await waitFor(() => evaluate(`(() => { const d = document.getElementById("dna"); return !d.hidden ? document.getElementById("dna-meta").textContent : null; })()`), "filtre ADN du miroir", 5000).catch(() => "");
+      check("votre Engramme devient un filtre ADN pour vos créations", dnaMeta.includes("Vous") && !dnaMeta.includes("undefined"), dnaMeta);
+      await evaluate(`window.__engram.pin(null)`, MF);
+    } else {
+      await evaluate(`document.getElementById("prefs-close").click()`);
+    }
+    await evaluate(`document.getElementById("prefs").open && document.getElementById("prefs-close").click()`);
     if (serverMode) {
       // Bouton « Tester » : compte d'essai immédiat, sans e-mail, utilisable comme un vrai compte.
       await evaluate(`document.getElementById("btn-logout").click()`);
@@ -722,7 +769,10 @@ async function main() {
       await clickSel("#btn-try");
       const trial = await waitFor(() => evaluate(`(() => { const s = document.getElementById("sparks"); return !s.hidden
         ? { sparks: document.getElementById("sparks-count").textContent, email: document.getElementById("account-email").textContent,
-            tryHidden: document.getElementById("btn-try").hidden } : null; })()`), "compte d'essai", 10000);
+            tryHidden: document.getElementById("btn-try").hidden } : null; })()`), "compte d'essai", 10000)
+        .catch(async (err) => { throw new Error(`${err.message} — ${await evaluate(`JSON.stringify({ sparksHidden: document.getElementById("sparks").hidden,
+          tryHidden: document.getElementById("btn-try").hidden, email: document.getElementById("account-email").textContent, toast: document.getElementById("toast").textContent,
+          dialogs: [...document.querySelectorAll("dialog[open]")].map((d) => d.id), toasts: (window.__toasts || []).slice(-4) })`)}`); });
       check("bouton « Tester » : connecté aussitôt avec un compte d'essai (10 Sparks)", trial.sparks === "10" && trial.email.startsWith("Compte d'essai") && trial.tryHidden,
         JSON.stringify(trial));
     }
