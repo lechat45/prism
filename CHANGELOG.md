@@ -1,5 +1,17 @@
 # Changelog
 
+## 6.0.0-alpha.3 — 2026-09-27 (CI de nouveau verte : l'API du Nexus peut être déployée)
+
+- **CI** : l'étape E2E « Serveur avec faux Gemini » échouait depuis la V5 (le clic sur le titre d'une carte n'ouvrait
+  pas l'inspecteur), ce qui bloquait le déploiement de l'API sur Render (déploiement seulement après une CI verte).
+  Cause : le toast de Prism s'affiche en haut au centre, par-dessus les cartes ; en CI, un toast venait d'apparaître au
+  moment du clic. Les clics de `tools/e2e_canvas.mjs` attendent désormais que leur cible soit dégagée et signalent ce
+  qui la recouvrait ; diagnostic détaillé si l'inspecteur ne s'ouvre pas (élément sous le clic, évènements, exceptions).
+- **Mon Hub** : un widget sans cesse utilisé (chaque clic change son état) repoussait sa miniature indéfiniment ; fermé
+  entre-temps, il arrivait sans image dans Mon Hub (défaut de la V5, révélé par la même CI). Une miniature déjà prévue
+  n'est plus repoussée.
+- Accueil : « Prism V6 · Focus et Nexus » (le Nexus n'est plus un prototype).
+
 ## 6.0.0-alpha.2 — 2026-09-27 (V6 : le Nexus pense avec Gemini ; la porte d'entrée devient l'accueil)
 
 - **Le Nexus pense avec Gemini** (`backend/nexus.py`) : `POST /api/nexus/think` (un esprit pense à partir de ses
