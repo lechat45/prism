@@ -12,7 +12,7 @@
 // Aucune dépendance : WebSocket natif de Node >= 22. Navigateur : PRISM_BROWSER ou détection auto.
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -457,7 +457,15 @@ async function main() {
     const dl = await stableBox("#download-html");
     const dlHit = await evaluate(`document.elementFromPoint(${dl.cx}, ${dl.cy})?.id || "autre"`);
     await click(dl.cx, dl.cy);
-    const file = await waitFor(() => downloadEvents.includes("completed") && existsSync(downloads) && readdirSync(downloads).find((f) => f.endsWith(".html")), "fichier téléchargé", 30000)
+    // Le fichier est choisi par le nom annoncé par Chrome (Browser.downloadWillBegin) : Chrome headless dépose parfois
+    // aussi un « downloads.html » étranger dans le dossier (vu en CI, 31 Mo), qu'un simple « premier .html » prenait.
+    const suggestedName = () => downloadEvents.filter((e) => e.startsWith("début ")).map((e) => e.slice(6)).pop();
+    const file = await waitFor(() => {
+      if (!downloadEvents.includes("completed") || !existsSync(downloads)) return null;
+      const files = readdirSync(downloads).filter((f) => f.endsWith(".html"));
+      const wanted = suggestedName();
+      return wanted && files.includes(wanted) ? wanted : files.find((f) => f !== "downloads.html") || null;
+    }, "fichier téléchargé", 30000)
       .catch(async (err) => {
         const toastText = await evaluate(`document.getElementById("toast").textContent`);
         const listing = existsSync(downloads) ? readdirSync(downloads).join(",") : "dossier absent";
@@ -467,7 +475,9 @@ async function main() {
     const libs = await evaluate(`fetch("engine/libs.json").then((r) => r.json())`);
     check("export .html autonome (données, accent, Chart.js épinglé, sans CSP)",
       exported.startsWith("<!DOCTYPE html>") && exported.includes("window.PRISM_FILE=") && exported.includes(`--accent:${ACCENT}`)
-        && exported.includes(libs.chartjs.integrity) && !exported.includes("Content-Security-Policy"), `${file}, ${exported.length} car.`);
+        && exported.includes(libs.chartjs.integrity) && !exported.includes("Content-Security-Policy"),
+      `${file}, ${exported.length} car.` + (exported.length > 100000 ? ` ; annoncé : ${suggestedName()} ; clic sur ${dlHit} ; dossier : ${readdirSync(downloads)
+        .map((f) => `${f} (${statSync(join(downloads, f)).size} o)`).join(", ")} ; début : ${exported.slice(0, 120).replace(/\s+/g, " ")}` : ""));
 
     // ------------------------------------------------------------------ 8. Refactorisation
     await clickSel(`.card[data-id="${c1.id}"] .card-title`);

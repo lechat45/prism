@@ -1880,7 +1880,15 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
       return Promise.all(todo.map(thinkRemote)).then(function () { propagate(); return step(); });
     }
     return step().catch(function (err) { propagate(); toast(errorText(err)); return false; })
-      .then(function (ok) { busy = false; renderIntel(); return ok; });
+      .then(function (ok) { return refreshSparks().then(function () { busy = false; renderIntel(); return ok; }); });
+  }
+  /** Les pensées partent en parallèle : leurs réponses (et le solde qu'elles annoncent) peuvent arriver dans le désordre.
+   *  À la fin, le vrai solde est relu une fois auprès du serveur. */
+  function refreshSparks() {
+    if (!canGemini()) return Promise.resolve();
+    return link.api("/api/auth/me").then(function (user) {
+      if (user && typeof user.sparks === "number" && link.setSparks) link.setSparks(user.sparks);
+    }, function () { /* solde laissé tel quel */ });
   }
   function thinkRemote(n) {
     var sig = n.pending;
