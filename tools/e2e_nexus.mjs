@@ -297,7 +297,10 @@ try {
       await waitFor("!document.getElementById('engram-menu').hidden && !!document.querySelector('.custom-mind')", "menu des Engrammes");
       await evaluate("document.querySelector('.custom-mind input').value = 'Léonard de Vinci'; document.querySelector('.custom-mind button').scrollIntoView({ block: 'center' })");
       await click(center("document.querySelector('.custom-mind button')"));
-      await waitFor(`__nexus.nodes.size === 5 && ${engramsLive}`, "Engramme créé par le serveur", 120000);
+      await waitFor(`__nexus.nodes.size === 5 && ${engramsLive}`, "Engramme créé par le serveur", 120000).catch(async (err) => {
+        const state = await evaluate("JSON.stringify([...__nexus.nodes.values()].filter(n=>n.type==='engram').map(n=>[n.name,n.source,n.status,n.error||'',n.el.classList.contains('is-live')]))");
+        throw new Error(`${err.message} — ${state} ; toast : ${await evaluate("document.getElementById('toast').hidden ? '-' : document.getElementById('toast').textContent")}`);
+      });
       await check("« Créer un Engramme » : un vrai Engramme vivant rejoint le Nexus (2 Sparks)",
         "[[...__nexus.nodes.values()].filter(n=>n.source==='created').map(n=>n.engram.nodes.length>=36).join(), __prismLink.account.user.sparks]", ["true", start - 3.25]);
     }
