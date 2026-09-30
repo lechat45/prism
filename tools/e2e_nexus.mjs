@@ -294,7 +294,8 @@ try {
     // Créer un Engramme (serveur en mode démo : un Engramme de démonstration, facturé comme un vrai).
     if (await evaluate("__prismLink.info.mode === 'mock'")) {
       await click(center("document.getElementById('add-engram')"));
-      await waitFor("!document.getElementById('engram-menu').hidden && !!document.querySelector('.custom-mind')", "menu des Engrammes");
+      // « Vos Engrammes » arrive après l'ouverture (Mon Hub) et décale le formulaire : on attend la liste.
+      await waitFor("!document.getElementById('engram-menu').hidden && !!document.querySelector('.custom-mind') && !/Recherche/.test(document.getElementById('engram-menu').textContent)", "menu des Engrammes");
       await evaluate("document.querySelector('.custom-mind input').value = 'Léonard de Vinci'; document.querySelector('.custom-mind button').scrollIntoView({ block: 'center' })");
       await click(center("document.querySelector('.custom-mind button')"));
       await waitFor(`__nexus.nodes.size === 5 && ${engramsLive}`, "Engramme créé par le serveur", 120000).catch(async (err) => {
