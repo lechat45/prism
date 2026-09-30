@@ -200,8 +200,12 @@ try {
 
   // --- Couper un fil : la mémoire en aval s'efface à l'instant ------------------------------------------------------------
   await waitFor(flowSettled, "flux reposé");
+  // Un point du fil réellement cliquable (la géométrie des cartes varie avec les polices : le milieu peut être couvert).
   await click(`(()=>{const c=__nexus.find('Marie Curie').id,x=__nexus.find('context').id;const l=[...__nexus.links.values()].find(l=>l.from===x&&l.to===c);
-    const p=l.paths[3];const pt=p.getPointAtLength(p.getTotalLength()/2);const q=new DOMPoint(pt.x,pt.y).matrixTransform(p.getScreenCTM());return [q.x,q.y]})()`);
+    const p=l.paths[3];const len=p.getTotalLength();const m=p.getScreenCTM();let best=null;
+    for(const u of [0.5,0.4,0.6,0.3,0.7,0.2,0.8]){const pt=p.getPointAtLength(len*u);const q=new DOMPoint(pt.x,pt.y).matrixTransform(m);
+      const e=document.elementFromPoint(q.x,q.y);if(e&&e.closest('.link')===l.el){best=[q.x,q.y];break}if(!best)best=[q.x,q.y]}
+    return best})()`);
   await check("fil coupé au clic : Curie perd sa mémoire, l'écran perd sa voix, sans délai",
     "(()=>{const c=__nexus.find('Marie Curie'),r=__nexus.find('render');return [__nexus.links.size,c.memory===null,c.el.querySelector('.thought').textContent,r.memory.thoughts.map(t=>t.author).join(' + '),document.querySelector('#nodes .render .voices').textContent.includes('Marie Curie')]})()",
     [3, true, "", "Ada Lovelace", false]);
