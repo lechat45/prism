@@ -200,13 +200,22 @@ try {
 
   // --- Couper un fil : la mémoire en aval s'efface à l'instant ------------------------------------------------------------
   await waitFor(flowSettled, "flux reposé");
-  // Un point du fil réellement cliquable (la géométrie des cartes varie avec les polices : le milieu peut être couvert).
+  // Un point du fil que le Nexus lui-même attribue à ce fil (sa géométrie, cf. linkAt), stable d'une mesure à l'autre :
+  // juste après la remontée, la mise en page peut encore bouger (CI).
   const cutAt = `(()=>{const c=__nexus.find('Marie Curie').id,x=__nexus.find('context').id;const l=[...__nexus.links.values()].find(l=>l.from===x&&l.to===c);
-    const p=l.paths[3];const len=p.getTotalLength();const m=p.getScreenCTM();let best=null;
+    const p=l.paths[3];const len=p.getTotalLength();const m=p.getScreenCTM();
     for(const u of [0.5,0.4,0.6,0.3,0.7,0.2,0.8]){const pt=p.getPointAtLength(len*u);const q=new DOMPoint(pt.x,pt.y).matrixTransform(m);
-      const e=document.elementFromPoint(q.x,q.y);if(e&&e.closest('.link')===l.el){best=[q.x,q.y];break}if(!best)best=[q.x,q.y]}
-    return best})()`;
-  const [cx, cy] = await evaluate(cutAt);
+      const e=document.elementFromPoint(q.x,q.y);const hit=__nexus.linkAt(q.x,q.y);
+      if(hit&&hit.id===l.id&&e&&(e.closest('.link')===l.el||e.id==='viewport'))return [Math.round(q.x),Math.round(q.y)]}
+    return null})()`;
+  let [cx, cy] = [0, 0];
+  for (let t0 = Date.now(); ; ) {
+    const a = await evaluate(cutAt);
+    await sleep(300);
+    const b = await evaluate(cutAt);
+    if (a && b && a[0] === b[0] && a[1] === b[1]) { [cx, cy] = b; break; }
+    if (Date.now() - t0 > 15000) throw new Error("délai dépassé : point du fil stable");
+  }
   const under = await evaluate(`(()=>{const c=__nexus.find('Marie Curie').id,x=__nexus.find('context').id;const want=[...__nexus.links.values()].find(l=>l.from===x&&l.to===c).id;
     const top=document.elementFromPoint(${cx},${cy});const got=top&&top.closest('.link');
     window.__ev=[];for(const t of ['pointerdown','pointerup','click'])addEventListener(t,(e)=>{const l=e.target.closest&&e.target.closest('.link');const nd=e.target.closest&&e.target.closest('.node');window.__ev.push(t+':'+(e.target.tagName||'?')+'.'+String(e.target.className||'').slice(0,30)+(e.target.id?'#'+e.target.id:'')+(l?' fil '+l.dataset.id:'')+(nd?' carte '+nd.dataset.id:'')+' @'+Math.round(e.clientX)+','+Math.round(e.clientY))},true);

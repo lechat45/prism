@@ -2236,7 +2236,7 @@ button { cursor: pointer; }
     memory: function (id) { var n = nodes.get(id); return n && n.memory; },
     connect: addLink, cut: cutLink, open: openAnatomy, close: closeAnatomy, hub: createHub, room: openRoom, debate: debate,
     setIntel: setIntel, intel: function () { return intel; }, thinkAll: thinkAll, pendingCount: function () { return toThink().length; },
-    saveNow: saveNow, clearScene: clearScene, think: think, createEngram: createEngram,
+    saveNow: saveNow, clearScene: clearScene, think: think, createEngram: createEngram, linkAt: linkAt,
     enter: enterNexus, find: function (name) { var f = null; nodes.forEach(function (n) { if (!f && (n.name === name || n.title === name || n.type === name)) f = n; }); return f; }
   };
 
