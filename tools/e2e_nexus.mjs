@@ -451,7 +451,8 @@ try {
   // --- Créer un Engramme demande le serveur et un compte : sans eux, rien n'est tenté -----------------------------------------
   if (!SERVER) {
     await click(center("document.getElementById('add-engram')"));
-    await waitFor("!document.getElementById('engram-menu').hidden", "menu des Engrammes");
+    // « Vos Engrammes » arrive après l'ouverture et décale le formulaire : on attend la liste (vu en CI).
+    await waitFor("!document.getElementById('engram-menu').hidden && !!document.querySelector('.custom-mind') && !/Recherche/.test(document.getElementById('engram-menu').textContent)", "menu des Engrammes");
     await evaluate("document.querySelector('.custom-mind input').value = 'Léonard de Vinci'; document.querySelector('.custom-mind button').scrollIntoView({ block: 'center' })");
     await click(center("document.querySelector('.custom-mind button')"));
     await check("« Créer un Engramme » sans serveur : aucune création, le menu Intelligence explique",
