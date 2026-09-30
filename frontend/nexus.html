@@ -1028,7 +1028,6 @@ button { cursor: pointer; }
     linksLayer.append(g);
     var l = { id: id, from: from, to: to, el: g, grad: grad, paths: [glow, core, flow, hit] };
     links.set(id, l);
-    hit.addEventListener("click", function (e) { e.stopPropagation(); cutLink(id, e.clientX, e.clientY); });
     placeLink(l);
     if (!quiet) propagate();
     return l;
@@ -1218,7 +1217,13 @@ button { cursor: pointer; }
     closeMenus();
     // Un clic sur un fil le coupe (voir addLink) ; l'étiquette d'un Hub ouvre sa War Room : pas de glisser du fond ici
     // (sa capture du pointeur détournerait le clic).
-    if (e.target.closest(".link, .hub .label")) return;
+    var linkEl = e.target.closest(".link");
+    if (linkEl) {
+      // Couper un fil : appui puis relâchement au même endroit, sur ce fil (sans dépendre du « click » synthétisé).
+      gesture = { kind: "cut", id: linkEl.dataset.id, sx: e.clientX, sy: e.clientY };
+      return;
+    }
+    if (e.target.closest(".hub .label")) return;
     // La capture se fait sur la bulle elle-même : clics et double-clics gardent leur cible.
     if (port && nodeEl) {
       // Tirer une synapse depuis un port de sortie.
@@ -1305,6 +1310,11 @@ button { cursor: pointer; }
     viewport.classList.remove("is-panning", "is-lasso");
     gesturing(false);
     save();
+    if (g.kind === "cut") {
+      var over = e && e.type === "pointerup" && e.target && e.target.closest ? e.target.closest(".link") : null;
+      if (over && over.dataset.id === g.id && Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < 8) cutLink(g.id, e.clientX, e.clientY);
+      return;
+    }
     if (g.kind === "node") g.n.el.classList.remove("is-dragging");
     if (g.kind === "wire") {
       $("draft").hidden = true;
