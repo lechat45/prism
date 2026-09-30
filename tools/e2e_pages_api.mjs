@@ -154,7 +154,8 @@ try {
 
   // V6 : le Nexus, sur github.io, pense à travers la même API et la même session (Gemini au clic, 0,25 Spark par esprit).
   await send("Page.navigate", { url: `${PAGES}frontend/nexus.html#nexus` }, S);
-  await until(`window.__nexus && window.__prismLink && window.__prismLink.ready && window.__prismLink.account.user && __nexus.links.size === 4`, "Nexus relié au compte", 30000);
+  await until(`window.__nexus && window.__prismLink && window.__prismLink.ready && window.__prismLink.account.user && __nexus.links.size === 4
+    && [...__nexus.nodes.values()].filter((n) => n.type === "engram").every((n) => n.engram)`, "Nexus relié au compte, Engrammes chargés", 90000);
   await ev(`__nexus.setIntel("gemini")`);
   const thought = await ev(`__nexus.thinkAll().then(() => [...__nexus.nodes.values()].filter((n) => n.type === "engram").every((n) => n.memory && n.memory.source === "api") && __prismLink.account.user.sparks)`);
   check("Nexus sur github.io : les Engrammes pensent par l'API (2 × 0,25 Spark)", thought === 48.5, `${thought} Sparks`);

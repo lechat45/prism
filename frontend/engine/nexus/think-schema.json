@@ -1,12 +1,70 @@
 {
   "type": "object",
   "properties": {
-    "lines": { "type": "array", "items": { "type": "string" }, "description": "2 to 4 short sentences: the thinking, key idea first." },
-    "keys": { "type": "array", "items": { "type": "string" }, "description": "1 to 5 concrete data items from the inputs, 1 to 3 words each." },
-    "title": { "type": "string", "description": "What is being designed or decided, 8 words at most." },
-    "action": { "type": "string", "description": "Main button label of the resulting screen, 2 to 4 words, verb first." },
-    "memory": { "type": "string", "description": "The memory drawn on, copied exactly, or an empty string." }
+    "lines": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "2 to 4 short sentences: the thinking, key idea first."
+    },
+    "keys": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "1 to 5 concrete data items from the inputs, 1 to 3 words each."
+    },
+    "title": {
+      "type": "string",
+      "description": "What is being designed or decided, 8 words at most."
+    },
+    "action": {
+      "type": "string",
+      "description": "Main button label of the resulting screen, 2 to 4 words, verb first."
+    },
+    "memory": {
+      "type": "string",
+      "description": "The memory drawn on, copied exactly, or an empty string."
+    },
+    "trace": {
+      "type": "array",
+      "description": "Up to 4 Engram nodes you actually drew on (ids in brackets in the dossier), each with a 2 to 4 word reason; empty without an Engram.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "why"
+        ],
+        "propertyOrdering": [
+          "id",
+          "why"
+        ]
+      }
+    }
   },
-  "required": ["lines", "keys", "title", "action", "memory"],
-  "propertyOrdering": ["lines", "keys", "title", "action", "memory"]
+  "required": [
+    "lines",
+    "keys",
+    "title",
+    "action",
+    "memory",
+    "trace"
+  ],
+  "propertyOrdering": [
+    "lines",
+    "keys",
+    "title",
+    "action",
+    "memory",
+    "trace"
+  ]
 }

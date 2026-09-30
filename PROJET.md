@@ -1,6 +1,6 @@
 # Prism — description complète du projet
 
-> Version décrite : **6.0.0-alpha.4** (27 septembre 2026). En ligne : <https://lechat45.github.io/prism/>,
+> Version décrite : **6.1.0-alpha.1** (30 septembre 2026). En ligne : <https://lechat45.github.io/prism/>,
 > API : <https://prism-api-0x4z.onrender.com>. Code : <https://github.com/lechat45/prism> (branches `v3` = site public
 > sur GitHub Pages, `v4` = branche déployée par Render pour l'API, `v5` et `v6` = développement ; identiques à chaque publication).
 > Ce document est mis à jour à chaque livraison ; le détail technique de chaque version est dans `CHANGELOG.md`.
@@ -9,6 +9,11 @@
 
 Les dernières mises à jour, de la plus récente à la plus ancienne.
 
+- **6.1.0-alpha.1 — 30 septembre 2026 · les vrais Engrammes dans le Nexus.** Dans le Nexus, chaque Engramme est de
+  nouveau le vrai Engramme cognitif, avec toutes ses bulles qui bougent seules, dans une carte de verre. Il pense à
+  partir de ce qu'il est (son axiome, sa méthode, son caractère, les évènements de sa vie) et allume les bulles qu'il
+  mobilise ; un double-clic plonge dedans, en grand. Les Engrammes (Nexus et Mode Focus) prennent un air de carte
+  stellaire : étoiles qui scintillent, constellations, fils de verre parcourus de lumière, particules au survol.
 - **6.0.0-alpha.4 — 27 septembre 2026 · solde exact.** Après « Penser » dans le Nexus, le solde de Sparks affiché est
   relu auprès du serveur (plusieurs esprits pensent en même temps et leurs réponses pouvaient arriver dans le désordre).
 - **6.0.0-alpha.3 — 27 septembre 2026 · le serveur suit.** Correctif de mise en ligne : un test automatique bloquait
@@ -179,6 +184,12 @@ cartes au repos se partagent un budget de calcul (environ 60 % d'un cœur au tot
 que l'on manipule tourne à pleine vitesse ; une carte hors de l'écran s'arrête. Si le navigateur ne sait pas faire,
 tout se passe comme avant, sur le fil de la carte.
 
+
+**Néo-Constellation (6.1).** L'Engramme se lit comme une carte stellaire : des étoiles scintillent, chaque catégorie
+est tracée en constellation, les « arbres » (caractère, moteurs, ombres, évènements) sont reliés au noyau et entre eux
+par des fils de verre que parcourt une lueur ; la bulle survolée laisse échapper des particules, entourée d'un arc de
+verre qui tourne. Tout se fige si l'on réduit les animations.
+
 ### 4.5 Utiliser un Engramme
 
 - **Filtre ADN** : un clic sur une bulle en fait le filtre de la prochaine demande ; déposer un fichier ou un texte sur
@@ -254,7 +265,7 @@ Le bouton de la barre du haut dispose les cartes en arc : inclinées vers vous s
 un mur de verre qui vous entoure. Si l'appareil sait faire de la réalité mixte (WebXR, par exemple un téléphone Android
 récent), Prism propose d'y entrer : l'interface Liquid Glass s'affiche par-dessus la pièce filmée.
 
-## 6. Le Mode Nexus (V6, prototype)
+## 6. Le Mode Nexus (V6)
 
 La V6 fait de Prism un **système d'exploitation cognitif spatial**. `frontend/nexus.html` est à la fois la page
 d'accueil du site et le Mode Nexus. Sans serveur, il fonctionne seul (simulation locale) ; avec le serveur Prism, ses
@@ -271,7 +282,7 @@ le laboratoire. Franchir la porte Nexus fait plonger la vue dans le canvas.
 | Bulle | Rôle |
 | --- | --- |
 | **Contexte** (verre cyan) | une donnée brute : un brief, une consigne, un texte ; titre et texte modifiables |
-| **Engramme** (orbe) | un esprit : il reçoit, raisonne selon son anatomie, transmet sa pensée |
+| **Engramme** (carte de verre) | un vrai Engramme cognitif, vivant : il reçoit, pense à partir de ses bulles, transmet sa pensée |
 | **Rendu** (écran) | la sortie : titre, données clés, voix de chaque esprit, action principale |
 
 On tire une **synapse** depuis le port lumineux de droite d'une bulle jusqu'à une autre bulle ; le fil prend les
@@ -281,10 +292,10 @@ Contexte, depuis un Rendu, en boucle) sont refusés.
 
 | Geste | Effet |
 | --- | --- |
-| Glisser une bulle, le fond | déplacer ; molette ou pincement : zoom ; « Tout voir » ou F |
+| Glisser une bulle (un Engramme : par son en-tête), le fond | déplacer ; molette ou pincement : zoom ; « Tout voir » ou F |
 | Glisser depuis un port | tirer une synapse |
 | Clic sur un fil | le **couper** |
-| Double-clic sur un Engramme | plonger dans son **anatomie** |
+| Double-clic sur l'en-tête d'un Engramme (ou ⤢) | **plonger** dedans, en grand |
 | Double-clic dans le vide | un nouveau Contexte |
 | Alt + glisser (ou l'outil Hub) | entourer des Engrammes : un **Hub** |
 
@@ -295,17 +306,16 @@ exemple « CO₂, température, bruit ») voyagent le long des fils jusqu'à l'�
 la mémoire du nœud suivant** et de tout ce qui en dépendait : l'Engramme privé d'entrée se tait, et l'écran perd sa
 voix sur-le-champ.
 
-### 6.4 L'anatomie d'un Engramme
+### 6.4 Les Engrammes du Nexus, et la plongée
 
-Double-cliquer sur un Engramme fait plonger la caméra dans l'orbe. Trois organes l'entourent :
+Chaque bulle Engramme contient **le vrai Engramme cognitif** de la personne (section 4) : ses 36 à 44 bulles vivantes,
+rendues par le même moteur que le Mode Focus ; on survole une bulle pour lire sa fiche de verre. Pour penser, il part
+de ce qu'il est : son **axiome**, le **moteur** le plus proche du sujet (et sa directive), un **trait de caractère**,
+une **ombre** si le sujet la réveille, et l'**évènement de sa vie** qui s'en rapproche. Les bulles mobilisées
+s'allument dans l'Engramme, numérotées.
 
-- **Core (logique)** : le mode de raisonnement : méthode scientifique stricte, simplicité radicale, empathie
-  utilisateur, science poétique, pensée systémique ;
-- **State (humeur)** : énergie, patience, créativité, qui donnent une humeur (fatiguée, créative, patiente, concentrée)
-  et modulent la pensée (plus brève, plus imagée, plus prudente) ;
-- **Memories** : les souvenirs et connaissances, qu'on ajoute ou qu'on oublie ; le plus pertinent est mobilisé.
-
-La pensée de l'Engramme s'affiche en direct pendant qu'on le modifie ; en remontant, le flux repart avec lui.
+Un double-clic sur son en-tête (ou le bouton ⤢) fait **plonger** la caméra dedans : l'Engramme s'ouvre en grand, avec
+son climat émotionnel, sa pensée dans le Nexus, ce qu'il reçoit et les évènements de sa vie.
 
 ### 6.5 Hubs : les War Rooms
 
@@ -327,16 +337,18 @@ Le serveur vérifie tout ce que le modèle renvoie (un souvenir cité doit exist
 rend les Sparks si rien n'aboutit. Une pensée payée est gardée pour exactement ces entrées : refaire un fil coupé ne
 coûte rien.
 
-### 6.7 Autres esprits, scène gardée
+### 6.7 D'où viennent les Engrammes, scène gardée
 
-Le menu Engramme propose Marie Curie, Steve Jobs, un expert UX, Ada Lovelace, ou **n'importe quel nom** (son anatomie
-se règle ensuite). La scène (bulles, anatomies, fils, Hubs, vue, pensées payées) est **gardée sur l'appareil** et
-retrouvée en revenant ; le menu « ⋯ » repart d'une scène vide ou de la démonstration (un second clic confirme).
+Le menu Engramme propose des **démonstrations** (Marie Curie, Ada Lovelace), **vos Engrammes** déjà créés dans Prism
+(cartes de cet appareil, Mon Hub), ou d'en **créer un** pour n'importe quelle personnalité publique : le serveur le
+dresse en 25 s à 1 min 30, pour 2 Sparks débités seulement à la réussite. La scène (bulles, Engrammes, fils, Hubs,
+vue, pensées payées) est **gardée sur l'appareil** et retrouvée en revenant ; le menu « ⋯ » repart d'une scène vide ou
+de la démonstration (un second clic confirme).
 
 ### 6.8 Prochaines étapes
 
-Générer de vrais widgets dans les bulles de Rendu (moteur du Mode Focus), relier une bulle Engramme à un Engramme
-complet de Prism (ses 36 à 44 bulles), et synchroniser les scènes dans Mon Hub.
+Générer de vrais widgets dans les bulles de Rendu (moteur du Mode Focus), converser avec un Engramme depuis la
+plongée, et synchroniser les scènes dans Mon Hub.
 
 ## 7. Architecture technique
 
@@ -369,7 +381,7 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
 - **Socle (V5, phase 1)** : rendu des Engrammes dans un Web Worker ; une portée par carte défaite à sa fermeture (rien ne
   reste en mémoire, vérifié par la CI) ; bouclier API (une demande déjà servie au même compte revient sans appel au
   modèle).
-- **Qualité** : 168 tests Python (sur SQLite et PostgreSQL), 93 tests Node, parité Python ↔ navigateur sur des cas
+- **Qualité** : 171 tests Python (sur SQLite et PostgreSQL), 93 tests Node, parité Python ↔ navigateur sur des cas
   partagés, sept scénarios E2E dans Chrome (site statique, serveur de démo, faux Gemini, GitHub Pages → API, Engramme en
   mode serveur et statique, Mode Nexus), contrôle de l'image Docker ; tout est rejoué par la CI GitHub à chaque envoi. Aucun test ne
   touche la production.
@@ -395,6 +407,7 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
 | alpha.2 | le Nexus pense avec Gemini (compte, Sparks au clic), autres esprits, scène gardée ; la porte d'entrée devient l'accueil du site |
 | alpha.3 | CI de nouveau verte (clics des tests à travers le toast), miniatures de Mon Hub, déploiement de l'API du Nexus |
 | alpha.4 | Nexus : solde relu après « Penser » ; tests de bout en bout plus robustes (export, écran de rendu) |
+| 6.1.0-alpha.1 | Nexus : les vrais Engrammes (vivants, pensée fondée sur leurs bulles, plongée), Néo-Constellation |
 
 ## 9. Limites connues
 

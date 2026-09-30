@@ -86,9 +86,10 @@ def fake_nexus(system: str, user: str) -> str:
             "synthesis": {"summary": "Synthèse du faux Gemini.", "points": [f"{n} — son apport" for n in names], "first_step": "Premier pas."},
         }, ensure_ascii=False)
     name = names[0] if names else "?"
+    ids = re.findall(r"^\[([^\]]+)\] ", user, re.M)  # bulles de l'Engramme dans le dossier
     return json.dumps({"lines": [f"{name} pense avec le faux Gemini.", "Deuxième phrase de la pensée."],
                        "keys": ["CO₂", "température"], "title": "Titre du faux Gemini", "action": "Agir maintenant",
-                       "memory": ""}, ensure_ascii=False)
+                       "memory": "", "trace": [{"id": i, "why": "faux Gemini"} for i in ids[:2]]}, ensure_ascii=False)
 
 
 class FakeGemini(BaseHTTPRequestHandler):

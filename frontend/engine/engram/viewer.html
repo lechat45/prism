@@ -20,6 +20,12 @@
   #glass { transition: opacity 0.14s ease; }
   .clamp-5 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; }
   .clamp-3 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+  /* Petites cartes (Nexus, carte réduite) : les bulles d'abord, l'en-tête se fait discret. */
+  @media (max-width: 520px), (max-height: 340px) { #temperament, #summary { display: none; } }
+  @media (max-width: 440px), (max-height: 300px) {
+    #domain, #climate, #chat-btn, #legend, footer { display: none !important; }
+    #person { font-size: 14px; }
+  }
 </style>
 </head>
 <body>

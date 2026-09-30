@@ -554,6 +554,180 @@
       });
     }
 
+    // ---------------------------------------------------------------- Néo-Constellation (V6)
+    // Carte stellaire : étoiles qui scintillent, chaque catégorie tracée en constellation (ses bulles reliées dans
+    // l'ordre de leur angle autour de son centre), les « arbres » reliés au noyau et entre eux par des fils de verre
+    // que parcourt une lueur ; au survol, des particules s'échappent de la bulle. Sans allocation par image
+    // (réserve fixe de particules), et figé si l'utilisateur réduit les animations.
+    var TREES = ["heart", "engine", "shadow", "artifact"];
+    var TREE_TINT = { heart: COLOR.heart, engine: COLOR.engine, shadow: [192, 132, 252], artifact: COLOR.succes };
+    var PULSE = [205, 232, 255];
+    var trees = {};
+    TREES.forEach(function (cat) {
+      trees[cat] = { x: 0, y: 0, nodes: sim.nodes.filter(function (n) { return n.category === cat; }) };
+    });
+    var twinkles = [];
+    (function () {
+      var r = o.rng((o.seed >>> 0) ^ 0x51ed27);
+      for (var i = 0; i < 34; i++) twinkles.push({ x: 0.05 + r() * 0.9, y: 0.05 + r() * 0.86, s: 0.6 + r() * 1.3, phase: r() * 6.3, speed: 0.6 + r() * 1.8 });
+    })();
+    var MAX_PARTICLES = 72;
+    var particles = [];
+    for (var pi = 0; pi < MAX_PARTICLES; pi++) particles.push({ alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 1, c: PULSE, s: 1 });
+    var nextParticle = 0;
+    var spawnDebt = 0;
+    var lastHover = null;
+    var particleRng = o.rng((o.seed >>> 0) ^ 0x7f4a7c15);
+
+    function spawn(n, count) {
+      var c = colorOf(n);
+      for (var k = 0; k < count; k++) {
+        var p = particles[nextParticle];
+        nextParticle = (nextParticle + 1) % MAX_PARTICLES;
+        var angle = particleRng() * Math.PI * 2;
+        var speed = 18 + particleRng() * 46;
+        var r = n.r * sim.pulseOf(n);
+        p.alive = true;
+        p.x = n.x + Math.cos(angle) * r;
+        p.y = n.y + Math.sin(angle) * r;
+        p.vx = Math.cos(angle) * speed;
+        p.vy = Math.sin(angle) * speed - 8;
+        p.max = 0.55 + particleRng() * 0.75;
+        p.life = p.max;
+        p.c = c;
+        p.s = 1.4 + particleRng() * 2.2;
+      }
+    }
+
+    function stepParticles(dt) {
+      if (reduced) return;
+      var f = hover || pinned;
+      if (hover && hover !== lastHover) spawn(hover, 14); // gerbe à l'arrivée du pointeur
+      lastHover = hover;
+      if (f) {
+        spawnDebt += dt * (hover ? 34 : 9); // flux continu, plus calme sur une bulle épinglée
+        var whole = Math.floor(spawnDebt);
+        if (whole > 0) { spawn(f, Math.min(whole, 6)); spawnDebt -= whole; }
+      } else spawnDebt = 0;
+      var drag = Math.pow(0.35, dt);
+      for (var i = 0; i < MAX_PARTICLES; i++) {
+        var p = particles[i];
+        if (!p.alive) continue;
+        p.life -= dt;
+        if (p.life <= 0) { p.alive = false; continue; }
+        p.vx *= drag;
+        p.vy *= drag;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+      }
+    }
+
+    function drawParticles() {
+      if (reduced) return;
+      ctx.globalCompositeOperation = "lighter";
+      for (var i = 0; i < MAX_PARTICLES; i++) {
+        var p = particles[i];
+        if (!p.alive) continue;
+        var k = p.life / p.max;
+        glow(p.x, p.y, p.s * 3.2, p.c, 0.55 * k);
+        ctx.fillStyle = "rgba(255,255,255," + 0.8 * k + ")";
+        ctx.fillRect(p.x - 0.6, p.y - 0.6, 1.2, 1.2);
+      }
+      ctx.globalCompositeOperation = "source-over";
+    }
+
+    /** Point d'une courbe quadratique (fils de verre entre les arbres). */
+    function onCurve(ax, ay, cx, cy, bx, by, u) {
+      var v = 1 - u;
+      return [v * v * ax + 2 * v * u * cx + u * u * bx, v * v * ay + 2 * v * u * cy + u * u * by];
+    }
+
+    function drawConstellation(t) {
+      // Étoiles qui scintillent (le ciel pré-rendu reste immobile).
+      for (var i = 0; i < twinkles.length; i++) {
+        var s = twinkles[i];
+        var a = reduced ? 0.3 : 0.12 + 0.5 * (0.5 + 0.5 * Math.sin(t * s.speed + s.phase));
+        var x = s.x * W;
+        var y = s.y * H;
+        ctx.fillStyle = "rgba(225,235,255," + a + ")";
+        ctx.fillRect(x - s.s / 2, y - s.s / 2, s.s, s.s);
+        if (s.s > 1.4 && a > 0.4) { // éclat en croix des plus brillantes
+          ctx.fillStyle = "rgba(225,235,255," + (a - 0.4) + ")";
+          ctx.fillRect(x - s.s * 2.5, y - 0.35, s.s * 5, 0.7);
+          ctx.fillRect(x - 0.35, y - s.s * 2.5, 0.7, s.s * 5);
+        }
+      }
+      if (!core) return;
+      // Centre de chaque arbre, puis sa constellation : bulles reliées par ordre d'angle autour de ce centre.
+      TREES.forEach(function (cat) {
+        var tree = trees[cat];
+        var list = tree.nodes;
+        if (!list.length) return;
+        var sx = 0;
+        var sy = 0;
+        for (var k = 0; k < list.length; k++) { sx += list[k].x; sy += list[k].y; }
+        tree.x = sx / list.length;
+        tree.y = sy / list.length;
+        if (list.length < 2) return;
+        list.sort(function (p, q) { return Math.atan2(p.y - tree.y, p.x - tree.x) - Math.atan2(q.y - tree.y, q.x - tree.x); });
+        var fade = focusCategory ? (focusCategory === cat ? 1 : 0.25) : 1;
+        ctx.strokeStyle = rgba(TREE_TINT[cat], 0.13 * fade);
+        ctx.lineWidth = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(list[0].x, list[0].y);
+        for (k = 1; k < list.length; k++) ctx.lineTo(list[k].x, list[k].y);
+        if (list.length > 2) ctx.closePath();
+        ctx.stroke();
+      });
+      // Fils de verre : du noyau vers chaque arbre, et d'un arbre à l'autre ; une lueur les parcourt.
+      var threads = [];
+      TREES.forEach(function (cat, i) {
+        var tree = trees[cat];
+        if (!tree.nodes.length) return;
+        threads.push([core.x, core.y, tree.x, tree.y, TREE_TINT[cat], i * 0.23]);
+        var next = trees[TREES[(i + 1) % TREES.length]];
+        if (next.nodes.length) threads.push([tree.x, tree.y, next.x, next.y, TREE_TINT[cat], 0.5 + i * 0.17]);
+      });
+      ctx.lineWidth = 1;
+      for (var j = 0; j < threads.length; j++) {
+        var th = threads[j];
+        var mx = (th[0] + th[2]) / 2 - (th[3] - th[1]) * 0.18;
+        var my = (th[1] + th[3]) / 2 + (th[2] - th[0]) * 0.18;
+        ctx.strokeStyle = rgba(th[4], 0.09);
+        ctx.beginPath();
+        ctx.moveTo(th[0], th[1]);
+        ctx.quadraticCurveTo(mx, my, th[2], th[3]);
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(255,255,255,0.05)"; // reflet du verre, légèrement décalé
+        ctx.beginPath();
+        ctx.moveTo(th[0] + 0.8, th[1] - 0.8);
+        ctx.quadraticCurveTo(mx + 0.8, my - 0.8, th[2] + 0.8, th[3] - 0.8);
+        ctx.stroke();
+        var u = reduced ? 0.5 : (t * 0.16 + th[5]) % 1;
+        var pt = onCurve(th[0], th[1], mx, my, th[2], th[3], u);
+        ctx.globalCompositeOperation = "lighter";
+        glow(pt[0], pt[1], 9, PULSE, 0.5 * Math.sin(Math.PI * u));
+        ctx.globalCompositeOperation = "source-over";
+      }
+    }
+
+    /** Survol : un arc de verre tourne autour de la bulle visée. */
+    function drawHoverSheen(n, t) {
+      var r = n.r * sim.pulseOf(n) + 5;
+      var start = reduced ? 0 : t * 2.2;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = "rgba(255,255,255,0.75)";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r, start, start + 1.2);
+      ctx.stroke();
+      ctx.strokeStyle = rgba(colorOf(n), 0.55);
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r + 3, start + Math.PI, start + Math.PI + 0.8);
+      ctx.stroke();
+      ctx.lineCap = "butt";
+    }
+
     function drawRing(n, t, color, extra) {
       ctx.strokeStyle = color;
       ctx.lineWidth = 1.4;
@@ -575,6 +749,7 @@
         drawAura(t);
         ctx.globalCompositeOperation = "source-over";
       }
+      drawConstellation(t);
       drawLinks();
       var glitching = [];
       ORDER.forEach(function (cat) {
@@ -606,6 +781,8 @@
           label(year, n.x, n.y + n.r + 3, 9, "rgba(253,230,138," + 0.6 * a + ")", 500, placed);
         }
       });
+      drawParticles();
+      if (hover) drawHoverSheen(hover, t);
       if (pinned) drawRing(pinned, t, "rgba(255,255,255,0.85)", 7);
       if (dropTarget) {
         var beat = 0.5 + 0.5 * Math.sin(t * 8);
@@ -675,6 +852,7 @@
             n.glitchAt = t + 1.5 + Math.random() * 4.5;
           }
         });
+        stepParticles(dt);
         draw(t);
         perf.frames += 1;
         perf.physics += t1 - t0;

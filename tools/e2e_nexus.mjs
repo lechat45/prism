@@ -1,5 +1,6 @@
-// V6 · Mode Nexus (frontend/nexus.html) : porte d'entrée, flux Contexte → Engramme → Rendu, glisser, synapses tirées à la
-// souris, sens du flux, anatomie (Core, State, Memories), fil coupé qui efface la mémoire en aval, Hub au lasso et débat.
+// V6 · Mode Nexus (frontend/nexus.html) : porte d'entrée, vrais Engrammes vivants (moteur du Mode Focus), flux Contexte →
+// Engramme → Rendu, glisser, synapses tirées à la souris, sens du flux, plongée dans un Engramme, fil coupé qui efface la
+// mémoire en aval, Hub au lasso et débat, scène retrouvée ; avec serveur : Gemini, débat, création d'un Engramme.
 // Tous les gestes passent par de vrais évènements souris (CDP), comme un utilisateur.
 //
 // Usage : node tools/e2e_nexus.mjs [--base http://127.0.0.1:8001/frontend/] [--shots dossier] [--width 1440 --height 900]
@@ -42,7 +43,9 @@ class CDP {
 
 // Centre d'un élément à l'écran (expression évaluée dans la page).
 const center = (selectorExpr) => `(()=>{const r=(${selectorExpr}).getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2]})()`;
-const orbOf = (name) => center(`__nexus.find(${JSON.stringify(name)}).el.querySelector('.orb')`);
+const headOf = (name) => center(`__nexus.find(${JSON.stringify(name)}).el.querySelector('.ename')`); // en-tête d'un Engramme
+const mindOf = (name) => center(`__nexus.find(${JSON.stringify(name)}).el.querySelector('.mind')`); // l'Engramme vivant
+const engramsLive = "[...__nexus.nodes.values()].filter(n=>n.type==='engram').every(n=>n.el.classList.contains('is-live'))";
 const portOf = (name, kind) => center(`__nexus.find(${JSON.stringify(name)}).el.querySelector('.port.${kind}')`);
 
 const work = mkdtempSync(join(tmpdir(), "prism-e2e-nexus-"));
@@ -123,12 +126,16 @@ try {
   await sleep(1200);
   await shot("nexus-1-porte.png");
 
-  // --- Nexus : la scène de départ se relie et le flux s'écoule ------------------------------------------------------
+  // --- Nexus : la scène de départ se relie, les vrais Engrammes s'animent, le flux s'écoule ------------------------------
   await click(center("document.getElementById('door-nexus')"));
   await waitFor("document.getElementById('gate').hidden && __nexus.links.size === 4", "entrée dans le Nexus", 20000);
-  await waitFor(`[...__nexus.nodes.values()].every(n=>!!n.memory) && ${flowSettled}`, "flux initial", 20000);
+  await waitFor(`${engramsLive} && [...__nexus.nodes.values()].every(n=>!!n.memory) && ${flowSettled}`, "Engrammes vivants et flux initial", 90000);
   await check("flux Contexte → Engrammes → Rendu", "[...__nexus.nodes.values()].map(n=>n.type+':'+!!n.memory).join(' ')",
     "context:true engram:true engram:true render:true");
+  await check("les Engrammes sont de vrais Engrammes (36 bulles et plus, document vivant du Mode Focus)",
+    "[...__nexus.nodes.values()].filter(n=>n.type==='engram').map(n=>n.engram.nodes.length>=36 && /prism-engram/.test(n.el.querySelector('.engram-frame').srcdoc)).join()", "true,true");
+  await check("la pensée part de l'Engramme et allume ses bulles (axiome, méthode…)",
+    "(()=>{const n=__nexus.find('Marie Curie');const ids=new Set(n.engram.nodes.map(x=>x.id));return n.memory.trace.length>=2 && n.memory.trace.every(t=>ids.has(t.id))})()", true);
   await check("l'écran porte le sujet et les données du brief", "[__nexus.find('render').memory.title, __nexus.find('render').memory.keys.join(', ')]",
     ["Un tableau de bord pour suivre la qualité de l'air dans une école primaire", "CO₂, température, bruit"]);
   await shot("nexus-2-flux.png");
@@ -148,49 +155,48 @@ try {
   await click(center("document.getElementById('fit')"));
   await sleep(900);
 
-  // --- Glisser une bulle ------------------------------------------------------------------------------------------------
-  await evaluate("window.__j0 = [__nexus.find('Steve Jobs').x, __nexus.find('Steve Jobs').y]");
-  await drag(`(()=>{const [x,y]=${orbOf("Steve Jobs")};return [[x,y],[x+90,y+30]]})()`);
-  await check("un Engramme se glisse (et ses synapses le suivent)",
-    "(()=>{const n=__nexus.find('Steve Jobs');const l=[...__nexus.links.values()].find(l=>l.to===n.id);return n.x!==__j0[0] && n.y!==__j0[1] && Math.abs(l.b.x-(n.x+20))<2})()", true);
+  // --- Glisser un Engramme par son en-tête ----------------------------------------------------------------------------------
+  await evaluate("window.__j0 = [__nexus.find('Ada Lovelace').x, __nexus.find('Ada Lovelace').y]");
+  await drag(`(()=>{const [x,y]=${headOf("Ada Lovelace")};return [[x,y],[x+90,y+30]]})()`);
+  await check("un Engramme se glisse par son en-tête (et ses synapses le suivent)",
+    "(()=>{const n=__nexus.find('Ada Lovelace');const l=[...__nexus.links.values()].find(l=>l.to===n.id);return n.x!==__j0[0] && n.y!==__j0[1] && Math.abs(l.b.x-n.x)<2})()", true);
 
-  // --- Ajouter un Engramme depuis le menu, tirer deux synapses ---------------------------------------------------------
+  // --- Retirer un Engramme, le reprendre depuis le menu, tirer deux synapses -------------------------------------------------
+  await click(center("__nexus.find('Ada Lovelace').el.querySelector('.close')"));
+  await waitFor("!__nexus.find('Ada Lovelace') && __nexus.links.size === 2", "Ada retirée");
   await click(center("document.getElementById('add-engram')"));
-  await waitFor("!document.getElementById('engram-menu').hidden", "menu des Engrammes");
-  await click(center("document.querySelectorAll('#engram-menu button')[3]"));
-  await waitFor("!!__nexus.find('Ada Lovelace')", "Ada Lovelace ajoutée");
-  await evaluate("(()=>{const n=__nexus.find('Ada Lovelace');n.x=-560;n.y=200;n.el.style.left=n.x+'px';n.el.style.top=n.y+'px';document.getElementById('fit').click()})()");
+  await waitFor("!document.getElementById('engram-menu').hidden && !/Recherche/.test(document.getElementById('engram-menu').textContent)", "menu des Engrammes");
+  await check("menu : démonstrations, vos Engrammes, création au prix affiché",
+    "(()=>{const m=document.getElementById('engram-menu');return [[...m.querySelectorAll('.menu-sec')].map(s=>s.textContent).join(' / '), m.querySelector('.custom-mind button').textContent]})()",
+    ["Démonstrations / Vos Engrammes / Créer un Engramme", "Créer · 2 Sparks"]);
+  await click(center("[...document.querySelectorAll('#engram-menu button')].find(b=>b.textContent.includes('Ada Lovelace'))"));
+  await waitFor("!!__nexus.find('Ada Lovelace') && document.getElementById('engram-menu').hidden", "Ada reprise depuis le menu");
+  await evaluate("(()=>{const n=__nexus.find('Ada Lovelace');n.x=-600;n.y=260;n.el.style.left=n.x+'px';n.el.style.top=n.y+'px';document.getElementById('fit').click()})()");
+  await waitFor(engramsLive, "Ada vivante", 90000);
   await sleep(1000);
-  await drag(`[${portOf("context", "out")}, ${orbOf("Ada Lovelace")}]`);
+  await drag(`[${portOf("context", "out")}, ${mindOf("Ada Lovelace")}]`);
   await drag(`[${portOf("Ada Lovelace", "out")}, ${portOf("render", "in")}]`);
-  await check("deux synapses tirées à la souris (port → bulle, port → port)", "__nexus.links.size", 6);
+  await check("deux synapses tirées à la souris (port → Engramme vivant, port → port)", "__nexus.links.size", 4);
   await drag(`[${portOf("Ada Lovelace", "out")}, ${center("__nexus.find('context').el.querySelector('.shell')")}]`);
-  await check("fil refusé vers un Contexte (le flux va Contexte → Engramme → Rendu)", "[__nexus.links.size, document.getElementById('toast').hidden]", [6, false]);
-  await waitFor(`__nexus.find('render').memory.thoughts.length === 3 && ${flowSettled}`, "le rendu reçoit Ada", 20000);
-  await check("l'écran entend les trois esprits", "__nexus.find('render').memory.thoughts.map(t=>t.author).join(' + ')",
-    "Marie Curie + Steve Jobs + Ada Lovelace");
+  await check("fil refusé vers un Contexte (le flux va Contexte → Engramme → Rendu)", "[__nexus.links.size, document.getElementById('toast').hidden]", [4, false]);
+  await waitFor(`__nexus.find('render').memory && __nexus.find('render').memory.thoughts.length === 2 && ${flowSettled}`, "le rendu reçoit Ada", 30000);
+  await check("l'écran entend les deux Engrammes", "__nexus.find('render').memory.thoughts.map(t=>t.author).join(' + ')", "Marie Curie + Ada Lovelace");
   await shot("nexus-3-synapses.png");
 
-  // --- Anatomie d'un Engramme ------------------------------------------------------------------------------------------
-  await click(orbOf("Marie Curie"), 2);
-  await waitFor("document.getElementById('anatomy').classList.contains('is-on')", "plongée dans l'anatomie");
-  // Les organes entrent en scène (animation) : on attend qu'ils soient posés avant de cliquer dedans.
-  await waitFor("[...document.querySelectorAll('.organ')].every(o=>o.getAnimations().every(a=>a.playState!=='running'))", "organes posés");
-  await check("double-clic : anatomie de Marie Curie, sans bulle créée", "[document.getElementById('anat-name').textContent, __nexus.nodes.size]", ["Marie Curie", 5]);
-  await check("State : énergie à 10 → humeur « Fatiguée »",
-    "(()=>{const s=document.querySelector('#sliders input');s.value=10;s.dispatchEvent(new Event('input'));return document.querySelector('#anat-mood span').textContent})()",
-    "Fatiguée · Méthode scientifique stricte");
-  await click(center("[...document.querySelectorAll('#core-modes button')].find(b=>b.textContent==='Pensée systémique')"));
-  await check("Core : un autre mode de raisonnement au clic", "document.getElementById('core-label').textContent", "Pensée systémique");
-  await check("Memories : un souvenir s'ajoute",
-    "(()=>{document.getElementById('mem-input').value='1906 : première femme professeure à la Sorbonne';document.getElementById('mem-form').requestSubmit();return document.querySelectorAll('#memories .chip').length})()", 5);
-  await check("la pensée en direct suit l'anatomie", "document.getElementById('anat-preview').textContent.includes('système')", true);
-  await sleep(600);
-  await shot("nexus-4-anatomie.png");
+  // --- Plongée : l'Engramme vivant en grand ------------------------------------------------------------------------------------
+  await click(headOf("Marie Curie"), 2);
+  await waitFor("document.getElementById('anatomy').classList.contains('is-on')", "plongée dans l'Engramme");
+  await check("double-clic sur l'en-tête : plongée dans l'Engramme de Marie Curie, sans bulle créée",
+    "[document.getElementById('anat-name').textContent, __nexus.nodes.size, document.getElementById('dive-frame').srcdoc.length > 1000]", ["Marie Curie", 4, true]);
+  await check("la plongée montre son climat, sa pensée, ses entrées et les évènements de sa vie",
+    "[document.querySelectorAll('#anat-climate .chip').length >= 2, document.querySelectorAll('#anat-preview p').length >= 2, document.querySelectorAll('#anat-inputs li').length, document.querySelectorAll('#memories li').length]",
+    [true, true, 1, 10]);
+  await sleep(2500);
+  await shot("nexus-4-plongee.png");
   await key("Escape");
-  await waitFor("document.getElementById('anatomy').hidden && __nexus.view.z < 3", "remontée");
-  await check("remontée : l'Engramme garde son anatomie modifiée",
-    "[__nexus.find('Marie Curie').core, __nexus.find('Marie Curie').el.querySelector('.mood span').textContent]", ["systems", "Fatiguée"]);
+  // La caméra revient en glissant (0,85 s) : on attend qu'elle soit posée avant de viser un fil.
+  await waitFor("document.getElementById('anatomy').hidden && __nexus.view.z < 3 && !document.getElementById('dive-frame').srcdoc && !document.getElementById('world').classList.contains('is-diving')", "remontée", 15000);
+  await check("remontée : l'Engramme en grand s'arrête, le Nexus revient", "document.getElementById('world').style.opacity", "1");
 
   // --- Couper un fil : la mémoire en aval s'efface à l'instant ------------------------------------------------------------
   await waitFor(flowSettled, "flux reposé");
@@ -198,20 +204,20 @@ try {
     const p=l.paths[3];const pt=p.getPointAtLength(p.getTotalLength()/2);const q=new DOMPoint(pt.x,pt.y).matrixTransform(p.getScreenCTM());return [q.x,q.y]})()`);
   await check("fil coupé au clic : Curie perd sa mémoire, l'écran perd sa voix, sans délai",
     "(()=>{const c=__nexus.find('Marie Curie'),r=__nexus.find('render');return [__nexus.links.size,c.memory===null,c.el.querySelector('.thought').textContent,r.memory.thoughts.map(t=>t.author).join(' + '),document.querySelector('#nodes .render .voices').textContent.includes('Marie Curie')]})()",
-    [5, true, "", "Steve Jobs + Ada Lovelace", false]);
+    [3, true, "", "Ada Lovelace", false]);
   await sleep(500);
   await shot("nexus-5-coupe.png");
 
   // --- Hub : lasso autour des Engrammes, War Room, débat -----------------------------------------------------------------
-  await drag(`(()=>{const cs=[...__nexus.nodes.values()].filter(n=>n.type==='engram').map(n=>{const r=n.el.querySelector('.orb').getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2]});
+  await drag(`(()=>{const cs=[...__nexus.nodes.values()].filter(n=>n.type==='engram').map(n=>{const r=n.el.querySelector('.mind').getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2]});
     const xs=cs.map(c=>c[0]),ys=cs.map(c=>c[1]);const cx=(Math.min(...xs)+Math.max(...xs))/2,cy=(Math.min(...ys)+Math.max(...ys))/2;
-    const rx=(Math.max(...xs)-Math.min(...xs))/2+110,ry=(Math.max(...ys)-Math.min(...ys))/2+110;const pts=[];
+    const rx=(Math.max(...xs)-Math.min(...xs))/2+150,ry=(Math.max(...ys)-Math.min(...ys))/2+150;const pts=[];
     for(let i=0;i<=36;i++){const a=i/36*Math.PI*2;pts.push([cx+Math.cos(a)*rx,cy+Math.sin(a)*ry])}
     let k=pts.findIndex(p=>{const e=document.elementFromPoint(p[0],p[1]);return e&&e.id==='viewport'});if(k<0)k=0;return pts.slice(k).concat(pts.slice(1,k+1))})()`, { alt: true });
   await waitFor("__nexus.hubs.size === 1 && !document.getElementById('room').hidden", "Hub et War Room");
-  await check("Alt + lasso : un Hub réunit les 3 Engrammes", "[...__nexus.hubs.values()][0].members.length", 3);
-  await check("débat en deux tours puis synthèse",
-    "__nexus.debate('Comment rendre ce tableau lisible par les enfants ?').then(()=>[document.querySelectorAll('#log .msg.mind').length, !!document.querySelector('#log .msg.synth')])", [6, true]);
+  await check("Alt + lasso : un Hub réunit les 2 Engrammes", "[...__nexus.hubs.values()][0].members.length", 2);
+  await check("débat en deux tours puis synthèse, à partir des Engrammes",
+    "__nexus.debate('Comment rendre ce tableau lisible par les enfants ?').then(()=>[document.querySelectorAll('#log .msg.mind').length, !!document.querySelector('#log .msg.synth')])", [4, true]);
   await check("le débat s'accroche aux données du brief", "document.getElementById('log').textContent.includes('« CO₂ »')", true);
   await sleep(700);
   await shot("nexus-6-war-room.png");
@@ -224,20 +230,24 @@ try {
 
   // --- La scène est enregistrée sur l'appareil : on revient, tout est là --------------------------------------------------
   await cdp.send("Page.navigate", { url: `${URL_NEXUS}?retour=1#nexus` }, S);
-  await waitFor("window.__nexus && __nexus.nodes.size === 5 && __nexus.links.size === 5 && __nexus.hubs.size === 1", "scène restaurée", 20000);
-  await check("scène retrouvée après rechargement (bulles, fils, Hub, anatomie, fil coupé)",
-    "[__nexus.find('Marie Curie').core, __nexus.find('Marie Curie').memory === null, __nexus.find('render').memory.thoughts.length, __nexus.find('Ada Lovelace').x]",
-    ["systems", true, 2, -560]);
+  await waitFor("window.__nexus && __nexus.nodes.size === 4 && __nexus.links.size === 3 && __nexus.hubs.size === 1", "scène restaurée", 30000);
+  await waitFor(`${engramsLive} && __nexus.find('render').memory`, "Engrammes de retour", 90000);
+  await check("scène retrouvée après rechargement (Engrammes, fils, Hub, fil coupé, position)",
+    "[__nexus.find('Marie Curie').memory === null, __nexus.find('render').memory.thoughts.length, __nexus.find('Ada Lovelace').x, __nexus.find('Ada Lovelace').engram.nodes.length >= 36]",
+    [true, 1, -600, true]);
 
-  // --- Un autre esprit, par son nom -------------------------------------------------------------------------------------------
-  await click(center("document.getElementById('add-engram')"));
-  await waitFor("!document.getElementById('engram-menu').hidden", "menu des Engrammes");
-  await evaluate("document.querySelector('.custom-mind input').value = 'Léonard de Vinci'");
-  await click(center("document.querySelector('.custom-mind button')"));
-  await check("« Autre esprit » : un Engramme au nom libre", "(()=>{const n=__nexus.find('Léonard de Vinci');return !!n && n.role === 'Esprit libre' && document.getElementById('engram-menu').hidden})()", true);
-  await evaluate("__nexus.find('Léonard de Vinci').el.querySelector('.close').click()");
+  // --- Créer un Engramme demande le serveur et un compte : sans eux, rien n'est tenté -----------------------------------------
+  if (!SERVER) {
+    await click(center("document.getElementById('add-engram')"));
+    await waitFor("!document.getElementById('engram-menu').hidden", "menu des Engrammes");
+    await evaluate("document.querySelector('.custom-mind input').value = 'Léonard de Vinci'; document.querySelector('.custom-mind button').scrollIntoView({ block: 'center' })");
+    await click(center("document.querySelector('.custom-mind button')"));
+    await check("« Créer un Engramme » sans serveur : aucune création, le menu Intelligence explique",
+      "[__nexus.nodes.size, !document.getElementById('intel-menu').hidden]", [4, true]);
+    await key("Escape");
+  }
 
-  // --- Avec le serveur Prism : penser avec Gemini (compte, prix affiché, Sparks au clic) ---------------------------------------
+  // --- Avec le serveur Prism : penser avec Gemini, débattre, créer un Engramme (compte, prix affichés, Sparks au clic) ---------
   if (SERVER) {
     await waitFor("window.__prismLink && __prismLink.ready", "API Prism détectée", 30000);
     await check("sans compte, Gemini ne dépense rien : l'intelligence reste locale", "[__nexus.intel(), document.getElementById('think-all').hidden]", ["local", true]);
@@ -248,12 +258,13 @@ try {
     const start = await evaluate("__prismLink.account.user.sparks");
     await click(center("document.querySelector('#intel-menu .opt[data-mode=gemini]')"));
     await waitFor("!document.getElementById('think-all').hidden", "bouton « Penser »");
-    await check("« Penser » annonce son prix, rien n'est encore dépensé", "[document.getElementById('think-all').textContent, __prismLink.account.user.sparks]", ["Penser · 0,5 Spark", start]);
-    await check("en attente, l'Engramme le dit", "__nexus.find('Steve Jobs').el.querySelector('.thought').textContent.startsWith('Prêt à penser')", true);
+    await check("« Penser » annonce son prix, rien n'est encore dépensé", "[document.getElementById('think-all').textContent, __prismLink.account.user.sparks]", ["Penser · 0,25 Spark", start]);
+    await check("en attente, l'Engramme le dit", "__nexus.find('Ada Lovelace').el.querySelector('.thought').textContent.startsWith('Prêt à penser')", true);
     await click(center("document.getElementById('think-all')"));
-    await waitFor("document.getElementById('think-all').hidden && [...__nexus.nodes.values()].every(n=>!n.el.classList.contains('is-thinking'))", "pensées reçues", 90000);
-    await check("Jobs et Ada ont pensé par l'API (2 × 0,25 Spark)",
-      "[['Steve Jobs','Ada Lovelace'].every(n=>__nexus.find(n).memory && __nexus.find(n).memory.source==='api'), __prismLink.account.user.sparks]", [true, start - 0.5]);
+    await waitFor("document.getElementById('think-all').hidden && [...__nexus.nodes.values()].every(n=>!n.el.classList.contains('is-thinking'))", "pensée reçue", 90000);
+    await check("Ada a pensé par l'API, à partir de son Engramme (0,25 Spark ; bulles mobilisées)",
+      "(()=>{const n=__nexus.find('Ada Lovelace');const ids=new Set(n.engram.nodes.map(x=>x.id));return [n.memory.source, n.memory.trace.length>0 && n.memory.trace.every(t=>ids.has(t.id)), __prismLink.account.user.sparks]})()",
+      ["api", true, start - 0.25]);
     // L'écran se redessine quand l'impulsion arrive au bout du fil (≈ 0,8 s après la pensée) : on attend l'écran lui-même.
     await waitFor(`__nexus.find('render').memory && __nexus.find('render').memory.thoughts.every(t=>t.source==='api') && ${flowSettled}
       && / · /.test((document.querySelector('#nodes .render .by') || {}).textContent || '')`, "écran nourri par l'API", 20000);
@@ -268,14 +279,25 @@ try {
     await evaluate("document.getElementById('log').replaceChildren(); document.getElementById('question').value = 'Par quoi commencer ?'");
     await click(center("document.getElementById('ask-send')"));
     await waitFor("!!document.querySelector('#log .msg.synth') && !document.getElementById('ask-send').disabled", "débat par l'API", 90000);
-    await check("débat par l'API : 3 positions, 3 réponses, une synthèse (1 Spark)",
-      "[document.querySelectorAll('#log .msg.mind:not(.typing):not(.error)').length, __prismLink.account.user.sparks]", [6, start - 1.5]);
+    await check("débat par l'API : 2 positions, 2 réponses, une synthèse (1 Spark)",
+      "[document.querySelectorAll('#log .msg.mind:not(.typing):not(.error)').length, __prismLink.account.user.sparks]", [4, start - 1.25]);
     await shot("nexus-7-gemini.png");
     await key("Escape");
+    // Créer un Engramme (serveur en mode démo : un Engramme de démonstration, facturé comme un vrai).
+    if (await evaluate("__prismLink.info.mode === 'mock'")) {
+      await click(center("document.getElementById('add-engram')"));
+      await waitFor("!document.getElementById('engram-menu').hidden && !!document.querySelector('.custom-mind')", "menu des Engrammes");
+      await evaluate("document.querySelector('.custom-mind input').value = 'Léonard de Vinci'; document.querySelector('.custom-mind button').scrollIntoView({ block: 'center' })");
+      await click(center("document.querySelector('.custom-mind button')"));
+      await waitFor(`__nexus.nodes.size === 5 && ${engramsLive}`, "Engramme créé par le serveur", 120000);
+      await check("« Créer un Engramme » : un vrai Engramme vivant rejoint le Nexus (2 Sparks)",
+        "[[...__nexus.nodes.values()].filter(n=>n.source==='created').map(n=>n.engram.nodes.length>=36).join(), __prismLink.account.user.sparks]", ["true", start - 3.25]);
+    }
     await cdp.send("Page.navigate", { url: `${URL_NEXUS}?retour=2#nexus` }, S);
-    await waitFor("window.__nexus && __nexus.nodes.size === 5 && window.__prismLink && __prismLink.ready && __prismLink.account.user", "retour avec le compte", 30000);
+    await waitFor("window.__nexus && __nexus.nodes.size >= 4 && window.__prismLink && __prismLink.ready && __prismLink.account.user", "retour avec le compte", 30000);
+    await waitFor(engramsLive, "Engrammes de retour", 90000);
     await check("au retour, les pensées payées sont gardées : rien à repayer",
-      "[__nexus.intel(), __nexus.pendingCount(), document.getElementById('think-all').hidden, __nexus.find('Steve Jobs').memory.source]", ["gemini", 0, true, "api"]);
+      "[__nexus.intel(), __nexus.pendingCount(), document.getElementById('think-all').hidden, __nexus.find('Ada Lovelace').memory.source]", ["gemini", 0, true, "api"]);
   }
 
   const errors = cdp.events.filter((e) => e.method === "Runtime.exceptionThrown")

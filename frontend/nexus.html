@@ -9,6 +9,8 @@
 <!-- API Prism (comptes, Sparks, Gemini) : utilisée sur GitHub Pages ; ailleurs, l'API qui sert la page (cf. js/account.js). -->
 <meta name="prism-api" content="https://prism-api-0x4z.onrender.com">
 <link rel="icon" href="assets/logo_prism.svg" type="image/svg+xml">
+<!-- Moteur des Engrammes (le même que le Mode Focus) : données, validation, document de la carte vivante. -->
+<script src="engine/engram/engram.js"></script>
 <style>
 /* ==========================================================================
    Prism V6 · Nexus — prototype en un seul fichier (HTML, CSS, JS purs ; aucune dépendance, aucune requête).
@@ -159,39 +161,39 @@ button { cursor: pointer; }
 .node.context textarea:focus { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent); }
 .node.context .port.out { left: 100%; top: 50%; }
 
-/* Engramme : un micro-univers en orbe */
-.node.engram { width: 190px; text-align: center; }
-.orb { position: relative; width: 150px; height: 150px; margin: 0 auto; border-radius: 50%; cursor: grab; }
-.orb .body { position: absolute; inset: 14px; border-radius: 50%;
-  background: radial-gradient(circle at 34% 28%, #fff 0 4%, color-mix(in srgb, var(--c) 70%, #fff) 14%, var(--c) 38%, color-mix(in srgb, var(--c) 35%, #05060a) 72%, #05060a 100%);
-  box-shadow: 0 0 60px -6px color-mix(in srgb, var(--c) 70%, transparent), inset 0 0 30px rgba(0, 0, 0, 0.55);
-  animation: breathe var(--breath, 5s) ease-in-out infinite; }
-.orb .veil { position: absolute; inset: 14px; border-radius: 50%; mix-blend-mode: screen; opacity: 0.55;
-  background: conic-gradient(from var(--spin), transparent, rgba(255, 255, 255, 0.35), transparent 30%, transparent 60%, rgba(255, 255, 255, 0.18), transparent 80%);
-  animation: spin 9s linear infinite; }
-.orb .ring { position: absolute; inset: 0; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); }
-.orb .ring.r2 { inset: -9px; border-style: dashed; opacity: 0.35; animation: rings 40s linear infinite; }
-.orb .sat { position: absolute; left: 50%; top: 50%; width: 9px; height: 9px; margin: -4.5px; border-radius: 50%;
-  background: #fff; box-shadow: 0 0 10px #fff; animation: orbit var(--t, 9s) linear infinite; }
-.orb .sat.s2 { --t: 13s; --r: 88px; width: 7px; height: 7px; animation-delay: -4s; background: var(--c); box-shadow: 0 0 10px var(--c); }
-.orb .sat.s3 { --t: 17s; --r: 80px; width: 6px; height: 6px; animation-delay: -9s; opacity: 0.8; }
-@keyframes orbit { from { transform: rotate(0deg) translateX(var(--r, 82px)); } to { transform: rotate(360deg) translateX(var(--r, 82px)); } }
-@keyframes breathe { 50% { transform: scale(1.035); filter: brightness(1.12); } }
-.node.engram.is-thinking .orb .body { animation-duration: 0.9s; }
-.node.engram.is-thinking .orb .ring { border-color: var(--c); box-shadow: 0 0 24px -4px var(--c); }
-.node.engram .name { margin-top: 12px; font-size: 16px; font-weight: 620; letter-spacing: -0.02em; }
-.node.engram .meta { display: flex; justify-content: center; gap: 6px; margin-top: 6px; }
+/* Engramme : l'Engramme cognitif vivant (bulles en mouvement, fiche de verre au survol), dans une carte de verre */
+.node.engram { width: 372px; }
+.node.engram .head { padding-bottom: 2px; }
 .chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 10.5px; color: #dfe5f0;
   border: 1px solid var(--line); background: rgba(255, 255, 255, 0.05); white-space: nowrap; }
 .chip i { width: 6px; height: 6px; border-radius: 50%; background: var(--mood, var(--c)); box-shadow: 0 0 8px var(--mood, var(--c)); }
-.node.engram .thought { margin: 10px auto 0; max-width: 220px; font-size: 11.5px; line-height: 1.5; color: var(--muted);
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; min-height: 0; transition: opacity 0.4s; }
-.node.engram .thought:empty { opacity: 0; }
-.node.engram .port.in { left: 20px; top: 75px; }
-.node.engram .port.out { left: 170px; top: 75px; }
-.node.engram .dive { position: absolute; left: 50%; top: 118px; transform: translateX(-50%); opacity: 0; font-size: 10px;
-  letter-spacing: 0.18em; text-transform: uppercase; color: #fff; pointer-events: none; transition: opacity 0.3s; text-shadow: 0 0 8px #000; }
-.node.engram:hover .dive { opacity: 0.85; }
+.node.engram .ename { font-size: 14px; font-weight: 620; letter-spacing: -0.015em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+.node.engram .head .chip.mood { margin-left: 4px; }
+.icon-btn { margin-left: auto; width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 50%; background: rgba(255, 255, 255, 0.05);
+  color: var(--muted); display: grid; place-items: center; font-size: 13px; transition: background 0.2s, color 0.2s, border-color 0.2s; }
+.icon-btn:hover { background: rgba(255, 255, 255, 0.12); color: var(--text); border-color: var(--line-strong); }
+.node.engram .icon-btn + .close { margin-left: 2px; }
+.mind { position: relative; height: 256px; margin: 10px 10px 0; border-radius: 15px; overflow: hidden; background: #04040b;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 40px -18px var(--c); transition: filter 0.5s, box-shadow 0.5s; }
+.mind::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.09), transparent 32%); } /* reflet du verre */
+.engram-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; opacity: 0; transition: opacity 0.8s var(--ease); }
+.node.engram.is-live .engram-frame { opacity: 1; }
+.mind-state { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; text-align: center; font-size: 12px; color: var(--muted);
+  background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--c) 18%, transparent), transparent 60%); }
+.mind-state:empty, .node.engram.is-live .mind-state { display: none; }
+.node.engram.is-loading .mind-state::before { content: ""; display: block; width: 46px; height: 46px; margin: 0 auto 12px; border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--c) 30%, transparent); border-top-color: var(--c); animation: rings 1.1s linear infinite; }
+.nexus.is-gesturing .engram-frame { pointer-events: none; } /* un geste en cours passe au-dessus des Engrammes */
+.node.engram .thought { margin: 9px 14px 12px; font-size: 11.5px; line-height: 1.5; color: var(--muted);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.node.engram .thought:empty { display: none; }
+.node.engram .port.in { left: 0; top: 146px; }
+.node.engram .port.out { left: 100%; top: 146px; }
+.node.engram.is-thinking .shell { border-color: color-mix(in srgb, var(--c) 70%, transparent); animation: thinking 1.1s ease-in-out infinite; }
+@keyframes thinking { 50% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent), 0 0 50px -12px var(--c); } }
+.node.engram.is-pending .mind { filter: saturate(0.45) brightness(0.72); }
+.node.engram.is-pending .thought { color: #d6c8ff; }
 
 /* Rendu : un écran de sortie */
 .node.render { --c: var(--render); width: 360px; }
@@ -278,63 +280,37 @@ button { cursor: pointer; }
   border: 1px solid var(--line-strong); background: rgba(14, 16, 26, 0.88); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
   font-size: 12.5px; animation: pop 0.4s var(--spring); }
 
-/* ---- Anatomie d'un Engramme (plongée à l'intérieur) --------------------------------------- */
-.anatomy { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; opacity: 0; transition: opacity 0.6s var(--ease);
-  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--c) 16%, transparent), rgba(5, 6, 10, 0.94) 62%); }
-.anatomy.is-on { opacity: 1; }
-.anatomy::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.5;
-  background-image: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--c) 30%, transparent) 1px, transparent 0); background-size: 26px 26px;
-  -webkit-mask: radial-gradient(circle at 50% 50%, #000, transparent 70%); mask: radial-gradient(circle at 50% 50%, #000, transparent 70%); }
-.anat-top { position: absolute; top: 20px; left: 24px; right: 24px; display: flex; align-items: center; gap: 12px; }
-.anat-top h2 { margin: 0; font-size: 22px; font-weight: 640; letter-spacing: -0.03em; }
-.anat-stage { position: relative; width: min(1060px, 94vw); height: min(640px, 80vh); }
-.anat-links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.anat-links path { fill: none; stroke: var(--c); stroke-width: 1.4; opacity: 0.45; stroke-dasharray: 2 10; animation: flow 1.6s linear infinite; }
-.anat-core { position: absolute; left: 50%; top: 50%; width: 230px; height: 230px; margin: -115px; border-radius: 50%; }
-.anat-core .body { inset: 0; animation-duration: var(--breath, 5s); }
-.anat-core .orbits { position: absolute; inset: -40px; border-radius: 50%; border: 1px dashed color-mix(in srgb, var(--c) 30%, transparent); animation: rings 60s linear infinite; }
-.organ .mood-chip { margin-top: 9px; }
-.organ { position: absolute; width: 300px; padding: 16px 18px 16px; border-radius: 24px; border: 1px solid var(--line);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025)), rgba(10, 12, 20, 0.72);
-  -webkit-backdrop-filter: blur(24px) saturate(150%); backdrop-filter: blur(24px) saturate(150%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 40px 90px -40px rgba(0, 0, 0, 0.95); animation: enter 0.8s var(--spring) both; }
-.organ::after { content: ""; position: absolute; width: 12px; height: 12px; border-radius: 50%; background: var(--c); box-shadow: 0 0 16px var(--c); }
-.organ.core { left: 0; top: 4%; animation-delay: 0.08s; }
-.organ.core::after { right: -6px; top: 50%; }
-.organ.state { right: 0; top: 10%; animation-delay: 0.16s; }
-.organ.state::after { left: -6px; top: 50%; }
-.organ.memories { left: 50%; bottom: 0; transform: translateX(-50%); width: 420px; animation-delay: 0.24s; }
-.organ.memories::after { left: 50%; top: -6px; margin-left: -6px; }
-.organ h4 { margin: 0; font-size: 9.5px; font-weight: 650; letter-spacing: 0.26em; text-transform: uppercase; color: color-mix(in srgb, var(--c) 70%, #fff); }
-.organ .big { margin-top: 6px; font-size: 18px; font-weight: 620; letter-spacing: -0.02em; }
-.organ p { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
-.modes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
-.modes button { border: 1px solid var(--line); border-radius: 999px; padding: 5px 10px; background: rgba(255, 255, 255, 0.04); font-size: 11.5px; color: var(--muted); }
-.modes button[aria-pressed="true"] { color: #05060a; background: linear-gradient(90deg, #fff, var(--c)); border-color: transparent; font-weight: 600; }
-.gauge { display: flex; align-items: center; gap: 14px; margin-top: 8px; }
-.gauge svg { width: 78px; height: 78px; flex: none; }
-.gauge .track { fill: none; stroke: rgba(255, 255, 255, 0.08); stroke-width: 7; }
-.gauge .fill { fill: none; stroke: var(--mood, var(--c)); stroke-width: 7; stroke-linecap: round; transition: stroke-dashoffset 0.5s var(--ease), stroke 0.5s;
-  filter: drop-shadow(0 0 6px var(--mood, var(--c))); }
-.sliders { display: grid; gap: 9px; flex: 1; }
-.sliders label { display: grid; gap: 3px; font-size: 11px; color: var(--muted); }
-.sliders label span { display: flex; justify-content: space-between; }
-input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.1); outline: none; }
-input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px var(--c); cursor: pointer; }
-input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0 10px var(--c); }
-.memories-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; max-height: 96px; overflow: auto; }
-.memories-list .chip { padding: 5px 6px 5px 10px; font-size: 11.5px; white-space: normal; text-align: left; }
-.memories-list .chip button { border: 0; background: none; color: var(--faint); padding: 0 4px; font-size: 13px; line-height: 1; }
-.memories-list .chip button:hover { color: var(--text); }
-.memadd { display: flex; gap: 6px; margin-top: 10px; }
-.memadd input { flex: 1; border: 1px solid var(--line); border-radius: 999px; background: rgba(0, 0, 0, 0.3); padding: 7px 12px; font-size: 12px; outline: none; }
-.memadd input:focus { border-color: color-mix(in srgb, var(--c) 50%, transparent); }
-.preview { position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: 360px; text-align: center; }
-.preview .micro { color: color-mix(in srgb, var(--c) 60%, #fff); }
-.preview p { margin: 8px 0 0; font-size: 13px; line-height: 1.55; color: #dfe5f0; min-height: 60px; }
-.glass-btn { border: 1px solid var(--line-strong); border-radius: 999px; padding: 8px 14px; background: rgba(255, 255, 255, 0.06); font-size: 12.5px;
-  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); display: inline-flex; gap: 8px; align-items: center; }
-.glass-btn:hover { background: rgba(255, 255, 255, 0.12); }
+/* ---- Plongée dans un Engramme : l'Engramme vivant en grand, et ce qu'il fait dans le Nexus ---------------- */
+.dive { position: absolute; inset: 0; z-index: 30; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; padding: 96px 18px 18px;
+  opacity: 0; transition: opacity 0.6s var(--ease);
+  background: radial-gradient(circle at 40% 45%, color-mix(in srgb, var(--c) 14%, transparent), rgba(5, 6, 10, 0.95) 64%); }
+.dive.is-on { opacity: 1; }
+.dive-top { position: absolute; top: 18px; left: 22px; right: 22px; display: flex; align-items: center; gap: 14px; }
+.dive-top h2 { margin: 0; font-size: 22px; font-weight: 640; letter-spacing: -0.03em; }
+.dive-top p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+.dive-stage { position: relative; border-radius: 24px; overflow: hidden; background: #04040b;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1), 0 40px 100px -40px rgba(0, 0, 0, 0.95), 0 0 90px -40px var(--c); }
+.dive-stage::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.07), transparent 28%); }
+.dive-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.dive-side { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; min-height: 0; }
+.dive-side section { padding: 14px 16px; border-radius: 20px; border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)), rgba(10, 12, 20, 0.72);
+  -webkit-backdrop-filter: blur(24px) saturate(150%); backdrop-filter: blur(24px) saturate(150%); animation: enter 0.7s var(--spring) both; }
+.dive-side section:nth-child(2) { animation-delay: 0.06s; } .dive-side section:nth-child(3) { animation-delay: 0.12s; } .dive-side section:nth-child(4) { animation-delay: 0.18s; }
+.dive-side h4 { margin: 0 0 8px; font-size: 9.5px; font-weight: 650; letter-spacing: 0.24em; text-transform: uppercase; color: color-mix(in srgb, var(--c) 70%, #fff); }
+.dive-side p { margin: 0; font-size: 12.5px; line-height: 1.55; color: #dfe5f0; }
+.dive-side p + p { margin-top: 8px; }
+.dive-side .quiet { color: var(--muted); font-size: 12px; }
+.dive-side ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.dive-side li { font-size: 12px; line-height: 1.45; color: var(--muted); padding-left: 12px; position: relative; }
+.dive-side li::before { content: ""; position: absolute; left: 0; top: 7px; width: 5px; height: 5px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.chips .chip i { background: var(--ec); box-shadow: 0 0 8px var(--ec); }
+@media (max-width: 900px) {
+  .dive { grid-template-columns: 1fr; grid-template-rows: minmax(260px, 1fr) auto; overflow-y: auto; }
+  .dive-side { overflow: visible; }
+}
 
 /* ---- War Room (chat du Hub) ---------------------------------------------------------------- */
 .room { position: absolute; right: 16px; top: 76px; bottom: 16px; z-index: 25; width: min(420px, calc(100vw - 32px)); display: flex; flex-direction: column;
@@ -384,8 +360,10 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
 .intel-menu .status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 10px 8px 36px; font-size: 11.5px; color: var(--muted); }
 .intel-menu .status a { color: #cfe3ff; }
 .intel-menu .status .glass-btn { padding: 5px 10px; font-size: 11.5px; }
-.node.engram.is-pending .orb .body { filter: saturate(0.35) brightness(0.75); }
 .node.engram.is-pending .thought { color: #d6c8ff; }
+.menu .menu-sec { padding: 8px 10px 4px; font-size: 9.5px; font-weight: 650; letter-spacing: 0.22em; text-transform: uppercase; color: var(--faint); }
+.menu .menu-note { padding: 2px 10px 8px; font-size: 11.5px; color: var(--faint); }
+.menu.engram-menu { width: 300px; max-height: min(70vh, 560px); overflow-y: auto; }
 .custom-mind { display: flex; gap: 6px; margin-top: 4px; padding: 8px 4px 4px; border-top: 1px solid var(--line); }
 .custom-mind input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 999px; background: rgba(0, 0, 0, 0.3); padding: 7px 12px;
   font-size: 12px; outline: none; }
@@ -401,10 +379,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
   .hud .spacer { display: none; }
   .tool { padding: 8px 10px; }
   .door { width: min(290px, 100%); }
-  .anat-stage { margin-top: 64px; max-height: calc(100vh - 84px); }
-  .organ { position: relative; left: auto !important; right: auto !important; top: auto !important; bottom: auto !important; transform: none !important; width: auto !important; margin: 10px; }
-  .anat-stage { height: auto; overflow: auto; max-height: 86vh; }
-  .anat-core, .anat-links, .preview { display: none; }
+  .dive { padding-top: 70px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001s !important; animation-iteration-count: 1 !important; transition-duration: 0.001s !important; }
@@ -464,7 +439,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
       <button class="tool" id="add-context" type="button" style="--c: var(--context)"><i></i><span class="label">Contexte</span></button>
       <span class="anchor">
         <button class="tool" id="add-engram" type="button" aria-haspopup="menu" aria-expanded="false" style="--c: #b99bff"><i></i><span class="label">Engramme</span></button>
-        <div class="menu" id="engram-menu" role="menu" hidden></div>
+        <div class="menu engram-menu" id="engram-menu" role="menu" hidden></div>
       </span>
       <button class="tool" id="add-render" type="button" style="--c: var(--render)"><i></i><span class="label">Rendu</span></button>
       <button class="tool" id="hub-tool" type="button" aria-pressed="false" title="Dessinez un cercle autour de plusieurs Engrammes (ou Alt + glisser)"
@@ -498,52 +473,41 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
   <div class="hint" id="hint">
     <span><b>Glisser</b> un port lumineux → une synapse</span>
     <span><b>Clic</b> sur un fil → le couper</span>
-    <span><b>Double-clic</b> sur un Engramme → son anatomie</span>
+    <span><b>Double-clic</b> sur un Engramme → plonger dedans</span>
     <span><b>Alt + glisser</b> → un Hub</span>
   </div>
   <div class="toast" id="toast" role="status" hidden></div>
 
-  <!-- Anatomie d'un Engramme -->
-  <div class="anatomy" id="anatomy" hidden aria-modal="true" role="dialog" aria-labelledby="anat-name">
-    <div class="anat-top">
+  <!-- Plongée dans un Engramme : l'Engramme vivant en grand, et ce qu'il fait dans le Nexus -->
+  <div class="dive" id="anatomy" hidden aria-modal="true" role="dialog" aria-labelledby="anat-name">
+    <div class="dive-top">
       <button class="glass-btn" id="anat-back" type="button">← Remonter</button>
       <div>
-        <div class="micro">Anatomie de l'Engramme</div>
+        <div class="micro">Engramme · plongée</div>
         <h2 id="anat-name"></h2>
+        <p id="anat-domain"></p>
       </div>
     </div>
-    <div class="anat-stage" id="anat-stage">
-      <svg class="anat-links" id="anat-links" aria-hidden="true"></svg>
-      <div class="preview">
-        <div class="micro" id="anat-preview-label">Sa pensée, en direct</div>
-        <p id="anat-preview"></p>
-      </div>
-      <div class="anat-core orb" id="anat-core">
-        <div class="orbits"></div>
-        <div class="body"></div>
-        <div class="veil"></div>
-      </div>
-      <section class="organ core" aria-labelledby="h-core">
-        <h4 id="h-core">Core · logique</h4>
-        <div class="big" id="core-label"></div>
-        <p id="core-desc"></p>
-        <div class="modes" id="core-modes" role="group" aria-label="Mode de raisonnement"></div>
+    <div class="dive-stage"><iframe class="dive-frame" id="dive-frame" sandbox="allow-scripts" referrerpolicy="no-referrer" title="Engramme en grand"></iframe></div>
+    <aside class="dive-side">
+      <section aria-labelledby="h-climate">
+        <h4 id="h-climate">Caractère et climat</h4>
+        <div class="chips" id="anat-climate"></div>
+        <p id="anat-temperament"></p>
       </section>
-      <section class="organ state" aria-labelledby="h-state">
-        <h4 id="h-state">State · humeur</h4>
-        <div class="chip mood-chip" id="anat-mood"><i></i><span></span></div>
-        <div class="gauge">
-          <svg viewBox="0 0 80 80" aria-hidden="true"><circle class="track" cx="40" cy="40" r="32"/><circle class="fill" id="mood-arc" cx="40" cy="40" r="32"
-            stroke-dasharray="201" stroke-dashoffset="100" transform="rotate(-90 40 40)"/></svg>
-          <div class="sliders" id="sliders"></div>
-        </div>
+      <section aria-labelledby="h-thought">
+        <h4 id="h-thought"><span id="anat-preview-label">Sa pensée dans le Nexus</span></h4>
+        <div id="anat-preview"></div>
       </section>
-      <section class="organ memories" aria-labelledby="h-mem">
-        <h4 id="h-mem">Memories · vie et connaissances</h4>
-        <div class="memories-list" id="memories"></div>
-        <form class="memadd" id="mem-form"><input id="mem-input" maxlength="120" placeholder="Ajouter un souvenir ou une connaissance…" aria-label="Nouveau souvenir"><button class="glass-btn" type="submit">Ajouter</button></form>
+      <section aria-labelledby="h-inputs">
+        <h4 id="h-inputs">Ce qu'il reçoit</h4>
+        <ul id="anat-inputs"></ul>
       </section>
-    </div>
+      <section aria-labelledby="h-memories">
+        <h4 id="h-memories">Évènements de sa vie</h4>
+        <ul id="memories"></ul>
+      </section>
+    </aside>
   </div>
 
   <!-- War Room d'un Hub -->
@@ -567,68 +531,56 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
   var SVGNS = "http://www.w3.org/2000/svg";
 
   // ======================================================================================
-  // Esprits disponibles (Engrammes) : anatomie par défaut. Personnalités publiques : faits publics, voix paraphrasée,
-  // aucune citation ; simulation locale.
+  // Esprits : de vrais Engrammes cognitifs (noyau, caractère, moteurs, ombres, évènements datés), rendus par le moteur
+  // du Mode Focus (engine/engram/viewer.html : les bulles vivantes). Démonstrations intégrées, Engrammes déjà créés
+  // dans Prism (cet appareil, Mon Hub), ou nouvel Engramme créé par le serveur.
   // ======================================================================================
-  var PERSONAS = {
-    curie: { name: "Marie Curie", role: "Physique et chimie", color: "#7dffb2", core: "science",
-      state: { energy: 70, patience: 85, creativity: 55 },
-      memories: ["1898 : découverte du polonium et du radium", "1903 : prix Nobel de physique", "1911 : prix Nobel de chimie",
-        "1914 : unités de radiologie mobiles au front"],
-      metaphor: "Comme le radium dans l'obscurité : une seule donnée juste éclaire tout le reste." },
-    jobs: { name: "Steve Jobs", role: "Produit et design", color: "#e9eef8", core: "simplicity",
-      state: { energy: 90, patience: 25, creativity: 80 },
-      memories: ["1984 : le Macintosh", "2001 : l'iPod", "2007 : l'iPhone", "Cours de calligraphie au Reed College"],
-      metaphor: "Imaginons l'écran comme un objet fini jusque dans ses bords, qu'on tient en main." },
-    ux: { name: "Expert UX", role: "Recherche utilisateur", color: "#ff8fc8", core: "empathy",
-      state: { energy: 75, patience: 80, creativity: 60 },
-      memories: ["Cinq tests utilisateurs révèlent l'essentiel des problèmes", "Loi de Fitts : grandes cibles, proches du geste",
-        "Accessibilité : contraste AA au minimum"],
-      metaphor: "Un bon parcours se remarque à peine : il ressemble à une évidence." },
-    ada: { name: "Ada Lovelace", role: "Mathématiques poétiques", color: "#ffc46b", core: "poetry",
-      state: { energy: 65, patience: 70, creativity: 90 },
-      memories: ["1843 : les Notes sur la machine analytique", "Le métier Jacquard et ses cartes perforées", "Correspondance avec Charles Babbage"],
-      metaphor: "Les nombres ont leur poésie : faisons-la entendre." }
+  var DEMOS = [
+    { key: "marie-curie", name: "Marie Curie", role: "Physique et chimie, 1891-1934", color: "#fb7185" },
+    { key: "ada-lovelace", name: "Ada Lovelace", role: "Mathématiques et science poétique", color: "#fbbf24" }
+  ];
+  var EMOTIONS = {
+    joie: ["Joie", "#fde047"], emerveillement: ["Émerveillement", "#7dd3fc"], passion: ["Passion", "#fb7185"],
+    tendresse: ["Tendresse", "#f9a8d4"], serenite: ["Sérénité", "#5eead4"], fierte: ["Fierté", "#fbbf24"],
+    melancolie: ["Mélancolie", "#818cf8"], tristesse: ["Tristesse", "#60a5fa"], colere: ["Colère", "#ef4444"],
+    peur: ["Peur", "#a78bfa"], angoisse: ["Angoisse", "#c084fc"], solitude: ["Solitude", "#94a3b8"]
   };
-
-  // Modes de raisonnement (Core) : ce que l'Engramme fait d'un contexte.
-  var CORES = {
-    science: { short: "Science", label: "Méthode scientifique stricte", desc: "Mesurer avant de conclure ; ne retenir que ce qui se vérifie.", action: "Lancer une mesure",
-      lines: function (s, k) { return [
-        "Commençons par mesurer. " + cap(s) + " : quelles grandeurs relever — " + list(k) + " ?",
-        "Protocole : un relevé régulier, des conditions notées, chaque écart vérifié deux fois.",
-        "Je n'afficherais que ce que les mesures confirment : le reste reste une hypothèse."]; },
-      check: "Refaisons la mesure une seconde fois avant de trancher.",
-      react: function (o, k) { return "Je rejoins " + o + " sur l'essentiel, mais sans mesure fiable de « " + k + " », l'écran le plus clair peut mentir."; } },
-    simplicity: { short: "Simplicité", label: "Simplicité radicale", desc: "Retirer jusqu'à l'évidence ; une seule action, un seul écran.", action: "Voir l'essentiel",
-      lines: function (s, k) { return [
-        "Trop de choses. " + cap(s) + " doit tenir en un seul écran.",
-        "Une seule donnée compte vraiment : « " + (k[0] || "l'essentiel") + " ». Tout le reste disparaît.",
-        "Le geste principal doit être évident, sans mode d'emploi."]; },
-      check: "Si quelqu'un hésite plus d'une seconde, on enlève encore.",
-      react: function (o, k) { return o + " a raison de vouloir du solide. Mais pour « " + k + " », un seul geste doit suffire : cachons tout le reste."; } },
-    empathy: { short: "Empathie", label: "Empathie utilisateur", desc: "Partir des personnes, de leur moment, de leurs mots.", action: "Comprendre en 3 secondes",
-      lines: function (s, k) { return [
-        "Qui ouvre cet écran, et à quel moment ? " + cap(s) + " doit répondre en trois secondes.",
-        "Friction probable : comprendre « " + (k[0] || "la donnée") + " » sans connaître le jargon.",
-        "Parcours : un statut en couleur, le détail au toucher, une action suggérée."]; },
-      check: "Testons avec cinq personnes avant de figer quoi que ce soit.",
-      react: function (o, k) { return "Ce que propose " + o + " marchera si « " + k + " » se comprend du premier coup : testons-le avec cinq personnes."; } },
-    poetry: { short: "Poésie", label: "Science poétique", desc: "Voir les données comme des motifs ; imaginer ce que la machine peut composer.", action: "Composer le motif",
-      lines: function (s, k) { return [
-        "Voyons " + s + " comme un motif à tisser, carte après carte.",
-        "La machine peut composer avec " + list(k) + ", comme avec des notes.",
-        "Imaginons ce que ces données diront quand elles se répondront entre elles."]; },
-      check: "Posons chaque règle par écrit, comme une note de traduction, avant de tisser.",
-      react: function (o, k) { return "J'entends " + o + ". Et si « " + k + " » devenait un motif qui se lit d'un regard, plutôt qu'un chiffre ?"; } },
-    systems: { short: "Systèmes", label: "Pensée systémique", desc: "Chercher les boucles, les causes et les effets retard.", action: "Voir les tendances",
-      lines: function (s, k) { return [
-        cap(s) + " est un système : repérons les boucles entre " + list(k) + ".",
-        "Chaque action modifie l'état suivant : montrons les causes, pas seulement les effets.",
-        "Une tendance sur une semaine vaut mieux qu'une valeur isolée."]; },
-      check: "Observons le système sur plusieurs cycles avant d'agir.",
-      react: function (o, k) { return o + " voit juste, mais « " + k + " » n'est qu'un maillon : regardons toute la boucle."; } }
-  };
+  function partsOf(eg) {
+    var out = { core: null, heart: [], engine: [], shadow: [], artifact: [] };
+    ((eg && eg.nodes) || []).forEach(function (nd) {
+      if (nd.category === "core") out.core = out.core || nd;
+      else if (out[nd.category]) out[nd.category].push(nd);
+    });
+    return out;
+  }
+  function firstSentence(text, max) {
+    var t = String(text || "").replace(/\s+/g, " ").trim();
+    var m = t.match(/^.*?[.!?;](?=\s|$)/);
+    t = (m ? m[0] : t).replace(/;$/, ".");
+    max = max || 200;
+    return t.length > max ? t.slice(0, max - 1).replace(/\s+\S*$/, "") + "…" : t;
+  }
+  var lowerFirst = function (t) { return t ? t.charAt(0).toLowerCase() + t.slice(1) : t; };
+  function yearOf(date) { var d = String(date || ""); return d.charAt(0) === "-" ? "-" + (d.split("-")[1] || "") : d.split("-")[0]; }
+  function clip(t, max) { t = String(t || ""); return t.length > max ? t.slice(0, max - 1).replace(/\s+\S*$/, "") + "…" : t; }
+  /** Bulle de la liste la plus proche du sujet (mots communs), sinon la plus intense ; strict : aucune sans mot commun. */
+  function bestNode(list, keys, subject, strict) {
+    var words = keywords((keys || []).join(", ") + ". " + (subject || ""), 12).map(function (k) { return plain(k.toLowerCase()); });
+    var best = null;
+    var bestScore = -1;
+    list.forEach(function (nd) {
+      var hay = plain([nd.title, nd.content, nd.directive, (nd.keywords || []).join(" ")].join(" ").toLowerCase());
+      var hits = words.reduce(function (acc, w) { return acc + (w.length > 2 && hay.indexOf(w) >= 0 ? 1 : 0); }, 0);
+      var score = hits * 10 + (Number(nd.intensity) || 0);
+      if (score > bestScore) { bestScore = score; best = nd; }
+    });
+    return strict && bestScore < 10 ? null : best;
+  }
+  /** Évènements datés de sa vie (« 1898 — … »), dans l'ordre : ses souvenirs. */
+  function memoriesOf(eg) {
+    return partsOf(eg).artifact.slice().sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); })
+      .map(function (a) { return yearOf(a.date) + " — " + a.title; }).slice(0, 12);
+  }
 
   // ======================================================================================
   // Langue : mots-clés, sujet d'une demande
@@ -672,50 +624,52 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
   var cap = function (s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; };
   var list = function (k) { return k.length ? k.slice(0, 3).join(", ") : "les données"; };
 
-  function moodOf(st) {
-    if (st.energy < 30) return { label: "Fatiguée", color: "#8b93a8" };
-    if (st.creativity >= 70) return { label: "Créative", color: "#ffb3f0" };
-    if (st.patience >= 70) return { label: "Patiente", color: "#8ff3ff" };
-    return { label: "Concentrée", color: "#fff1b8" };
+  /** Humeur d'un Engramme : l'émotion dominante de son climat. */
+  function moodOf(n) {
+    var top = ((n.engram && n.engram.climate) || []).slice().sort(function (a, b) { return (b.weight || 0) - (a.weight || 0); })[0];
+    var e = top && EMOTIONS[top.emotion];
+    return e ? { label: e[0], color: e[1] } : { label: "Calme", color: "#c9d4ff" };
   }
 
   // ======================================================================================
-  // Pensée d'un Engramme : ce qu'il fait des mémoires reçues (contexte ou autres esprits), selon son anatomie.
+  // Pensée d'un Engramme (simulation locale) : ce qu'il fait des mémoires reçues, à partir de ses propres bulles —
+  // son axiome, le moteur le plus proche du sujet (sa directive), un trait de caractère, une ombre si le sujet la
+  // réveille, et l'évènement de sa vie qui s'en rapproche. Les bulles mobilisées s'allument dans l'Engramme (trace).
   // ======================================================================================
-  function think(e, inputs) {
+  function think(n, inputs) {
+    if (!n.engram) return null;
     var contexts = inputs.filter(function (m) { return m.kind === "context"; });
     var upstream = inputs.filter(function (m) { return m.kind === "thought"; });
     var subject = contexts.length ? subjectOf(contexts[0].text) : upstream.length ? upstream[0].subject : "ce sujet";
     var keys = mergeKeys(upstream.map(function (m) { return m.keys; })
       .concat([keywords(contexts.map(function (m) { return m.text; }).join(" "), 5)]), 5);
-    var core = CORES[e.core] || CORES.science;
-    var lines = core.lines(subject, keys);
-    var mood = moodOf(e.state);
-    if (upstream.length) lines[0] = "Sur la piste de " + upstream.map(function (m) { return m.author; }).join(" et ") + " : " + lines[0].charAt(0).toLowerCase() + lines[0].slice(1);
-    if (mood.label === "Fatiguée") { lines = lines.slice(0, 2); lines.push("Je fatigue : l'essentiel, pas davantage."); }
-    else if (mood.label === "Créative") lines.push(e.metaphor);
-    else if (mood.label === "Patiente") lines.push(core.check);
-    var memory = pickMemory(e.memories, keys);
+    var parts = partsOf(n.engram);
+    var mood = moodOf(n);
+    var eng = bestNode(parts.engine, keys, subject);
+    var trait = bestNode(parts.heart, keys, subject);
+    var shadow = bestNode(parts.shadow, keys, subject, true);
+    var art = bestNode(parts.artifact, keys, subject);
+    var lines = [];
+    var axiom = parts.core ? firstSentence(parts.core.content, 170) : "Voyons ce que cela demande vraiment.";
+    var from = upstream.length ? "Sur la piste de " + upstream.map(function (m) { return m.author; }).join(" et ") + " : " : "";
+    lines.push(from + cap(subject) + " ? " + axiom);
+    if (eng) lines.push(eng.title + " : " + lowerFirst(firstSentence(eng.directive || eng.content, 190)));
+    if (trait) lines.push("Caractère : " + lowerFirst(trait.title) + ".");
+    if (shadow) lines.push("Ombre à surveiller : " + lowerFirst(shadow.title) + ".");
+    var memory = art ? yearOf(art.date) + " — " + art.title : "";
     if (memory) lines.push("Souvenir mobilisé : " + memory + ".");
-    return { kind: "thought", author: e.name, color: e.color, core: e.core, mood: mood.label, keys: keys, subject: subject,
-      lines: lines, text: lines.join(" "), action: core.action };
+    if (lines.length < 2) lines.push("Pour " + list(keys) + ", commençons par l'essentiel.");
+    var trace = [parts.core && { id: parts.core.id, why: "son axiome" }, eng && { id: eng.id, why: "sa méthode" },
+      trait && { id: trait.id, why: "son caractère" }, art && { id: art.id, why: "un souvenir" }].filter(Boolean);
+    return { kind: "thought", author: n.name, color: n.color, mood: mood.label, keys: keys, subject: subject, lines: lines,
+      text: lines.join(" "), action: eng ? clip(eng.title, 34) : "Explorer", trace: trace, memory: memory };
   }
   function mergeKeys(groups, n) {
     var out = [];
     groups.forEach(function (g) { g.forEach(function (k) { if (out.indexOf(k) < 0) out.push(k); }); });
     return out.slice(0, n);
   }
-  function pickMemory(memories, keys) {
-    if (!memories.length) return "";
-    var best = memories[0];
-    var score = -1;
-    memories.forEach(function (m) {
-      var p = plain(m.toLowerCase());
-      var s = keys.reduce(function (acc, k) { return acc + (p.indexOf(plain(k)) >= 0 ? 1 : 0); }, 0);
-      if (s > score) { score = s; best = m; }
-    });
-    return best;
-  }
+
 
   // Rendu : l'écran qui naît des flux reçus.
   function compose(inputs) {
@@ -807,15 +761,6 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
   }
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
 
-  /** Un esprit qui n'est pas dans la liste : n'importe quel nom ; son anatomie se règle ensuite (double-clic). */
-  function customMind(name) {
-    var hue = 0;
-    for (var i = 0; i < name.length; i++) hue = (hue * 31 + name.charCodeAt(i)) % 360;
-    return { name: name.slice(0, 80), role: "Esprit libre", color: "hsl(" + hue + ", 85%, 72%)", core: "systems",
-      state: { energy: 65, patience: 60, creativity: 60 }, memories: [],
-      metaphor: "Imaginons la forme la plus claire que cela pourrait prendre." };
-  }
-
   function addNode(type, x, y, opts) {
     opts = opts || {};
     var n = { id: opts.id || uid(type[0]), type: type, x: x, y: y, memory: null };
@@ -842,25 +787,26 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
       node.querySelector(".title").addEventListener("input", function (e) { n.title = e.target.textContent.trim() || "Contexte"; save(); });
       requestAnimationFrame(function () { autosize(area); });
     } else if (type === "engram") {
-      var p = opts.mind || PERSONAS[opts.persona] || PERSONAS.curie;
-      n.persona = opts.persona || (opts.mind ? "custom" : "curie");
-      n.name = String(p.name || "Esprit").slice(0, 80); n.role = p.role || ""; n.color = p.color || "#c9b8ff";
-      n.metaphor = p.metaphor || "Imaginons la forme la plus claire que cela pourrait prendre.";
-      n.core = CORES[p.core] ? p.core : "systems";
-      n.state = Object.assign({ energy: 60, patience: 60, creativity: 60 }, p.state);
-      n.memories = (Array.isArray(p.memories) ? p.memories : []).slice(0, 16);
+      n.name = String(opts.name || (opts.engram && opts.engram.person) || "Engramme").slice(0, 80);
+      n.source = opts.source || "";
+      n.engram = opts.engram || null;
+      n.color = opts.color || "#c9b8ff";
       n.cache = opts.cache && typeof opts.cache.sig === "string" ? opts.cache : null; // dernière pensée Gemini
       n.pending = null; // signature des entrées qui attendent une pensée Gemini
+      n.status = n.engram ? "" : opts.creating ? "creating" : "loading";
       node.style.setProperty("--c", n.color);
-      node.innerHTML = '<div class="orb" title="Double-clic : plonger dans son anatomie"><div class="ring r2"></div><div class="ring"></div><div class="body"></div><div class="veil"></div>' +
-        '<span class="sat"></span><span class="sat s2"></span><span class="sat s3"></span></div>' +
-        '<span class="dive">Plonger</span>' +
-        '<div class="name"></div><div class="meta"><span class="chip mood"><i></i><span></span></span><span class="chip core-chip"></span></div>' +
-        '<div class="thought"></div>' +
-        '<span class="port in" data-port="in" title="Entrée"></span><span class="port out" data-port="out" title="Tirer une synapse"></span>' +
-        '<button class="close" type="button" aria-label="Supprimer la bulle" style="position:absolute;right:-4px;top:-4px;opacity:0"></button>';
-      node.querySelector(".name").textContent = n.name;
+      node.innerHTML = '<div class="shell"><div class="head"><span class="dot"></span><span class="kind">Engramme</span><b class="ename"></b>' +
+        '<span class="chip mood"><i></i><span></span></span>' +
+        '<button class="icon-btn" type="button" data-action="dive" title="Plonger dans l\'Engramme (ou double-clic sur l\'en-tête)" aria-label="Plonger dans l\'Engramme">⤢</button>' +
+        '<button class="close" type="button" aria-label="Supprimer la bulle">×</button></div>' +
+        '<div class="mind"><iframe class="engram-frame" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe><div class="mind-state"></div></div>' +
+        '<div class="thought"></div></div>' +
+        '<span class="port in" data-port="in" title="Entrée"></span><span class="port out" data-port="out" title="Tirer une synapse"></span>';
+      node.querySelector(".ename").textContent = n.name;
+      node.querySelector('[data-action="dive"]').addEventListener("click", function (e) { e.stopPropagation(); openAnatomy(n.id); });
       paintEngram(n);
+      if (n.engram) mountEngram(n);
+      else if (/^demo:/.test(n.source)) loadDemo(n);
     } else {
       node.innerHTML = '<div class="shell"><div class="head"><span class="dot"></span><span class="kind">Rendu</span>' +
         '<button class="close" type="button" aria-label="Supprimer la bulle">×</button></div>' +
@@ -879,18 +825,101 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
   function autosize(area) { area.style.height = "auto"; area.style.height = Math.min(220, area.scrollHeight + 2) + "px"; }
 
   function paintEngram(n) {
-    var mood = moodOf(n.state);
+    var mood = moodOf(n);
     var e = n.el;
     e.style.setProperty("--mood", mood.color);
-    e.style.setProperty("--breath", (6.5 - n.state.energy / 25).toFixed(2) + "s");
-    e.querySelector(".mood span").textContent = mood.label;
-    e.querySelector(".core-chip").textContent = CORES[n.core].short;
-    e.querySelector(".core-chip").title = CORES[n.core].label;
+    e.querySelector(".mood span").textContent = n.engram ? mood.label : "…";
+    e.classList.toggle("is-loading", !n.engram && n.status !== "failed");
+    e.querySelector(".mind-state").textContent = n.engram ? ""
+      : n.status === "failed" ? n.error || "Engramme indisponible."
+      : n.status === "creating" ? "Prism dresse l'Engramme de " + n.name + " (25 s à 1 min 30)…"
+      : "Chargement de l'Engramme…";
     e.classList.toggle("is-pending", !n.memory && !!n.pending);
     e.querySelector(".thought").textContent = n.memory ? n.memory.lines[0]
       : n.pending ? (thinkingNow.has(n.id) ? "Réflexion avec Gemini…" : "Prêt à penser · " + sparksLabel(priceOf("nexus_think")) + " au clic sur « Penser »")
       : "";
   }
+
+  // Le document d'un Engramme vient du pont (module) : viewer.html + physique + rendu, CSP et prélude du Mode Focus.
+  var engineWaiters = [];
+  function whenEngine() {
+    if (link && link.engrams) return Promise.resolve(link.engrams);
+    return new Promise(function (resolve, reject) {
+      engineWaiters.push(resolve);
+      setTimeout(function () { reject(new Error("Moteur des Engrammes indisponible : ouvrez le Nexus depuis le site Prism.")); }, 15000);
+    });
+  }
+  function engineReady() {
+    if (!link || !link.engrams) return;
+    var waiting = engineWaiters;
+    engineWaiters = [];
+    waiting.forEach(function (resolve) { resolve(link.engrams); });
+  }
+  function failEngram(n, err) {
+    n.status = "failed";
+    n.error = (err && err.message) || String(err);
+    paintEngram(n);
+  }
+  function loadDemo(n) {
+    whenEngine().then(function (engine) { return engine.demo(n.source.slice(5)); }).then(function (eg) {
+      if (!nodes.has(n.id)) return;
+      n.engram = eg;
+      mountEngram(n);
+      propagate();
+    }, function (err) { failEngram(n, err); });
+  }
+  function mountEngram(n) {
+    n.status = "";
+    n.name = n.engram.person || n.name;
+    n.color = moodOf(n).color;
+    n.el.style.setProperty("--c", n.color);
+    n.el.querySelector(".ename").textContent = n.name;
+    var frame = n.el.querySelector(".engram-frame");
+    frame.title = "Engramme de " + n.name;
+    links.forEach(function (l) { if (l.from === n.id || l.to === n.id) recolorLink(l); });
+    paintEngram(n);
+    whenEngine().then(function (engine) { return engine.html(n.engram); }).then(function (doc) {
+      if (!nodes.has(n.id)) return;
+      n.doc = doc;
+      frame.onload = function () {
+        n.el.classList.add("is-live");
+        shareBudget();
+        if (n.memory && n.memory.trace) traceIn(n);
+      };
+      frame.srcdoc = doc;
+    }, function (err) { failEngram(n, err); });
+    save();
+  }
+  /** Les bulles mobilisées par la pensée s'allument dans l'Engramme (ronds de la logique du moteur). */
+  function traceIn(n) {
+    var steps = (n.memory && n.memory.trace) || [];
+    [n.el.querySelector(".engram-frame"), anatomyOf === n.id ? $("dive-frame") : null].forEach(function (f) {
+      if (f && f.contentWindow) f.contentWindow.postMessage({ prism: "engram-trace", steps: steps }, "*");
+    });
+  }
+  /** Budget de calcul commun aux Engrammes vivants (comme le Mode Focus) ; en plongée, l'Engramme plongé passe devant. */
+  function shareBudget() {
+    var frames = [];
+    nodes.forEach(function (n) { if (n.type === "engram" && n.el.classList.contains("is-live")) frames.push(n.el.querySelector(".engram-frame")); });
+    var diving = anatomyOf && $("dive-frame").contentWindow;
+    var share = diving ? 0.05 : Math.min(0.3, 0.6 / Math.max(1, frames.length));
+    frames.forEach(function (f) { if (f.contentWindow) f.contentWindow.postMessage({ prism: "engram-budget", share: share }, "*"); });
+    if (diving) $("dive-frame").contentWindow.postMessage({ prism: "engram-budget", share: 0.45 }, "*");
+  }
+  /** Messages des Engrammes (leur document tourne isolé, comme dans le Mode Focus). */
+  addEventListener("message", function (e) {
+    var d = e.data;
+    if (!d || typeof d.prism !== "string") return;
+    var owner = null;
+    nodes.forEach(function (n) { if (n.type === "engram" && n.el.querySelector(".engram-frame").contentWindow === e.source) owner = n; });
+    if (!owner && anatomyOf && $("dive-frame").contentWindow === e.source) owner = nodes.get(anatomyOf);
+    if (!owner) return;
+    if (d.prism === "engram-chat") {
+      // « Discuter avec … » : on plonge dans l'Engramme ; déjà en plongée, la conversation se fait dans le Mode Focus.
+      if (anatomyOf === owner.id) toast("Converser avec " + owner.name + " : ouvrez son Engramme dans le Mode Focus (« Discuter avec … »).");
+      else openAnatomy(owner.id);
+    }
+  });
 
   function paintRender(n) {
     var screen = n.el.querySelector(".screen");
@@ -1004,6 +1033,11 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     if (!quiet) propagate();
     return l;
   }
+  function recolorLink(l) {
+    var stops = l.grad.querySelectorAll("stop");
+    stops[0].setAttribute("stop-color", colorOf(nodes.get(l.from)));
+    stops[1].setAttribute("stop-color", colorOf(nodes.get(l.to)));
+  }
   function placeLink(l) {
     var a = portCenter(nodes.get(l.from), "out");
     var b = portCenter(nodes.get(l.to), "in");
@@ -1110,7 +1144,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
       if (n.type === "context") mem = n.text.trim() ? { kind: "context", text: n.text.trim(), title: n.title } : null;
       else if (n.type === "engram") {
         n.pending = null;
-        if (!ins.length) mem = null;
+        if (!ins.length || !n.engram) mem = null;
         else if (intel === "gemini") {
           // Gemini : la pensée mémorisée pour exactement ces entrées et cette anatomie, sinon rien (au clic sur « Penser »).
           var sig = signature(n, ins);
@@ -1145,7 +1179,10 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     save();
   }
   function repaint(n, erased) {
-    if (n.type === "engram") paintEngram(n);
+    if (n.type === "engram") {
+      paintEngram(n);
+      traceIn(n);
+    }
     if (n.type === "render") {
       paintRender(n);
       if (erased) { n.el.classList.remove("is-erased"); void n.el.offsetWidth; n.el.classList.add("is-erased"); }
@@ -1188,6 +1225,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
       e.preventDefault();
       var from = nodeEl.dataset.id;
       gesture = { kind: "wire", from: from, start: portCenter(nodes.get(from), "out") };
+      gesturing(true);
       $("draft").hidden = false;
       nodeEl.setPointerCapture(e.pointerId);
       markTargets(from, true);
@@ -1198,6 +1236,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
       select(n.id);
       var p = toWorld(e.clientX, e.clientY);
       gesture = { kind: "node", n: n, dx: p.x - n.x, dy: p.y - n.y, moved: false };
+      gesturing(true);
       nodeEl.classList.add("is-dragging");
       zTop += 1;
       nodeEl.style.zIndex = zTop; // au premier plan
@@ -1208,9 +1247,11 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     select(null);
     if (hubMode || e.altKey) {
       gesture = { kind: "lasso", points: [[e.clientX, e.clientY]] };
+      gesturing(true);
       viewport.classList.add("is-lasso");
     } else {
       gesture = { kind: "pan", sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y };
+      gesturing(true);
       viewport.classList.add("is-panning");
     }
     viewport.setPointerCapture(e.pointerId);
@@ -1254,6 +1295,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     }
   });
 
+  function gesturing(on) { $("nexus").classList.toggle("is-gesturing", on); }
   function endGesture(e) {
     if (e && e.pointerType === "touch") touches.delete(e.pointerId);
     if (!gesture) return;
@@ -1261,6 +1303,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     var g = gesture;
     gesture = null;
     viewport.classList.remove("is-panning", "is-lasso");
+    gesturing(false);
     save();
     if (g.kind === "node") g.n.el.classList.remove("is-dragging");
     if (g.kind === "wire") {
@@ -1348,36 +1391,79 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
   });
   $("add-render").addEventListener("click", function () { var s = centerSpot(260); select(addNode("render", s.x, s.y).id); });
   var menu = $("engram-menu");
-  Object.keys(PERSONAS).forEach(function (key) {
-    var p = PERSONAS[key];
-    var b = el("button", "", '<span class="mini-orb" style="--c:' + p.color + '"></span><span><b>' + esc(p.name) + "</b><small>" + esc(p.role) + " · " + esc(CORES[p.core].label) + "</small></span>");
-    b.type = "button";
-    b.setAttribute("role", "menuitem");
-    b.addEventListener("click", function () {
-      closeMenus();
-      var s = centerSpot(0);
-      select(addNode("engram", s.x, s.y, { persona: key }).id);
-    });
-    menu.append(b);
-  });
-  var customForm = el("form", "custom-mind", '<input maxlength="80" placeholder="Autre esprit : un nom…" aria-label="Nom d\'un autre esprit">' +
-    '<button class="glass-btn" type="submit">Créer</button>');
-  customForm.addEventListener("submit", function (e) {
-    e.preventDefault();
-    var input = customForm.querySelector("input");
-    var name = input.value.trim().replace(/\s+/g, " ");
-    if (!name) return;
-    input.value = "";
+  function addEngramNode(opts) {
     closeMenus();
     var s = centerSpot(0);
-    select(addNode("engram", s.x, s.y, { mind: customMind(name) }).id);
-    toast(name + " rejoint le Nexus : double-cliquez pour régler son anatomie.");
-  });
-  menu.append(customForm);
+    var n = addNode("engram", s.x, s.y, opts);
+    select(n.id);
+    return n;
+  }
+  function menuItem(color, title, sub, onClick) {
+    var b = el("button", "", '<span class="mini-orb"></span><span><b></b><small></small></span>');
+    b.type = "button";
+    b.setAttribute("role", "menuitem");
+    b.querySelector(".mini-orb").style.setProperty("--c", color);
+    b.querySelector("b").textContent = title;
+    b.querySelector("small").textContent = sub;
+    b.addEventListener("click", onClick);
+    return b;
+  }
+  /** Menu reconstruit à chaque ouverture : les Engrammes de l'utilisateur ont pu changer (Mode Focus, Mon Hub). */
+  function fillEngramMenu() {
+    menu.replaceChildren(el("div", "menu-sec", "Démonstrations"));
+    DEMOS.forEach(function (d) {
+      menu.append(menuItem(d.color, d.name, d.role + " · gratuit", function () {
+        addEngramNode({ source: "demo:" + d.key, name: d.name, color: d.color });
+      }));
+    });
+    menu.append(el("div", "menu-sec", "Vos Engrammes"));
+    var mine = el("div", "menu-note", "Recherche dans Prism…");
+    menu.append(mine);
+    whenEngine().then(function (engine) { return engine.mine(); }).then(function (list) {
+      if (!list.length) { mine.textContent = "Aucun pour l'instant : créez-en un ci-dessous, ou dans le Mode Focus (« Engramme : un nom »)."; return; }
+      var box = document.createDocumentFragment();
+      list.forEach(function (item) {
+        box.append(menuItem(moodOf({ engram: item.engram }).color, item.engram.person, (item.engram.domain || "") + (item.where ? " · " + item.where : ""), function () {
+          addEngramNode({ source: item.source, engram: item.engram });
+        }));
+      });
+      mine.replaceWith(box);
+    }, function () { mine.textContent = "Indisponible ici (ouvrez le Nexus depuis le site Prism)."; });
+    menu.append(el("div", "menu-sec", "Créer un Engramme"));
+    var form = el("form", "custom-mind", '<input maxlength="80" placeholder="Une personnalité publique…" aria-label="Personne dont créer l\'Engramme">' +
+      '<button class="glass-btn" type="submit"></button>');
+    form.querySelector("button").textContent = "Créer · " + sparksLabel(priceOf("engram"));
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var input = form.querySelector("input");
+      var person = input.value.trim().replace(/\s+/g, " ");
+      if (person.length < 2) return;
+      if (!canGemini()) {
+        toast(link && link.ready ? "Créer un Engramme demande un compte Prism (menu Intelligence)." : "Créer un Engramme demande le serveur Prism.");
+        openIntel();
+        return;
+      }
+      input.value = "";
+      createEngram(person);
+    });
+    menu.append(form, el("div", "menu-note", "Le serveur dresse son Engramme (36 à 44 bulles) en 25 s à 1 min 30 ; les Sparks ne sont débités qu'à la réussite."));
+  }
+  /** Nouvel Engramme par le serveur (Sparks au clic sur « Créer », rendus si la création échoue). */
+  function createEngram(person) {
+    var n = addEngramNode({ source: "created", name: person, creating: true });
+    whenEngine().then(function (engine) { return engine.create(person); }).then(function (eg) {
+      if (!nodes.has(n.id)) return;
+      n.engram = eg;
+      mountEngram(n);
+      propagate();
+      toast("L'Engramme de " + eg.person + " rejoint le Nexus.");
+    }, function (err) { failEngram(n, { message: errorText(err) }); });
+  }
   $("add-engram").addEventListener("click", function (e) {
     e.stopPropagation();
     var open = menu.hidden;
     closeMenus();
+    if (open) fillEngramMenu();
     menu.hidden = !open;
     $("add-engram").setAttribute("aria-expanded", String(open));
   });
@@ -1418,37 +1504,40 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
   }
 
   // ======================================================================================
-  // Anatomie : plonger dans un Engramme, altérer son Core, son State, ses Memories
+  // Plongée : la caméra entre dans l'Engramme, qui s'ouvre en grand (le même Engramme vivant : survolez ses bulles),
+  // avec ce qu'il fait dans le Nexus : son climat, sa pensée, ce qu'il reçoit, les évènements de sa vie.
   // ======================================================================================
   var anatomyOf = null;
   var beforeDive = null;
   function openAnatomy(id) {
     var n = nodes.get(id);
-    if (!n || anatomyOf) return;
+    if (!n || anatomyOf || !n.engram) return;
     anatomyOf = id;
     $("nexus").classList.add("is-diving");
     beforeDive = { x: view.x, y: view.y, z: view.z };
-    // La caméra plonge dans l'orbe.
-    var orb = n.el.querySelector(".orb").getBoundingClientRect();
-    var c = toWorld(orb.left + orb.width / 2, orb.top + orb.height / 2);
-    var z = 7;
+    var mind = n.el.querySelector(".mind").getBoundingClientRect();
+    var c = toWorld(mind.left + mind.width / 2, mind.top + mind.height / 2);
+    var z = 4;
     world.classList.add("is-diving");
     Object.assign(view, { z: z, x: innerWidth / 2 - c.x * z, y: innerHeight / 2 - c.y * z });
     applyView();
-    world.style.opacity = "0.15";
+    world.style.opacity = "0"; // le Nexus s'efface pendant que la caméra entre dans l'Engramme
     var a = $("anatomy");
     a.style.setProperty("--c", n.color);
     a.hidden = false;
     fillAnatomy(n);
-    setTimeout(function () { a.classList.add("is-on"); drawOrgans(); }, reduced ? 0 : 420);
+    var frame = $("dive-frame");
+    frame.onload = function () { shareBudget(); if (n.memory && n.memory.trace) traceIn(n); };
+    if (n.doc) frame.srcdoc = n.doc;
+    setTimeout(function () { a.classList.add("is-on"); }, reduced ? 0 : 380);
   }
   function closeAnatomy() {
     if (!anatomyOf) return;
-    var n = nodes.get(anatomyOf);
     var a = $("anatomy");
     a.classList.remove("is-on");
     setTimeout(function () {
       a.hidden = true;
+      $("dive-frame").srcdoc = ""; // l'Engramme en grand s'arrête (son fil de rendu aussi)
       Object.assign(view, beforeDive);
       applyView();
       world.style.opacity = "1";
@@ -1456,109 +1545,54 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     }, reduced ? 0 : 300);
     anatomyOf = null;
     $("nexus").classList.remove("is-diving");
-    if (n) { paintEngram(n); propagate(); toast(n.name + " : anatomie mise à jour, le flux repart."); }
+    shareBudget();
   }
   $("anat-back").addEventListener("click", closeAnatomy);
 
   function fillAnatomy(n) {
-    $("anat-name").textContent = n.name;
-    var core = $("anat-core");
-    core.style.setProperty("--breath", (6.5 - n.state.energy / 25).toFixed(2) + "s");
-    // Core
-    var modes = $("core-modes");
-    modes.replaceChildren();
-    Object.keys(CORES).forEach(function (key) {
-      var b = el("button");
-      b.type = "button";
-      b.textContent = CORES[key].label;
-      b.setAttribute("aria-pressed", String(key === n.core));
-      b.addEventListener("click", function () {
-        n.core = key;
-        modes.querySelectorAll("button").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
-        refreshAnatomy(n);
-      });
-      modes.append(b);
+    var eg = n.engram;
+    $("anat-name").textContent = eg.person || n.name;
+    $("anat-domain").textContent = eg.domain || "";
+    var chips = $("anat-climate");
+    chips.replaceChildren();
+    (eg.climate || []).forEach(function (c) {
+      var e = EMOTIONS[c.emotion];
+      if (!e) return;
+      var chip = el("span", "chip", "<i></i><span></span>");
+      chip.style.setProperty("--ec", e[1]);
+      chip.querySelector("span").textContent = e[0] + " " + Math.round((c.weight || 0) * 100) + " %";
+      chips.append(chip);
     });
-    // State
-    var sliders = $("sliders");
-    sliders.replaceChildren();
-    [["energy", "Énergie"], ["patience", "Patience"], ["creativity", "Créativité"]].forEach(function (pair) {
-      var label = el("label", "", "<span>" + pair[1] + "<b></b></span>");
-      var input = el("input");
-      input.type = "range"; input.min = 0; input.max = 100; input.value = n.state[pair[0]];
-      input.setAttribute("aria-label", pair[1]);
-      input.addEventListener("input", function () { n.state[pair[0]] = +input.value; refreshAnatomy(n); });
-      label.append(input);
-      sliders.append(label);
-    });
-    renderMemories(n);
-    refreshAnatomy(n);
-  }
-  function renderMemories(n) {
-    var box = $("memories");
-    box.replaceChildren();
-    n.memories.forEach(function (m, i) {
-      var chip = el("span", "chip");
-      chip.append(document.createTextNode(m));
-      var x = el("button", "", "×");
-      x.type = "button";
-      x.setAttribute("aria-label", "Oublier ce souvenir");
-      x.addEventListener("click", function () { n.memories.splice(i, 1); renderMemories(n); refreshAnatomy(n); });
-      chip.append(x);
-      box.append(chip);
-    });
-    if (!n.memories.length) box.append(el("span", "chip", "Mémoire vide : l'Engramme ne raisonne plus qu'avec son Core."));
-  }
-  $("mem-form").addEventListener("submit", function (e) {
-    e.preventDefault();
-    var n = nodes.get(anatomyOf);
-    var v = $("mem-input").value.trim();
-    if (!n || !v) return;
-    n.memories.unshift(v);
-    $("mem-input").value = "";
-    renderMemories(n);
-    refreshAnatomy(n);
-  });
-  function refreshAnatomy(n) {
-    var mood = moodOf(n.state);
-    $("core-label").textContent = CORES[n.core].label;
-    $("core-desc").textContent = CORES[n.core].desc;
-    var a = $("anatomy");
-    a.style.setProperty("--mood", mood.color);
-    $("anat-mood").querySelector("span").textContent = mood.label + " · " + CORES[n.core].label;
-    var score = (n.state.energy + n.state.patience + n.state.creativity) / 300;
-    $("mood-arc").setAttribute("stroke-dashoffset", String(201 - 201 * score));
-    $("sliders").querySelectorAll("label").forEach(function (label, i) {
-      label.querySelector("b").textContent = n.state[["energy", "patience", "creativity"][i]];
-    });
-    $("anat-core").style.setProperty("--breath", (6.5 - n.state.energy / 25).toFixed(2) + "s");
+    $("anat-temperament").textContent = eg.temperament || eg.summary || "";
+    var mem = $("memories");
+    mem.replaceChildren();
+    memoriesOf(eg).forEach(function (m) { var li = el("li"); li.textContent = m; mem.append(li); });
     renderPreview();
   }
+  /** Sa pensée dans le Nexus (ou un aperçu local sur un exemple, s'il ne reçoit encore rien), et ses entrées. */
   function renderPreview() {
     var n = nodes.get(anatomyOf);
     if (!n) return;
     var ins = incoming(n.id).map(function (l) { return nodes.get(l.from).memory; }).filter(Boolean);
-    if (!ins.length) ins = [{ kind: "context", text: "Concevoir un écran d'accueil pour une bibliothèque de quartier." }];
-    var t = think(n, ins);
-    $("anat-preview").textContent = t.lines.slice(0, 3).join(" ");
-  }
-  function drawOrgans() {
-    var stage = $("anat-stage").getBoundingClientRect();
-    var core = $("anat-core").getBoundingClientRect();
-    var cx = core.left + core.width / 2 - stage.left, cy = core.top + core.height / 2 - stage.top;
-    var linksSvg = $("anat-links");
-    linksSvg.replaceChildren();
-    document.querySelectorAll(".organ").forEach(function (o) {
-      var r = o.getBoundingClientRect();
-      var tx = r.left + r.width / 2 - stage.left, ty = r.top + r.height / 2 - stage.top;
-      if (o.classList.contains("core")) tx = r.right - stage.left;
-      if (o.classList.contains("state")) tx = r.left - stage.left;
-      if (o.classList.contains("memories")) ty = r.top - stage.top;
-      var mx = (cx + tx) / 2;
-      linksSvg.append(svg("path", { d: "M" + cx + " " + cy + " Q" + mx + " " + (cy + ty) / 2 + " " + tx + " " + ty }));
+    var box = $("anat-preview");
+    box.replaceChildren();
+    var t = n.memory || think(n, ins.length ? ins : [{ kind: "context", text: "Concevoir un écran d'accueil pour une bibliothèque de quartier." }]);
+    (t ? t.lines : []).forEach(function (line) { box.append(el("p", "", "")); box.lastChild.textContent = line; });
+    if (!n.memory) {
+      var note = el("p", "quiet", "");
+      note.textContent = n.pending ? "En attente : Gemini pensera au clic sur « Penser »." : ins.length ? "" : "Aperçu : reliez-lui un contexte pour qu'il pense à votre sujet.";
+      if (note.textContent) box.append(note);
+    }
+    var list = $("anat-inputs");
+    list.replaceChildren();
+    ins.forEach(function (m) {
+      var li = el("li");
+      li.textContent = m.kind === "context" ? "Contexte « " + (m.title || "") + " » : " + clip(m.text, 120) : "Pensée de " + m.author + " : " + clip(m.lines[0], 120);
+      list.append(li);
     });
+    if (!ins.length) list.append(el("li", "", "Rien pour l'instant : tirez une synapse vers lui."));
   }
-  addEventListener("resize", function () { if (anatomyOf) drawOrgans(); });
+  addEventListener("resize", function () { if (anatomyOf) renderPreview(); });
 
   // ======================================================================================
   // Hubs : un cercle autour de plusieurs Engrammes → une War Room où ils débattent
@@ -1576,7 +1610,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     var members = [];
     nodes.forEach(function (n) {
       if (n.type !== "engram") return;
-      var r = n.el.querySelector(".orb").getBoundingClientRect();
+      var r = n.el.querySelector(".mind").getBoundingClientRect();
       if (inside(points, r.left + r.width / 2, r.top + r.height / 2)) members.push(n.id);
     });
     if (members.length < 2) { toast("Un Hub réunit au moins deux Engrammes."); return; }
@@ -1598,7 +1632,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
   function placeHub(h) {
     var pts = h.members.map(function (id) {
       var n = nodes.get(id);
-      return { x: n.x + n.el.offsetWidth / 2, y: n.y + 75 };
+      return { x: n.x + n.el.offsetWidth / 2, y: n.y + n.el.offsetHeight / 2 };
     });
     var cx = pts.reduce(function (a, p) { return a + p.x; }, 0) / pts.length;
     var cy = pts.reduce(function (a, p) { return a + p.y; }, 0) / pts.length;
@@ -1692,6 +1726,12 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     var minds = h.members.map(function (id) { return nodes.get(id); });
     var ctx = firstContext();
     var input = [{ kind: "context", text: question + (ctx ? " " + ctx.text : "") }];
+    if (minds.some(function (n) { return !n.engram; })) {
+      debating = false;
+      $("ask-send").disabled = false;
+      toast("Un Engramme du Hub se charge encore.");
+      return Promise.resolve();
+    }
     var positions = minds.map(function (n) { return think(n, input); });
     var keys = positions[0].keys.length ? positions[0].keys : ["l'essentiel"];
     var log = $("log");
@@ -1714,7 +1754,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
         var t = typing(n.color, n.name);
         return wait(600).then(function () {
           t.remove();
-          var reply = CORES[n.core].react(other.name.split(" ").pop(), keys[i % keys.length]);
+          var reply = reactOf(n, other, keys[i % keys.length], positions[i]);
           return type(addMsg("mind", n.color, n.name + " → " + other.name.split(" ").pop(), reply));
         });
       });
@@ -1727,11 +1767,12 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
         var ul = s.querySelector("ul");
         minds.forEach(function (n) {
           var li = el("li");
-          li.textContent = n.name.split(" ").pop() + " — " + CORES[n.core].desc;
+          var eng = bestNode(partsOf(n.engram).engine, keys, question);
+          li.textContent = n.name.split(" ").pop() + " — " + (eng ? eng.title + " : " + lowerFirst(firstSentence(eng.directive || eng.content, 120)) : "son regard");
           ul.append(li);
         });
         var li = el("li");
-        li.textContent = "Premier geste : « " + CORES[minds[0].core].action + " », validé par " + minds.slice(1).map(function (n) { return n.name.split(" ").pop(); }).join(" et ") + ".";
+        li.textContent = "Premier geste : « " + positions[0].action + " », validé par " + minds.slice(1).map(function (n) { return n.name.split(" ").pop(); }).join(" et ") + ".";
         ul.append(li);
         log.append(s);
         log.scrollTop = log.scrollHeight;
@@ -1739,6 +1780,13 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
         $("ask-send").disabled = false;
       });
     });
+  }
+  /** Réponse d'un Engramme à un autre : sa méthode appliquée à une donnée du sujet. */
+  function reactOf(n, other, key, position) {
+    var eng = bestNode(partsOf(n.engram).engine, [key], position.subject);
+    var who = other.name.split(" ").pop();
+    return who + " voit juste sur l'essentiel. Mais pour « " + key + " », " +
+      (eng ? lowerFirst(firstSentence(eng.directive || eng.content, 170)) : "restons au plus près des faits.");
   }
   $("ask").addEventListener("submit", function (e) {
     e.preventDefault();
@@ -1783,18 +1831,18 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
   /** Scène de départ : un brief, deux esprits, un écran — reliés ; le flux se met en marche. */
   function seed() {
     seeded = true;
-    var ctx = addNode("context", -540, -120, { title: "Brief",
+    var ctx = addNode("context", -560, -120, { title: "Brief",
       text: "Concevoir un tableau de bord pour suivre la qualité de l'air dans une école primaire : CO₂, température, bruit." });
-    var curie = addNode("engram", -120, -300, { persona: "curie" });
-    var jobs = addNode("engram", -120, 90, { persona: "jobs" });
-    var screen = addNode("render", 300, -150);
-    [ctx, curie, jobs, screen].forEach(function (n, i) { n.el.style.animationDelay = i * 0.12 + "s"; });
+    var curie = addNode("engram", -150, -360, { source: "demo:marie-curie", name: "Marie Curie", color: DEMOS[0].color });
+    var ada = addNode("engram", -150, 60, { source: "demo:ada-lovelace", name: "Ada Lovelace", color: DEMOS[1].color });
+    var screen = addNode("render", 330, -150);
+    [ctx, curie, ada, screen].forEach(function (n, i) { n.el.style.animationDelay = i * 0.12 + "s"; });
     fit(false);
     setTimeout(function () {
       addLink(ctx.id, curie.id, true);
-      addLink(ctx.id, jobs.id, true);
+      addLink(ctx.id, ada.id, true);
       addLink(curie.id, screen.id, true);
-      addLink(jobs.id, screen.id, true);
+      addLink(ada.id, screen.id, true);
       propagate();
     }, reduced ? 0 : 900);
   }
@@ -1807,8 +1855,8 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
   var link = window.__prismLink || null;
   var busy = false;
   var thinkingNow = new Set();
-  var PRICES = { nexus_think: 0.25, nexus_debate: 1 };
-  addEventListener("prism:link", function (e) { link = e.detail; renderIntel(); });
+  var PRICES = { nexus_think: 0.25, nexus_debate: 1, engram: 2 };
+  addEventListener("prism:link", function (e) { link = e.detail; engineReady(); renderIntel(); });
 
   function priceOf(action) {
     var pricing = link && link.account && link.account.pricing;
@@ -1820,12 +1868,11 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
   }
   function canGemini() { return !!(link && link.ready && link.account && link.account.user); }
   function signature(n, ins) {
-    return JSON.stringify([n.name, n.role, n.core, n.state.energy, n.state.patience, n.state.creativity, n.memories,
-      ins.map(function (m) { return [m.kind, m.author || "", m.title || "", m.text]; })]);
+    var eg = n.engram || {};
+    return JSON.stringify([eg.person, (eg.nodes || []).length, eg.summary, ins.map(function (m) { return [m.kind, m.author || "", m.title || "", m.text]; })]);
   }
   function mindOf(n) {
-    return { name: n.name, role: n.role || "", core: n.core, mood: moodOf(n.state).label, energy: n.state.energy,
-      patience: n.state.patience, creativity: n.state.creativity, memories: n.memories.slice(0, 16) };
+    return { name: n.name, role: (n.engram && n.engram.domain) || "", mood: moodOf(n).label, memories: memoriesOf(n.engram), engram: n.engram };
   }
   function toInput(m) {
     return m.kind === "context" ? { kind: "context", title: String(m.title || "").slice(0, 120), text: m.text.slice(0, 3000) }
@@ -1834,8 +1881,8 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
   function fromRemote(n, t, mode) {
     var lines = t.lines.slice();
     if (t.memory) lines.push("Souvenir mobilisé : " + t.memory + ".");
-    return { kind: "thought", author: n.name, color: n.color, core: n.core, mood: moodOf(n.state).label, keys: t.keys || [],
-      subject: t.title, lines: lines, text: t.lines.join(" "), action: t.action, source: "api", mode: mode };
+    return { kind: "thought", author: n.name, color: n.color, mood: moodOf(n).label, keys: t.keys || [],
+      subject: t.title, lines: lines, text: t.lines.join(" "), action: t.action, source: "api", mode: mode, trace: t.trace || [], memory: t.memory || "" };
   }
   function errorText(err) {
     if (!err) return "Erreur inconnue.";
@@ -1989,7 +2036,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     $("room-note").textContent = gem ? "Débat par Gemini, à partir de l'anatomie de chaque Engramme : " + sparksLabel(priceOf("nexus_debate")) +
       ", débité seulement au clic sur « Débattre »."
       : "Débat simulé localement, à partir de l'anatomie de chaque Engramme. Pour un vrai débat : menu Intelligence → Gemini.";
-    $("anat-preview-label").textContent = gem ? "Aperçu local de sa pensée · Gemini pensera au clic sur « Penser »" : "Sa pensée, en direct";
+    $("anat-preview-label").textContent = gem ? "Sa pensée dans le Nexus · Gemini, au clic sur « Penser »" : "Sa pensée dans le Nexus";
     if (!$("intel-menu").hidden) fillIntel();
   }
   function fillIntel() {
@@ -2052,13 +2099,17 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
   var restoring = false;
   var saveTimer = 0;
   function snapshot() {
-    var out = { v: 1, intel: intel, view: { x: view.x, y: view.y, z: view.z }, nodes: [], links: [], hubs: [] };
+    var out = { v: 2, intel: intel, view: { x: view.x, y: view.y, z: view.z }, nodes: [], links: [], hubs: [] };
     nodes.forEach(function (n) {
       var o = { id: n.id, type: n.type, x: n.x, y: n.y };
       if (n.type === "context") { o.title = n.title; o.text = n.text; }
       if (n.type === "engram") {
-        o.mind = { name: n.name, role: n.role, color: n.color, metaphor: n.metaphor, core: n.core, state: n.state, memories: n.memories };
+        o.name = n.name;
+        o.color = n.color;
+        o.source = n.source;
+        if (n.engram && !/^demo:/.test(n.source)) o.engram = n.engram; // une démonstration se recharge d'elle-même
         if (n.cache) o.cache = n.cache;
+        if (!n.engram && !/^demo:/.test(n.source)) return; // création interrompue : rien à retrouver
       }
       out.nodes.push(o);
     });
@@ -2079,12 +2130,13 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
   function restoreScene() {
     var data = null;
     try { data = JSON.parse(localStorage.getItem(STORE) || "null"); } catch (e) { data = null; }
-    if (!data || data.v !== 1 || !Array.isArray(data.nodes)) return false;
+    if (!data || data.v !== 2 || !Array.isArray(data.nodes)) return false; // V6.0 (esprits sans Engramme) : démonstration
     restoring = true;
     try {
       data.nodes.forEach(function (o) {
         if (!o || ["context", "engram", "render"].indexOf(o.type) < 0 || nodes.has(String(o.id))) return;
-        addNode(o.type, +o.x || 0, +o.y || 0, { id: String(o.id), title: o.title, text: o.text, mind: o.mind, cache: o.cache, still: true });
+        addNode(o.type, +o.x || 0, +o.y || 0, { id: String(o.id), title: o.title, text: o.text, name: o.name, color: o.color,
+          source: o.source, engram: o.engram, cache: o.cache, still: true });
         var num = parseInt(String(o.id).slice(1), 10);
         if (num > seq) seq = num;
       });
@@ -2159,7 +2211,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     memory: function (id) { var n = nodes.get(id); return n && n.memory; },
     connect: addLink, cut: cutLink, open: openAnatomy, close: closeAnatomy, hub: createHub, room: openRoom, debate: debate,
     setIntel: setIntel, intel: function () { return intel; }, thinkAll: thinkAll, pendingCount: function () { return toThink().length; },
-    saveNow: saveNow, clearScene: clearScene,
+    saveNow: saveNow, clearScene: clearScene, think: think, createEngram: createEngram,
     enter: enterNexus, find: function (name) { var f = null; nodes.forEach(function (n) { if (!f && (n.name === name || n.title === name || n.type === name)) f = n; }); return f; }
   };
 
@@ -2172,8 +2224,59 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
   // Pont vers le compte Prism : même API, même session que le Mode Focus (js/account.js). Sans serveur (fichier local,
   // GitHub Pages sans API), rien ne se passe : le Nexus reste en simulation locale.
   import { account, api, initAccount, onAccountChange, setSparks, signInAsGuest, API_BASE, REMOTE_API, STATIC_HOST } from "./js/account.js";
+  import { buildSrcdoc } from "./js/sandbox.js";
+  import { cardStore } from "./js/store.js";
+  import { engramHtml, engramOf } from "./js/engram.js";
 
-  const link = { ready: false, waking: false, info: null, account, api, setSparks, signInAsGuest };
+  const E = window.PrismEngram;
+  let libsPromise = null;
+  const libs = () => (libsPromise ||= fetch("engine/libs.json").then((r) => r.json()));
+  // Moteur des Engrammes du Nexus : le document vivant du Mode Focus (viewer, physique, rendu) dans la même sandbox.
+  const engrams = {
+    async html(engram) {
+      const l = await libs();
+      return buildSrcdoc({ html: await engramHtml(engram, l), storage: {}, accent: null, file: null }, l);
+    },
+    async demo(key) {
+      const res = await fetch(`engine/engram/demo-${key}.json`);
+      if (!res.ok) throw new Error(`démonstration introuvable (${key})`);
+      return E.normalize(await res.json());
+    },
+    /** Engrammes déjà créés dans Prism : cartes de cet appareil (Mode Focus), puis Mon Hub (compte connecté). */
+    async mine() {
+      const out = [];
+      const seen = new Set();
+      const add = (engram, source, where) => {
+        const key = (engram?.person || "").toLowerCase();
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        out.push({ engram, source, where });
+      };
+      try {
+        for (const card of await cardStore.all()) add(engramOf(card), `local:${card.id}`, "cet appareil");
+      } catch { /* stockage indisponible */ }
+      if (link.ready && account.user) {
+        try {
+          const page = await api("/api/widgets?limit=100");
+          const items = (page.items || []).filter((w) => /^(Hyper-)?Engramme ·|^Miroir ·/.test(w.title || "")).slice(0, 12);
+          for (const w of items) {
+            if (seen.has(String(w.title).replace(/^.*?·\s*/, "").toLowerCase())) continue;
+            const detail = await api(`/api/widgets/${encodeURIComponent(w.id)}`);
+            add(E.readViewer(detail.html), `hub:${w.id}`, "Mon Hub");
+          }
+        } catch { /* Mon Hub injoignable : les Engrammes de cet appareil suffisent */ }
+      }
+      return out;
+    },
+    /** Nouvel Engramme par le serveur (2 Sparks, rendus si la création échoue). */
+    async create(person) {
+      const res = await api("/api/engram", { method: "POST", body: { person, language: "fr" } });
+      if (Number.isFinite(res.sparks)) setSparks(res.sparks);
+      return E.normalize(res.engram);
+    },
+  };
+
+  const link = { ready: false, waking: false, info: null, account, api, setSparks, signInAsGuest, engrams };
   const announce = () => dispatchEvent(new CustomEvent("prism:link", { detail: link }));
   onAccountChange(announce);
   async function probe() {
@@ -2197,6 +2300,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
     if (link.waking) setTimeout(() => connect(tries - 1), 8000);
   }
   window.__prismLink = link;
+  announce(); // le moteur des Engrammes est prêt tout de suite, avec ou sans serveur
   if (!STATIC_HOST || REMOTE_API) connect(12);
 </script>
 </body>
