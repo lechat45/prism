@@ -1,5 +1,14 @@
 # Changelog
 
+## 6.1.0-alpha.2 — 2026-09-30 (Nexus : couper un fil, à coup sûr)
+
+- **Corrigé** : couper un fil pouvait échouer. Avec les Engrammes vivants (documents isolés) dans la page, le navigateur
+  ne désignait pas toujours le fil SVG comme cible du clic (vu en CI : le fil était sous le pointeur, l'évènement
+  arrivait au canevas). Le Nexus teste désormais lui-même la géométrie des fils sous le pointeur (`isPointInStroke`,
+  zone de 18 px), et coupe au relâchement sur le même fil.
+- E2E Nexus : diagnostics (fil visé, fil sous le point, évènements reçus), attente de la liste « Vos Engrammes » avant
+  « Créer ».
+
 ## 6.1.0-alpha.1 — 2026-09-30 (Nexus : les vrais Engrammes reviennent, en Néo-Constellation)
 
 - **Les Engrammes du Nexus sont de vrais Engrammes cognitifs** : chaque bulle Engramme est une carte de verre qui
