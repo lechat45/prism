@@ -1,6 +1,8 @@
 // V6 · Mode Nexus (frontend/nexus.html) : porte d'entrée, vrais Engrammes vivants (moteur du Mode Focus), flux Contexte →
 // Engramme → Rendu, glisser, synapses tirées à la souris, sens du flux, plongée dans un Engramme, fil coupé qui efface la
-// mémoire en aval, Hub au lasso et débat, scène retrouvée ; avec serveur : Gemini, débat, création d'un Engramme.
+// mémoire en aval, Hub au lasso et débat, scène retrouvée ; V6.2 : atmosphère, inventaire (sans fil, fusion, prisme,
+// horloge), roue de réactions, bulles de dialogue, Paramètres (Ctrl + K, aperçu, Appliquer), streaming prédictif des
+// Engrammes, canaux et fils de la War Room ; avec serveur : Gemini, débat, réponse en fil, création d'un Engramme.
 // Tous les gestes passent par de vrais évènements souris (CDP), comme un utilisateur.
 //
 // Usage : node tools/e2e_nexus.mjs [--base http://127.0.0.1:8001/frontend/] [--shots dossier] [--width 1440 --height 900]
@@ -108,11 +110,31 @@ try {
   const key = async (k) => {
     for (const type of ["keyDown", "keyUp"]) await cdp.send("Input.dispatchKeyEvent", { type, key: k, code: k, windowsVirtualKeyCode: k === "Escape" ? 27 : 0 }, S);
   };
+  const rclick = async (pointExpr) => { // clic droit (menu contextuel)
+    const [x, y] = await evaluate(pointExpr);
+    await mouse("mouseMoved", x, y, { buttons: 0 });
+    await mouse("mousePressed", x, y, { button: "right", buttons: 2, clickCount: 1 });
+    await mouse("mouseReleased", x, y, { button: "right", buttons: 0, clickCount: 1 });
+  };
+  const ctrlK = async () => {
+    for (const type of ["keyDown", "keyUp"]) await cdp.send("Input.dispatchKeyEvent", { type, key: "k", code: "KeyK", windowsVirtualKeyCode: 75, modifiers: 2 }, S);
+  };
+  const typeText = (text) => cdp.send("Input.insertText", { text }, S);
   const shot = async (name) => {
     if (!SHOTS) return;
     mkdirSync(SHOTS, { recursive: true });
     const { data } = await cdp.send("Page.captureScreenshot", { format: "png" }, S);
     writeFileSync(join(SHOTS, name), Buffer.from(data, "base64"));
+  };
+  // La vue ne bouge plus (cadrage animé terminé) : deux relevés identiques à 250 ms.
+  const viewStill = async () => {
+    let prev = "";
+    for (const t0 = Date.now(); Date.now() - t0 < 15000; ) {
+      const v = await evaluate("JSON.stringify(__nexus.view)");
+      if (v === prev) return;
+      prev = v;
+      await sleep(250);
+    }
   };
   const flowSettled = "[...__nexus.nodes.values()].every(n=>!n.el.classList.contains('is-thinking')) && !document.querySelector('#pulses .pulse')";
 
@@ -153,7 +175,8 @@ try {
   await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: false }, S);
   await check("pincer à deux doigts zoome (×2 entre les doigts)", "Math.round(__nexus.view.z / __z0 * 10) / 10", 2);
   await click(center("document.getElementById('fit')"));
-  await sleep(900);
+  await sleep(300);
+  await viewStill();
 
   // --- Glisser un Engramme par son en-tête ----------------------------------------------------------------------------------
   await evaluate("window.__j0 = [__nexus.find('Ada Lovelace').x, __nexus.find('Ada Lovelace').y]");
@@ -256,6 +279,175 @@ try {
     "[__nexus.find('Marie Curie').memory === null, __nexus.find('render').memory.thoughts.length, __nexus.find('Ada Lovelace').x, __nexus.find('Ada Lovelace').engram.nodes.length >= 36]",
     [true, 1, -600, true]);
 
+  // --- V6.2 · Atmosphère : brume volumétrique sous le canvas, éclairée par les bulles -------------------------------------
+  await check("atmosphère active sous le canvas (WebGL, ou lueurs 2D sans WebGL matériel)",
+    "(()=>{const a=__nexus.atmos();const c=document.getElementById('atmos');return [!!a&&a.enabled, !!a&&['webgl','2d'].includes(a.mode), c.width>1&&c.style.display!=='none']})()",
+    [true, true, true]);
+
+  // --- V6.2 · Inventaire : paire sans fil, fusion bionique, prisme holographique, horloge chrono-quantique -----------------
+  const fromInventory = async (label) => {
+    await click(center("document.getElementById('inventory')"));
+    await waitFor("!document.getElementById('inventory-menu').hidden", "inventaire ouvert");
+    await click(center(`[...document.querySelectorAll('#inventory-menu .inv-item')].find(b=>b.querySelector('b').textContent===${JSON.stringify(label)})`));
+    await waitFor("document.getElementById('inventory-menu').hidden", `inventaire : ${label}`);
+  };
+  await click(center("document.getElementById('inventory')"));
+  await waitFor("!document.getElementById('inventory-menu').hidden", "inventaire ouvert");
+  await check("inventaire : les essentiels et les blocs avancés",
+    "[...document.querySelectorAll('#inventory-menu .inv-item b')].map(b=>b.textContent).join(' / ')",
+    "Contexte / Engramme / Rendu / Prisme holographique / Horloge chrono-quantique / Fusion bionique / Paire sans fil / Émetteur sans fil / Récepteur sans fil");
+  await key("Escape");
+  await fromInventory("Paire sans fil");
+  await waitFor("!!__nexus.find('tx') && !!__nexus.find('rx') && document.querySelectorAll('#wireless path').length === 1", "paire sans fil");
+  // Sous la scène, à l'écart des autres bulles ; un second écran au bout du récepteur.
+  await evaluate(`(()=>{const N=__nexus;const y=Math.max(...[...N.nodes.values()].map(n=>n.y+n.el.offsetHeight))+160;const x0=N.find('context').x;
+    const put=(n,x,yy)=>{n.x=x;n.y=yy;n.el.style.left=x+'px';n.el.style.top=yy+'px'};
+    put(N.find('tx'),x0,y);put(N.find('rx'),x0+560,y);window.__r2=N.add('render',x0+1040,y-40).id;document.getElementById('fit').click()})()`);
+  await sleep(1000);
+  await drag(`[${portOf("context", "out")}, ${portOf("tx", "in")}]`);
+  await drag(`[${portOf("rx", "out")}, ${center("__nexus.nodes.get(__r2).el.querySelector('.port.in')")}]`);
+  await waitFor(`(()=>{const m=__nexus.memory(__r2);return !!m && m.contexts.length===1 && ${flowSettled}})()`, "flux sans fil jusqu'à l'écran", 20000);
+  await check("sans fil : le contexte entre dans l'émetteur et ressort du récepteur (canal A), jusqu'à l'écran",
+    "[__nexus.memory(__r2).contexts[0].title, __nexus.find('rx').el.querySelector('.note').textContent]", ["Brief", "Reçoit 1 contexte de 1 émetteur (« A »)."]);
+  await click(center("__nexus.find('rx').el.querySelector('.channel')"));
+  await evaluate("__nexus.find('rx').el.querySelector('.channel').select()");
+  await typeText("B");
+  await check("changer de canal rompt la liaison : l'écran s'efface aussitôt", "[document.querySelectorAll('#wireless path').length, __nexus.memory(__r2)]", [0, null]);
+  await evaluate("__nexus.find('rx').el.querySelector('.channel').select()");
+  await typeText("A");
+  await waitFor(`!!__nexus.memory(__r2) && document.querySelectorAll('#wireless path').length === 1 && ${flowSettled}`, "canal A retrouvé", 20000);
+  await fromInventory("Fusion bionique");
+  await fromInventory("Prisme holographique");
+  await fromInventory("Horloge chrono-quantique");
+  // Les nouveaux blocs, rangés à l'écart (ils naissent au centre de la vue, parfois sur une autre bulle).
+  await evaluate(`(()=>{const N=__nexus;const tx=N.find('tx'),rx=N.find('rx');const put=(n,x,y)=>{n.x=x;n.y=y;n.el.style.left=x+'px';n.el.style.top=y+'px'};
+    put(N.find('fuse'),rx.x,rx.y+320);put(N.find('holo'),rx.x+480,rx.y+380);put(N.find('chrono'),tx.x-460,tx.y);document.getElementById('fit').click()})()`);
+  await sleep(1000);
+  await check("fils vers la fusion (Ada et le récepteur), la fusion vers le prisme, le prisme vers l'écran",
+    "(()=>{const N=__nexus;const f=N.find('fuse'),h=N.find('holo');return [N.connect(N.find('Ada Lovelace').id,f.id),N.connect(N.find('rx').id,f.id),N.connect(f.id,h.id),N.connect(h.id,__r2)].every(Boolean)})()", true);
+  // Les mémoires sont calculées d'un coup ; les bulles se redessinent quand l'impulsion arrive (on attend le prisme).
+  await waitFor(`(()=>{const m=__nexus.memory(__r2);return !!m && m.thoughts.length===1 && /^Projette/.test(__nexus.find('holo').el.querySelector('.note').textContent) && ${flowSettled}})()`, "fusion jusqu'à l'écran", 20000);
+  await check("fusion bionique : Ada et le contexte sans fil fondus en une pensée, que le prisme projette jusqu'à l'écran",
+    "(()=>{const f=__nexus.memory(__nexus.find('fuse').id);return [f.author, /^Fusion de Ada Lovelace/.test(f.lines[0]), f.lines.length>=3, __nexus.memory(__r2).thoughts[0].author, /^Projette 1 pensée/.test(__nexus.find('holo').el.querySelector('.note').textContent)]})()",
+    ["Fusion", true, true, "Fusion", true]);
+  await evaluate(`(()=>{const N=__nexus,c=N.find('chrono');window.__ch=c.id;const p=c.el.querySelector('input[type=range]');p.value=3;p.dispatchEvent(new Event('input',{bubbles:true}));
+    const s=c.el.getBoundingClientRect();return !!N.connect(c.id,N.find('Ada Lovelace').id)})()`);
+  await check("règles des blocs : un écran n'émet rien, une horloge ne reçoit rien, pas de boucle",
+    "(()=>{const N=__nexus;return [N.connect(__r2,N.find('tx').id), N.connect(N.find('holo').id,__ch), N.connect(N.find('holo').id,N.find('fuse').id)]})()", [null, null, null]);
+  const phase0 = await evaluate("__nexus.memory(__ch).text");
+  await waitFor(`__nexus.memory(__ch).text !== ${JSON.stringify(phase0)}`, "l'horloge change d'état", 15000);
+  await waitFor("[...document.querySelectorAll('#says .say:not(.is-emoji)')].some(s=>/^Avec « /.test(s.textContent))", "bulle de dialogue au-dessus d'Ada", 15000);
+  await check("bulle de dialogue dans l'espace : Ada dit sa pensée au-dessus d'elle, à taille lisible",
+    "(()=>{const b=[...document.querySelectorAll('#says .say')].find(s=>/^Avec « /.test(s.textContent));const n=__nexus.find('Ada Lovelace');return [Math.abs(parseFloat(b.style.left)-(n.x+n.el.offsetWidth/2))<2, parseFloat(b.style.top)===n.y]})()", [true, true]);
+  await click(center("__nexus.nodes.get(__ch).el.querySelector('.chrono-ring')"));
+  await check("un clic sur l'anneau fige l'horloge (l'état observé ne change plus)", "__nexus.nodes.get(__ch).el.querySelector('.chrono-top small').textContent.includes('figé')", true);
+  await waitFor(`(()=>{const m=__nexus.memory(__nexus.find('Ada Lovelace').id);return !!m && m.lines[1].includes(__nexus.memory(__ch).text) && ${flowSettled}})()`, "Ada pense avec le moment", 20000);
+  await check("horloge chrono-quantique : Ada pense avec le moment présent", "__nexus.inputs(__nexus.find('Ada Lovelace').id).map(m=>m.title).join(' + ')", "Brief + Horloge");
+  await shot("nexus-8-blocs.png");
+
+  // --- V6.2 · Roue de réactions : clic droit, ping ; touche R ----------------------------------------------------------------
+  await rclick(headOf("Ada Lovelace"));
+  await waitFor("!document.getElementById('wheel').hidden", "roue de réactions");
+  await check("clic droit sur une bulle : la roue de réactions", "[...document.querySelectorAll('#wheel .wheel-item')].map(b=>b.getAttribute('aria-label')).join(', ')",
+    "Approuver, Une idée, Une question, Attention, Ping, Épingler");
+  await shot("nexus-9-roue.png");
+  // Les gestes de la roue arrivent en glissant depuis son centre : on clique une fois posés.
+  await waitFor("[...document.querySelectorAll('#wheel .wheel-item')].every(b=>b.getAnimations().every(a=>a.playState!=='running'))", "roue posée", 10000);
+  await click(center("document.querySelector('#wheel [data-reaction=\"📍\"]')"));
+  await check("ping : la bulle s'illumine et le dit dans l'espace",
+    "[document.getElementById('wheel').hidden, __nexus.find('Ada Lovelace').el.classList.contains('is-pinged'), [...document.querySelectorAll('#says .say.is-emoji')].some(s=>s.textContent==='📍')]",
+    [true, true, true]);
+  await key("r");
+  await check("touche R : la roue s'ouvre sur la bulle choisie", "[!document.getElementById('wheel').hidden, document.querySelector('#wheel .wheel-center').textContent]", [true, "Ada Lovelace"]);
+  await key("Escape");
+  await check("Échap ferme la roue", "document.getElementById('wheel').hidden", true);
+
+  // --- V6.2 · Paramètres « Liquid Glass » : Ctrl + K, recherche, aperçu en direct, Appliquer, Annuler, par défaut ----------------
+  await ctrlK();
+  await waitFor("!document.getElementById('settings').hidden && document.activeElement === document.getElementById('settings-q')", "Ctrl + K : Paramètres");
+  await typeText("brume");
+  await check("Ctrl + K : recherche instantanée parmi les réglages", "[...document.querySelectorAll('#settings-list .setting b')].map(b=>b.textContent).join(' / ')",
+    "Atmosphère volumétrique / Météo / Densité de la brume / Éclairage volumétrique");
+  await check("aperçu en direct : l'atmosphère du réglage, avant de l'appliquer", "/^Rendu (WebGL|2D)/.test(document.getElementById('preview-meta').textContent)", true);
+  await shot("nexus-10-parametres.png");
+  await evaluate("document.getElementById('settings-q').select()");
+  await typeText("zzzz");
+  await check("recherche sans résultat", "document.querySelector('#settings-list .settings-empty').textContent", "Aucun réglage pour « zzzz ».");
+  await evaluate("document.getElementById('settings-q').select()");
+  await typeText("dialogue");
+  await click(center("document.querySelector('#settings-list .setting[data-key=says] .switch')"));
+  await check("un réglage modifié s'essaie dans l'aperçu sans être appliqué",
+    "[document.querySelector('.setting[data-key=says]').classList.contains('is-dirty'), document.getElementById('settings-apply').disabled, document.getElementById('pv-say').hidden, __nexus.settings().says]",
+    [true, false, true, true]);
+  await click(center("document.getElementById('settings-apply')"));
+  await check("« Appliquer » : le réglage vaut dans le Nexus et reste enregistré sur l'appareil",
+    "[__nexus.settings().says, JSON.parse(localStorage.getItem('prism:nexus:settings')).says, document.getElementById('settings-apply').disabled, document.querySelectorAll('#says .say').length]",
+    [false, false, true, 0]);
+  await evaluate("document.getElementById('settings-q').select()");
+  await typeText("orage");
+  await click(center("[...document.querySelectorAll('.setting[data-key=weather] .segmented button')].find(b=>b.textContent==='Orage')"));
+  await click(center("document.getElementById('settings-cancel')"));
+  await check("« Annuler » : rien n'est appliqué", "[document.getElementById('settings').hidden, __nexus.settings().weather]", [true, "auto"]);
+  await click(center("document.getElementById('settings-btn')"));
+  await waitFor("!document.getElementById('settings').hidden", "Paramètres (bouton)");
+  await click(center("document.getElementById('settings-reset')"));
+  await click(center("document.getElementById('settings-apply')"));
+  await check("« Réglages par défaut » puis « Appliquer »", "[__nexus.settings().says, __nexus.settings().atmos]", [true, true]);
+  await key("Escape");
+  await check("Échap ferme les Paramètres", "document.getElementById('settings').hidden", true);
+
+  // --- V6.2 · Anti-lag : Engrammes endormis hors champ, réveillés avant d'entrer à l'écran (caméra suivie) ------------------------
+  await evaluate("__nexus.setView(-40000, -40000, 1)");
+  await waitFor("(()=>{const s=__nexus.stream();return s.asleep===s.engrams && s.culled===__nexus.nodes.size})()", "Engrammes endormis hors champ", 12000);
+  await check("hors champ : les Engrammes s'endorment, les bulles ne sont plus peintes", "(()=>{const s=__nexus.stream();return [s.live, s.asleep]})()", [0, 2]);
+  // La caméra glisse vers Ada, image par image : elle doit se réveiller alors qu'elle est encore au-delà de la marge.
+  await check("streaming prédictif : la caméra file vers Ada, qui se réveille avant d'entrer à l'écran",
+    `(async()=>{const N=__nexus,n=N.find('Ada Lovelace'),z=1,W=innerWidth,H=innerHeight;const y=H/2-(n.y+n.el.offsetHeight/2)*z;
+      const frame=()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      let x=W+1900-n.x*z,early=false,asleep0=n.asleep;
+      while(x+n.x*z>W){x-=60;N.setView(x,y,z);await frame();if(!n.asleep&&x+n.x*z>W+220)early=true}
+      return [asleep0, early]})()`, [true, true]);
+  await click(center("document.getElementById('fit')"));
+  await waitFor(`${engramsLive} && __nexus.stream().asleep === 0`, "Engrammes réveillés", 90000);
+
+  // --- V6.2 · War Room : un canal par Hub, effacée pendant un geste, réponses en fil ----------------------------------------------
+  await evaluate("__nexus.room([...__nexus.hubs.keys()][0])");
+  await waitFor("!document.getElementById('room').hidden", "War Room");
+  await sleep(900);
+  const [fx, fy] = await evaluate(`(()=>{const free=(x,y)=>{const e=document.elementFromPoint(x,y);return e&&e.id==='viewport'};
+    for(let y=140;y<innerHeight-60;y+=20)for(let x=60;x<innerWidth-60;x+=20)if(free(x,y)&&free(x+60,y))return [x,y];return null})()`);
+  await mouse("mouseMoved", fx, fy, { buttons: 0 });
+  await mouse("mousePressed", fx, fy, { clickCount: 1 });
+  for (let k = 1; k <= 6; k++) { await mouse("mouseMoved", fx + k * 10, fy); await sleep(16); }
+  await sleep(700);
+  const during = await evaluate("+getComputedStyle(document.getElementById('room')).opacity");
+  await mouse("mouseReleased", fx + 60, fy, { clickCount: 1 });
+  await sleep(600);
+  const after = await evaluate("+getComputedStyle(document.getElementById('room')).opacity");
+  await check("la War Room s'efface pendant un geste, puis revient", JSON.stringify([during < 0.3, after === 1]), [true, true]);
+  await check("un canal par Hub", "[...document.querySelectorAll('#channels button')].map(b=>b.getAttribute('aria-selected')).join()", "true");
+  await evaluate("__nexus.debate('Qui lit le tableau en premier ?')");
+  await evaluate("[...document.querySelectorAll('#log .page > .msg.mind .reply-btn')].pop().scrollIntoView({ block: 'center', behavior: 'instant' })");
+  await click(center("[...document.querySelectorAll('#log .page > .msg.mind .reply-btn')].pop()"));
+  await check("« Répondre en fil » vise un esprit", "[!document.getElementById('reply-to').hidden, document.getElementById('ask-send').textContent, document.activeElement.id]", [true, "Répondre", "question"]);
+  await typeText("Et pour les plus petits ?");
+  await click(center("document.getElementById('ask-send')"));
+  await waitFor("document.querySelectorAll('#log .thread .msg:not(.typing)').length === 2 && !document.getElementById('ask-send').disabled", "réponse en fil", 20000);
+  await check("fil : votre question et sa réponse, sous le message visé",
+    "[...document.querySelectorAll('#log .thread .msg')].map(m=>m.classList.contains('user')?'vous':m.querySelector('b').textContent.split(' · ').pop())", ["vous", "en fil"]);
+  await shot("nexus-11-fil.png");
+  await evaluate("window.__h2 = __nexus.hub([__nexus.find('Ada Lovelace').id, __nexus.find('Marie Curie').id]).id");
+  await click(center("document.querySelector('#channels button[data-hub=\"' + __h2 + '\"]')"));
+  await check("deux Hubs : deux canaux, chacun sa discussion", "[document.querySelectorAll('#channels button').length, document.querySelectorAll('#log .msg').length]", [2, 0]);
+  await click(center("document.querySelector('#channels button')"));
+  await check("retour au premier canal : sa discussion est intacte", "document.querySelectorAll('#log .thread .msg').length", 2);
+  await evaluate("__nexus.unhub(__h2)");
+  await key("Escape");
+
+  // Les blocs repartent : la scène redevient celle d'avant.
+  await evaluate("['tx','rx','fuse','holo','chrono'].forEach(t=>__nexus.remove(__nexus.find(t).id)); __nexus.remove(__r2)");
+  await waitFor(`__nexus.nodes.size === 4 && __nexus.links.size === 3 && __nexus.hubs.size === 1 && document.getElementById('room').hidden && ${flowSettled}`, "blocs retirés", 20000);
+
   // --- Créer un Engramme demande le serveur et un compte : sans eux, rien n'est tenté -----------------------------------------
   if (!SERVER) {
     await click(center("document.getElementById('add-engram')"));
@@ -296,11 +488,19 @@ try {
     await click(center("document.querySelector('.hub .label button')"));
     await waitFor("!document.getElementById('room').hidden", "War Room");
     await check("« Débattre » annonce son prix", "document.getElementById('ask-send').textContent", "Débattre · 1 Spark");
-    await evaluate("document.getElementById('log').replaceChildren(); document.getElementById('question').value = 'Par quoi commencer ?'");
+    await evaluate("document.querySelector('#log .page').replaceChildren(); document.getElementById('question').value = 'Par quoi commencer ?'");
     await click(center("document.getElementById('ask-send')"));
     await waitFor("!!document.querySelector('#log .msg.synth') && !document.getElementById('ask-send').disabled", "débat par l'API", 90000);
     await check("débat par l'API : 2 positions, 2 réponses, une synthèse (1 Spark)",
       "[document.querySelectorAll('#log .msg.mind:not(.typing):not(.error)').length, __prismLink.account.user.sparks]", [4, start - 1.25]);
+    await evaluate("[...document.querySelectorAll('#log .page > .msg.mind .reply-btn')].pop().scrollIntoView({ block: 'center', behavior: 'instant' })");
+    await click(center("[...document.querySelectorAll('#log .page > .msg.mind .reply-btn')].pop()"));
+    await check("répondre en fil avec Gemini annonce son prix (une pensée)", "document.getElementById('ask-send').textContent", "Répondre · 0,25 Spark");
+    await typeText("Et concrètement, lundi ?");
+    await click(center("document.getElementById('ask-send')"));
+    await waitFor("document.querySelectorAll('#log .thread .msg.mind:not(.typing)').length === 1 && !document.getElementById('ask-send').disabled", "réponse en fil par l'API", 60000);
+    await check("réponse en fil par l'API, à partir de l'Engramme (0,25 Spark)",
+      "[document.querySelector('#log .thread .msg.mind:not(.typing)').classList.contains('error'), __prismLink.account.user.sparks]", [false, start - 1.5]);
     await shot("nexus-7-gemini.png");
     await key("Escape");
     // Créer un Engramme (serveur en mode démo : un Engramme de démonstration, facturé comme un vrai).
@@ -315,7 +515,7 @@ try {
         throw new Error(`${err.message} — ${state} ; toast : ${await evaluate("document.getElementById('toast').hidden ? '-' : document.getElementById('toast').textContent")}`);
       });
       await check("« Créer un Engramme » : un vrai Engramme vivant rejoint le Nexus (2 Sparks)",
-        "[[...__nexus.nodes.values()].filter(n=>n.source==='created').map(n=>n.engram.nodes.length>=36).join(), __prismLink.account.user.sparks]", ["true", start - 3.25]);
+        "[[...__nexus.nodes.values()].filter(n=>n.source==='created').map(n=>n.engram.nodes.length>=36).join(), __prismLink.account.user.sparks]", ["true", start - 3.5]);
     }
     await cdp.send("Page.navigate", { url: `${URL_NEXUS}?retour=2#nexus` }, S);
     await waitFor("window.__nexus && __nexus.nodes.size >= 4 && window.__prismLink && __prismLink.ready && __prismLink.account.user", "retour avec le compte", 30000);

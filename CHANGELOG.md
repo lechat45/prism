@@ -1,5 +1,48 @@
 # Changelog
 
+## 6.2.0-alpha.1 — 2026-09-30 (Nexus : atmosphère, inventaire, social, Paramètres « Liquid Glass »)
+
+Le brief « piliers 2 à 6 » décrivait un jeu de blocs en 3D ; ils sont transposés au Nexus, ce que Prism est réellement.
+
+- **Atmosphère** (`engine/nexus/atmosphere.js`, nouveau) : brume volumétrique en volutes sous le canvas (WebGL, bruit
+  fractal à domaine déformé, demi-résolution), éclairée par les bulles : chaque bulle est une source de lumière
+  (position, taille, couleur, intensité ; plus vive quand elle pense) qui se diffuse dans la brume et transparaît à
+  travers le verre des cartes. Météo : cycle automatique (clair, brume, aurore, orage aux éclairs brefs) ou fixe.
+  Cadence plafonnée (30, 60, ou celle de l'écran), pause quand la page est cachée ou pendant une plongée, image figée
+  si l'on réduit les animations ; sans WebGL matériel (rendu logiciel), lueurs en dégradés 2D.
+  **Illumination globale** : chaque bulle teinte la surface sous elle (ombre douce colorée) et diffuse sa couleur dans
+  son verre.
+- **Anti-lag** : streaming prédictif des Engrammes. La vitesse de la caméra est suivie ; un Engramme hors du champ
+  (actuel, et prévu 0,65 s plus loin) s'endort après 2,5 s (son document s'arrête), et ceux vers lesquels la caméra se
+  dirige se réveillent avant d'entrer à l'écran. Plafond d'Engrammes vivants (4 ou 8 selon la machine, réglable) : les
+  plus proches du centre passent devant ; une bulle épinglée reste toujours vivante. Occlusion : les bulles hors champ
+  ne sont plus peintes. Compteur de performances facultatif (images/s, vivants, en veille, hors champ).
+- **Inventaire** (nouveau menu) : les essentiels et cinq blocs avancés. **Prisme holographique** (relais de verre qui
+  projette le flux qui le traverse ; transparence réglable), **horloge chrono-quantique** (source dont l'état change
+  avec le temps : un état par ligne, période de 3 à 60 s ; un clic sur l'anneau la fige), **fusion bionique** (fond
+  tous les flux reçus en une seule pensée qui garde la voix de chacun), **émetteur** et **récepteur sans fil** (tout ce
+  qui entre dans un émetteur ressort des récepteurs du même canal ; liaison en pointillés ; « Paire sans fil » crée
+  les deux sur un canal libre). Le moteur de flux suit les liaisons sans fil (ordre, boucles refusées, boucle créée
+  en changeant de canal signalée et coupée) ; relais dépliés pour les esprits et l'écran ; un second contexte (une
+  horloge, par exemple) entre dans la pensée d'un Engramme. Scène : les blocs sont gardés.
+- **Social** : bulles de dialogue dans l'espace (ce que pense ou dit un esprit apparaît au-dessus de lui, lisible à
+  tout zoom) ; **roue de réactions** (clic droit, appui long, ou R sur la bulle choisie : approuver, idée, question,
+  attention, ping qui fait pulser la bulle, épingler) ; **War Room** : un canal par Hub (onglets, messages non lus,
+  un débat continue dans son canal), **réponses en fil** sous le message d'un esprit, qui répond (Gemini : prix d'une
+  pensée, 0,25 Spark, affiché sur « Répondre » et débité au clic seulement), panneau qui s'efface pendant un geste.
+- **Paramètres « Liquid Glass »** (⚙, ou Ctrl + K) : recherche instantanée (sans accents, mots-clés), sections
+  Rendu, Performance, Social, Accessibilité ; chaque réglage s'essaie dans un **aperçu en direct** (une seconde
+  atmosphère) avant « Appliquer » ; « Annuler », « Réglages par défaut » ; enregistrés sur l'appareil
+  (`prism:nexus:settings`). Animations : système, complètes ou réduites.
+- Corrigé : depuis la 6.1, la règle du cadre des Engrammes (`.mind`, 256 px de haut) s'appliquait aussi aux messages
+  des esprits dans la War Room (`.msg.mind`), étirés et vides ; les boutons de verre du Nexus (« Remonter », fermeture
+  de la War Room) n'avaient pas de style de base ; texte de la scène de démonstration (Ada Lovelace).
+- Tests : 4 Node (`atmosphere.test.cjs` : repli 2D, toile neuve si WebGL échoue, image datée d'avant la création,
+  météo, pause, image figée) ; E2E Nexus : atmosphère, inventaire (sans fil jusqu'à l'écran, changement de canal, fusion, prisme, horloge, règles
+  des blocs), bulle de dialogue, roue (clic droit, ping, touche R), Paramètres (Ctrl + K, recherche, aperçu, Appliquer,
+  Annuler, défaut), streaming (endormis hors champ, réveil prédictif), War Room (effacée pendant un geste, canaux,
+  réponse en fil ; avec serveur : réponse en fil par l'API, 0,25 Spark).
+
 ## 6.1.0-alpha.2 — 2026-09-30 (Nexus : couper un fil, à coup sûr)
 
 - **Corrigé** : couper un fil pouvait échouer. Avec les Engrammes vivants (documents isolés) dans la page, le navigateur

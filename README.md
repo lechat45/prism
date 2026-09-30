@@ -283,6 +283,12 @@ Avec le serveur, les esprits pensent avec Gemini (`backend/nexus.py`) : `POST /a
 Sparks rendus en cas d'échec. La page réutilise la session du Mode Focus (module `js/account.js`) ; rien n'est débité
 sans un clic sur « Penser » ou « Débattre », qui affichent leur prix. La scène est gardée en `localStorage`.
 
+V6.2 : atmosphère volumétrique éclairée par les bulles (`frontend/engine/nexus/atmosphere.js`, WebGL, repli 2D),
+streaming prédictif des Engrammes (endormis hors champ, réveillés avant d'entrer à l'écran), Inventaire (prisme
+holographique, horloge chrono-quantique, fusion bionique, émetteur et récepteur sans fil), bulles de dialogue
+spatiales, roue de réactions, canaux et réponses en fil dans la War Room, Paramètres (Ctrl + K, recherche, aperçu en
+direct, `localStorage` `prism:nexus:settings`).
+
 ## Architecture
 
 ```
