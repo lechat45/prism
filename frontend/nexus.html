@@ -11,6 +11,8 @@
 <link rel="icon" href="assets/logo_prism.svg" type="image/svg+xml">
 <!-- Moteur des Engrammes (le même que le Mode Focus) : données, validation, document de la carte vivante. -->
 <script src="engine/engram/engram.js"></script>
+<!-- Atmosphère (V6.2) : brume volumétrique éclairée par les bulles (WebGL). -->
+<script src="engine/nexus/atmosphere.js"></script>
 <style>
 /* ==========================================================================
    Prism V6 · Nexus — prototype en un seul fichier (HTML, CSS, JS purs ; aucune dépendance, aucune requête).
@@ -173,9 +175,9 @@ button { cursor: pointer; }
   color: var(--muted); display: grid; place-items: center; font-size: 13px; transition: background 0.2s, color 0.2s, border-color 0.2s; }
 .icon-btn:hover { background: rgba(255, 255, 255, 0.12); color: var(--text); border-color: var(--line-strong); }
 .node.engram .icon-btn + .close { margin-left: 2px; }
-.mind { position: relative; height: 256px; margin: 10px 10px 0; border-radius: 15px; overflow: hidden; background: #04040b;
+.node .mind { position: relative; height: 256px; margin: 10px 10px 0; border-radius: 15px; overflow: hidden; background: #04040b;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 40px -18px var(--c); transition: filter 0.5s, box-shadow 0.5s; }
-.mind::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+.node .mind::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.09), transparent 32%); } /* reflet du verre */
 .engram-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; opacity: 0; transition: opacity 0.8s var(--ease); }
 .node.engram.is-live .engram-frame { opacity: 1; }
@@ -371,6 +373,186 @@ button { cursor: pointer; }
 .custom-mind .glass-btn { padding: 6px 12px; font-size: 12px; }
 .msg.error { --c: #ff9a9a; }
 
+/* Bouton de verre (base manquante : les boutons « glass-btn » prenaient le style du navigateur). */
+.glass-btn { border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; background: rgba(255, 255, 255, 0.06); color: var(--text);
+  font-size: 12.5px; -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); transition: background 0.2s, border-color 0.2s; }
+.glass-btn:hover { background: rgba(255, 255, 255, 0.12); border-color: var(--line-strong); }
+
+/* ---- V6.2 · Atmosphère : brume volumétrique derrière le canvas -------------------------------------- */
+.atmos { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; mix-blend-mode: screen; }
+.viewport.no-grid { background-image: none; }
+
+/* ---- V6.2 · Inventaire : blocs avancés ----------------------------------------------------------------- */
+.menu.inventory-menu { width: 420px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.inv-item { align-items: flex-start !important; }
+.inv-icon { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 10px; font-size: 16px; color: #05060a;
+  background: radial-gradient(circle at 35% 30%, #fff, var(--c) 70%); box-shadow: 0 0 16px -4px var(--c); }
+.node .field { display: flex; align-items: center; gap: 8px; margin: 10px 14px 0; font-size: 11.5px; color: var(--muted); }
+.node .field input[type="range"] { flex: 1; }
+.node .field b { color: var(--text); font-variant-numeric: tabular-nums; min-width: 36px; text-align: right; font-weight: 600; }
+.node .note { margin: 8px 14px 12px; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+.node.holo, .node.fuse { width: 252px; }
+.node.chrono { width: 272px; }
+.node.tx, .node.rx { width: 228px; }
+.node.holo .port.in, .node.fuse .port.in, .node.tx .port.in { left: 0; top: 50%; }
+.node.holo .port.out, .node.fuse .port.out, .node.chrono .port.out, .node.rx .port.out { left: 100%; top: 50%; }
+.node.holo .shell { background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.015)), rgba(16, 12, 34, var(--glass-a, 0.3));
+  -webkit-backdrop-filter: blur(10px) saturate(170%); backdrop-filter: blur(10px) saturate(170%); }
+.holo-prism { height: 64px; margin: 10px 14px 0; border-radius: 14px; opacity: var(--prism-a, 0.7); mix-blend-mode: screen;
+  background: conic-gradient(from var(--spin), rgba(196, 181, 253, 0), rgba(196, 181, 253, 0.6), rgba(125, 211, 252, 0.45), rgba(249, 168, 212, 0.5), rgba(196, 181, 253, 0));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); animation: spin 9s linear infinite; }
+.chrono-top { display: flex; align-items: center; gap: 10px; margin: 10px 14px 0; }
+.chrono-top > div { flex: 1; min-width: 0; }
+.chrono-top b { display: block; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chrono-top small { display: block; margin-top: 2px; font-size: 10.5px; color: var(--faint); }
+.chrono-ring { width: 40px; height: 40px; flex: none; }
+.chrono-ring .track { fill: none; stroke: rgba(255, 255, 255, 0.08); stroke-width: 4; }
+.chrono-ring .arc { fill: none; stroke: var(--c); stroke-width: 4; stroke-linecap: round; filter: drop-shadow(0 0 5px var(--c)); transition: stroke-dashoffset 0.2s linear; }
+.node.chrono.is-paused .chrono-ring .arc { stroke: var(--faint); filter: none; }
+.node textarea.states { display: block; width: calc(100% - 28px); margin: 10px 14px 0; min-height: 64px; resize: none; border: 0; border-radius: 12px;
+  padding: 8px 10px; background: rgba(0, 0, 0, 0.28); color: #dfe7f5; font-size: 12px; line-height: 1.5; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  outline: none; cursor: text; }
+.node.chrono .field { margin-bottom: 12px; }
+.fuse-blob { height: 70px; margin: 10px 14px 0; border-radius: 42% 58% 55% 45% / 50% 40% 60% 50%;
+  background: radial-gradient(circle at 30% 35%, var(--c1, #f0abfc), transparent 62%), radial-gradient(circle at 72% 60%, var(--c2, #c4b5fd), transparent 64%),
+  radial-gradient(circle at 50% 50%, var(--c3, #7fdcff), transparent 72%); filter: blur(5px) saturate(150%); animation: morph 7s ease-in-out infinite alternate; }
+@keyframes morph { 50% { border-radius: 58% 42% 40% 60% / 42% 60% 40% 58%; transform: scale(1.06); } }
+.antenna { position: relative; height: 54px; margin: 8px 14px 0; display: grid; place-items: center; }
+.antenna i { position: absolute; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--c); opacity: 0; }
+.node.is-on .antenna i { animation: wave 2.4s ease-out infinite; }
+.antenna i:nth-child(2) { animation-delay: 0.8s !important; } .antenna i:nth-child(3) { animation-delay: 1.6s !important; }
+.antenna b { width: 10px; height: 10px; border-radius: 50%; background: var(--c); box-shadow: 0 0 14px var(--c); }
+@keyframes wave { from { opacity: 0.9; transform: scale(1); } to { opacity: 0; transform: scale(4.2); } }
+.node .channel { width: 80px; border: 1px solid var(--line); border-radius: 999px; background: rgba(0, 0, 0, 0.3); padding: 4px 10px; font-size: 12px;
+  text-align: center; outline: none; }
+.node .channel:focus { border-color: color-mix(in srgb, var(--c) 55%, transparent); }
+.node.rx.is-receiving .antenna b { animation: beckon 0.7s ease-in-out 2; }
+.wireless { fill: none; stroke: #fcd34d; stroke-width: 1.4; stroke-dasharray: 2 8; opacity: 0.75; animation: flow 1.2s linear infinite; }
+
+/* ---- V6.2 · Social : bulles spatiales, roue de réactions, canaux et fils de la War Room ------------------ */
+.says { position: absolute; left: 0; top: 0; }
+.say { position: absolute; width: max-content; max-width: 280px; padding: 8px 12px; border-radius: 14px 14px 14px 4px; font-size: 12px; line-height: 1.45; color: #eef3ff;
+  transform: translate(-50%, calc(-100% - 14px)) scale(clamp(1, var(--inv, 1), 2.4)); transform-origin: 50% 100%; pointer-events: none; white-space: normal;
+  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 3px), linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.04));
+  border: 1px solid color-mix(in srgb, var(--c) 50%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  box-shadow: 0 0 34px -10px var(--c); animation: sayIn 0.45s var(--spring) both; transition: opacity 0.5s; }
+.say.is-emoji { padding: 4px 9px; font-size: 24px; border-radius: 999px; }
+.say.is-leaving { opacity: 0; }
+@keyframes sayIn { from { opacity: 0; filter: blur(6px); } }
+.node.is-pinged::after { content: ""; position: absolute; inset: -6px; border-radius: 28px; border: 2px solid var(--c); pointer-events: none;
+  animation: ping 1.2s ease-out 2; }
+@keyframes ping { from { opacity: 0.9; transform: scale(1); } to { opacity: 0; transform: scale(1.12); } }
+.node.is-pinned .shell { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--c) 75%, transparent), 0 0 60px -14px var(--c); }
+.wheel { position: fixed; z-index: 45; width: 0; height: 0; }
+.wheel-center { position: absolute; left: -46px; top: -46px; width: 92px; height: 92px; border-radius: 50%; display: grid; place-items: center; text-align: center;
+  padding: 10px; font-size: 10.5px; line-height: 1.25; color: var(--muted); border: 1px solid var(--line); background: rgba(12, 14, 22, 0.75);
+  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); animation: pop 0.3s var(--spring); }
+.wheel-item { position: absolute; width: 50px; height: 50px; margin: -25px; border-radius: 50%; border: 1px solid var(--line-strong); font-size: 20px;
+  display: grid; place-items: center; background: rgba(14, 16, 26, 0.86); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  box-shadow: 0 16px 40px -16px rgba(0, 0, 0, 0.9); animation: wheelIn 0.4s var(--spring) both; transition: transform 0.2s var(--spring), background 0.2s; }
+.wheel-item:hover, .wheel-item:focus-visible { transform: scale(1.14); background: rgba(40, 44, 64, 0.95); outline: none; }
+.wheel-item span { position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 10.5px;
+  padding: 2px 7px; border-radius: 999px; background: rgba(10, 12, 20, 0.85); color: #dfe5f0; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+.wheel-item:hover span, .wheel-item:focus-visible span { opacity: 1; }
+@keyframes wheelIn { from { opacity: 0; transform: translate(var(--fx), var(--fy)) scale(0.4); } }
+.channels { display: flex; gap: 6px; margin-top: 10px; overflow-x: auto; scrollbar-width: none; }
+.channels button { flex: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; background: rgba(255, 255, 255, 0.04); font-size: 11.5px; color: var(--muted); }
+.channels button[aria-selected="true"] { color: #05060a; background: linear-gradient(90deg, #fff, #c9b8ff); border-color: transparent; font-weight: 600; }
+.reply-btn { display: block; margin-top: 4px; border: 0; background: none; padding: 0; font-size: 10.5px; color: var(--faint); }
+.reply-btn:hover { color: var(--text); }
+.thread { align-self: stretch; margin: -4px 0 2px 18px; padding-left: 10px; border-left: 1.5px solid rgba(201, 184, 255, 0.35); display: flex; flex-direction: column; gap: 8px; }
+.thread .msg { max-width: 100%; }
+.reply-to { display: flex; align-items: center; gap: 8px; margin: 0 12px; padding: 6px 8px 6px 12px; border-radius: 12px; font-size: 11.5px; color: #dfe5f0;
+  border: 1px solid rgba(201, 184, 255, 0.35); background: rgba(201, 184, 255, 0.08); }
+.reply-to span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.reply-to button { border: 0; background: none; color: var(--faint); font-size: 14px; }
+.room { transition: opacity 0.25s ease; }
+.nexus.autohide-chat.is-gesturing .room { opacity: 0.14; pointer-events: none; transition-delay: 0.18s; } /* effacée pendant un geste (pas pour un simple clic) */
+
+/* ---- V6.2 · Paramètres « Liquid Glass » : aperçu en direct, recherche Ctrl + K ---------------------------- */
+.settings { position: absolute; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(3, 4, 8, 0.55);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: pop 0.35s var(--ease); }
+.settings-sheet { width: min(1040px, 100%); height: min(680px, 100%); display: flex; flex-direction: column; border-radius: 30px; overflow: hidden;
+  border: 1px solid var(--line-strong); background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03)), rgba(12, 14, 24, 0.72);
+  -webkit-backdrop-filter: blur(40px) saturate(170%); backdrop-filter: blur(40px) saturate(170%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 50px 120px -40px rgba(0, 0, 0, 0.95); }
+.settings-top { display: flex; align-items: center; gap: 16px; padding: 18px 20px 14px; border-bottom: 1px solid var(--line); }
+.settings-top h2 { margin: 0; font-size: 22px; font-weight: 640; letter-spacing: -0.03em; }
+.settings-search { flex: 1; display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-radius: 16px; border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.28); color: var(--faint); }
+.settings-search:focus-within { border-color: rgba(201, 184, 255, 0.55); box-shadow: 0 0 0 4px rgba(201, 184, 255, 0.1); }
+.settings-search input { flex: 1; border: 0; background: none; outline: none; font-size: 14px; color: var(--text); }
+.settings-search kbd { font-family: var(--mono); font-size: 10.5px; color: var(--faint); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
+.settings-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 180px minmax(0, 1fr) 300px; }
+.settings-nav { padding: 14px 10px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+.settings-nav button { text-align: left; border: 0; border-radius: 12px; padding: 8px 12px; background: none; color: var(--muted); font-size: 13px; }
+.settings-nav button:hover, .settings-nav button[aria-current="true"] { background: rgba(255, 255, 255, 0.07); color: var(--text); }
+.settings-list { overflow-y: auto; padding: 8px 18px 18px; scroll-behavior: smooth; }
+.settings-list h3 { margin: 18px 0 6px; font-size: 9.5px; font-weight: 650; letter-spacing: 0.26em; text-transform: uppercase; color: var(--faint); }
+.setting { display: flex; align-items: center; gap: 16px; padding: 12px 14px; border-radius: 16px; transition: background 0.2s; }
+.setting:hover { background: rgba(255, 255, 255, 0.045); }
+.setting.is-flash { animation: settingFlash 1.2s ease; }
+@keyframes settingFlash { 30% { background: rgba(201, 184, 255, 0.18); } }
+.setting .txt { flex: 1; min-width: 0; }
+.setting b { display: block; font-size: 13.5px; font-weight: 600; }
+.setting small { display: block; margin-top: 2px; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+.setting.is-dirty b::after { content: " •"; color: #c9b8ff; }
+.switch { position: relative; width: 44px; height: 26px; flex: none; border-radius: 999px; border: 1px solid var(--line-strong); background: rgba(255, 255, 255, 0.08);
+  transition: background 0.25s; }
+.switch::after { content: ""; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); transition: transform 0.3s var(--spring); }
+.switch[aria-checked="true"] { background: linear-gradient(90deg, #8ff3ff, #c9b8ff); border-color: transparent; }
+.switch[aria-checked="true"]::after { transform: translateX(18px); }
+.setting .range { display: flex; align-items: center; gap: 10px; width: 190px; flex: none; }
+.setting .range output { min-width: 44px; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text); }
+.segmented { display: flex; flex: none; padding: 3px; gap: 2px; border-radius: 12px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.25); }
+.segmented button { border: 0; border-radius: 9px; padding: 5px 9px; background: none; color: var(--muted); font-size: 11.5px; }
+.segmented button[aria-pressed="true"] { background: rgba(255, 255, 255, 0.14); color: var(--text); font-weight: 600; }
+.settings-empty { padding: 40px 10px; text-align: center; color: var(--faint); font-size: 13px; }
+.settings-preview { border-left: 1px solid var(--line); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.preview-stage { position: relative; height: 230px; border-radius: 20px; overflow: hidden; background: #05060a;
+  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.09) 1px, transparent 0); background-size: 18px 18px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+.preview-stage.no-grid { background-image: none; }
+.preview-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; mix-blend-mode: screen; }
+.pv-card { position: absolute; padding: 7px 10px; border-radius: 12px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(12, 14, 24, 0.55); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.pv-a { left: 8%; top: 60%; color: #7fdcff; } .pv-e { right: 8%; top: 30%; color: #fb7185; }
+.pv-e.is-asleep { opacity: 0.35; filter: grayscale(1); }
+.pv-wire { position: absolute; inset: 0; width: 100%; height: 100%; }
+.pv-wire path { fill: none; stroke: rgba(201, 184, 255, 0.7); stroke-width: 1.6; stroke-dasharray: 1 10; animation: flow 1.3s linear infinite; }
+.pv-say { position: absolute; right: 18px; top: 16px; padding: 5px 9px; border-radius: 11px 11px 11px 3px; font-size: 10.5px; color: #eef3ff;
+  border: 1px solid rgba(251, 113, 133, 0.5); background: rgba(255, 255, 255, 0.08); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.preview-stage.is-still * { animation: none !important; }
+.preview-note { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); min-height: 54px; }
+.preview-meta { font-size: 11px; color: var(--faint); }
+.settings-foot { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.cta-btn { border: 0; border-radius: 999px; padding: 9px 18px; font-size: 13px; font-weight: 600; color: #05060a; background: linear-gradient(90deg, #fff, #c9b8ff); }
+.cta-btn:disabled { opacity: 0.45; cursor: default; }
+.wireless { pointer-events: none; }
+.log .page { display: contents; }
+.node.is-culled { visibility: hidden; } /* hors champ : plus peinte (occlusion) */
+.node.engram.is-asleep .mind-state { display: grid !important; }
+.perf { position: absolute; left: 16px; bottom: 16px; z-index: 21; padding: 6px 10px; border-radius: 10px; font: 11px/1.4 var(--mono); color: var(--muted);
+  border: 1px solid var(--line); background: rgba(10, 12, 20, 0.72); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); pointer-events: none; }
+/* Illumination globale : chaque bulle teinte la surface sous elle (ombre douce colorée) et diffuse sa couleur dans son verre. */
+.nexus.gi .node:not(.is-selected):not(.is-pinned) .shell { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14),
+  inset 0 26px 44px -30px color-mix(in srgb, var(--c) 45%, transparent), 0 30px 80px -34px rgba(0, 0, 0, 0.9),
+  0 40px 90px -46px color-mix(in srgb, var(--c) 65%, transparent); }
+.node.holo .field { margin-bottom: 14px; }
+.pv-card { background: rgba(12, 14, 24, var(--pv-glass, 0.55)) !important; }
+.nexus.reduce-motion *, .nexus.reduce-motion *::before, .nexus.reduce-motion *::after {
+  animation-duration: 0.001s !important; animation-iteration-count: 1 !important; transition-duration: 0.001s !important; }
+@media (max-width: 900px) {
+  .settings-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr) auto; }
+  .settings-nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  .settings-preview { border-left: 0; border-top: 1px solid var(--line); }
+  .preview-stage { height: 130px; }
+  .preview-note { min-height: 0; }
+  .menu.inventory-menu { position: fixed; left: 16px; right: 16px; top: 72px; width: auto; max-width: 440px; max-height: calc(100vh - 96px);
+    overflow-y: auto; grid-template-columns: 1fr; }
+}
+
 @media (max-width: 760px) {
   .hint { display: none; }
   .tool .label { display: none; }
@@ -415,15 +597,18 @@ button { cursor: pointer; }
 <!-- ============================ Nexus ============================ -->
 <section class="nexus" id="nexus" hidden aria-label="Mode Nexus">
   <div class="viewport" id="viewport">
+    <canvas class="atmos" id="atmos" aria-hidden="true"></canvas>
     <div class="world" id="world">
       <div class="hubs" id="hubs"></div>
       <svg class="wires" id="wires" aria-hidden="true">
         <defs id="wire-defs"></defs>
+        <g id="wireless"></g>
         <g id="links"></g>
         <g id="pulses"></g>
         <path class="draft" id="draft" d="" hidden></path>
       </svg>
       <div id="nodes"></div>
+      <div class="says" id="says" aria-live="polite"></div>
     </div>
     <svg class="lasso" id="lasso-layer" aria-hidden="true"><path id="lasso" d=""></path></svg>
   </div>
@@ -444,6 +629,11 @@ button { cursor: pointer; }
       <button class="tool" id="add-render" type="button" style="--c: var(--render)"><i></i><span class="label">Rendu</span></button>
       <button class="tool" id="hub-tool" type="button" aria-pressed="false" title="Dessinez un cercle autour de plusieurs Engrammes (ou Alt + glisser)"
         style="--c: #d6c8ff"><i></i><span class="label">Hub</span> <kbd>Alt</kbd></button>
+      <span class="anchor">
+        <button class="tool" id="inventory" type="button" aria-haspopup="menu" aria-expanded="false" style="--c: #fcd34d"
+          title="Inventaire : tous les blocs du Nexus"><i></i><span class="label">Inventaire</span></button>
+        <div class="menu inventory-menu" id="inventory-menu" role="menu" hidden></div>
+      </span>
     </div>
     <span class="spacer"></span>
     <div class="pill" role="toolbar" aria-label="Intelligence">
@@ -460,11 +650,14 @@ button { cursor: pointer; }
       <button class="tool" id="zoom-in" type="button" aria-label="Zoomer">+</button>
       <button class="tool" id="fit" type="button" title="Tout voir (F)" aria-label="Tout voir"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"
         stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9"/></svg><span class="label">Tout voir</span></button>
+      <button class="tool" id="settings-btn" type="button" aria-label="Paramètres" title="Paramètres (Ctrl + K pour chercher un réglage)"><svg width="15" height="15"
+        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path
+        d="M12 2.5v2.6M12 18.9v2.6M4.6 4.6l1.9 1.9M17.5 17.5l1.9 1.9M2.5 12h2.6M18.9 12h2.6M4.6 19.4l1.9-1.9M17.5 6.5l1.9-1.9"/></svg></button>
       <span class="anchor">
         <button class="tool" id="scene" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Scène" title="Scène">⋯</button>
         <div class="menu scene-menu" id="scene-menu" role="menu" hidden>
           <button type="button" id="scene-empty" role="menuitem"><span><b>Nouvelle scène vide</b><small>Remplace la scène enregistrée sur cet appareil</small></span></button>
-          <button type="button" id="scene-demo" role="menuitem"><span><b>Scène de démonstration</b><small>Un brief, Marie Curie, Steve Jobs et un écran</small></span></button>
+          <button type="button" id="scene-demo" role="menuitem"><span><b>Scène de démonstration</b><small>Un brief, Marie Curie, Ada Lovelace et un écran</small></span></button>
         </div>
       </span>
     </div>
@@ -475,6 +668,7 @@ button { cursor: pointer; }
     <span><b>Clic</b> sur un fil → le couper</span>
     <span><b>Double-clic</b> sur un Engramme → plonger dedans</span>
     <span><b>Alt + glisser</b> → un Hub</span>
+    <span><b>Clic droit</b> → réagir</span>
   </div>
   <div class="toast" id="toast" role="status" hidden></div>
 
@@ -516,18 +710,59 @@ button { cursor: pointer; }
       <div class="row"><div><div class="micro">Hub · War Room</div><h3 id="room-title"></h3></div><span class="spacer"></span>
         <button class="glass-btn" id="room-close" type="button" aria-label="Fermer la War Room">×</button></div>
       <div class="avatars" id="room-avatars"></div>
+      <nav class="channels" id="channels" role="tablist" aria-label="Canaux (un par Hub)"></nav>
     </header>
     <div class="log" id="log" aria-live="polite"></div>
+    <div class="reply-to" id="reply-to" hidden><span></span><button type="button" id="reply-cancel" aria-label="Annuler la réponse">×</button></div>
     <form class="ask" id="ask"><input id="question" maxlength="300" placeholder="Posez une question au Hub…" aria-label="Question au Hub"><button id="ask-send" type="submit">Débattre</button></form>
     <div class="note" id="room-note"></div>
   </aside>
+
+  <!-- Roue de réactions (clic droit ou appui long sur une bulle) -->
+  <div class="wheel" id="wheel" hidden role="menu" aria-label="Réactions"></div>
+
+  <!-- Paramètres « Liquid Glass » : aperçu en direct avant d'appliquer, recherche Ctrl + K -->
+  <div class="settings" id="settings" hidden role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="settings-sheet">
+      <header class="settings-top">
+        <div><div class="micro">Nexus</div><h2 id="settings-title">Paramètres</h2></div>
+        <label class="settings-search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="settings-q" type="search" autocomplete="off"
+          placeholder="Rechercher un réglage… (brume, veille, bulles…)" aria-label="Rechercher un réglage"><kbd>Ctrl K</kbd></label>
+        <button class="glass-btn" id="settings-close" type="button" aria-label="Fermer les Paramètres">×</button>
+      </header>
+      <div class="settings-body">
+        <nav class="settings-nav" id="settings-nav" aria-label="Sections"></nav>
+        <div class="settings-list" id="settings-list"></div>
+        <aside class="settings-preview" aria-label="Aperçu en direct">
+          <div class="micro">Aperçu en direct</div>
+          <div class="preview-stage" id="preview-stage">
+            <canvas id="preview-canvas"></canvas>
+            <svg class="pv-wire" viewBox="0 0 268 230" aria-hidden="true"><path d=""/></svg>
+            <div class="pv-card pv-a">Contexte</div>
+            <div class="pv-card pv-e" id="pv-engram">Engramme</div>
+            <div class="pv-say" id="pv-say">« Mesurons d'abord. »</div>
+          </div>
+          <p class="preview-note" id="preview-note"></p>
+          <p class="preview-meta" id="preview-meta"></p>
+        </aside>
+      </div>
+      <footer class="settings-foot">
+        <span id="settings-dirty"></span><span class="spacer"></span>
+        <button class="glass-btn" id="settings-reset" type="button">Réglages par défaut</button>
+        <button class="glass-btn" id="settings-cancel" type="button">Annuler</button>
+        <button class="cta-btn" id="settings-apply" type="button" disabled>Appliquer</button>
+      </footer>
+    </div>
+  </div>
 </section>
 
 <script>
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
-  var reduced = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var systemReduced = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+  var reduced = systemReduced; // réglable dans les Paramètres (Accessibilité → Animations)
   var SVGNS = "http://www.w3.org/2000/svg";
 
   // ======================================================================================
@@ -653,6 +888,8 @@ button { cursor: pointer; }
     var axiom = parts.core ? firstSentence(parts.core.content, 170) : "Voyons ce que cela demande vraiment.";
     var from = upstream.length ? "Sur la piste de " + upstream.map(function (m) { return m.author; }).join(" et ") + " : " : "";
     lines.push(from + cap(subject) + " ? " + axiom);
+    // Un second contexte (une horloge chrono-quantique, par exemple) : il pense aussi avec ce moment-là.
+    if (contexts.length > 1) lines.push("Avec « " + clip(contexts[1].text, 100) + " » : " + (eng ? lowerFirst(clip(eng.title, 70)) : "on ajuste") + ".");
     if (eng) lines.push(eng.title + " : " + lowerFirst(firstSentence(eng.directive || eng.content, 190)));
     if (trait) lines.push("Caractère : " + lowerFirst(trait.title) + ".");
     if (shadow) lines.push("Ombre à surveiller : " + lowerFirst(shadow.title) + ".");
@@ -707,6 +944,8 @@ button { cursor: pointer; }
     viewport.style.setProperty("--gx", view.x + "px");
     viewport.style.setProperty("--gy", view.y + "px");
     $("zoom-reset").textContent = Math.round(view.z * 100) + " %";
+    $("says").style.setProperty("--inv", (1 / view.z).toFixed(3)); // bulles de dialogue lisibles même en vue d'ensemble
+    trackMotion();
     save();
   }
   function toWorld(sx, sy) { return { x: (sx - view.x) / view.z, y: (sy - view.y) / view.z }; }
@@ -807,6 +1046,8 @@ button { cursor: pointer; }
       paintEngram(n);
       if (n.engram) mountEngram(n);
       else if (/^demo:/.test(n.source)) loadDemo(n);
+    } else if (BLOCKS[type]) {
+      buildBlock(n, node, type, opts);
     } else {
       node.innerHTML = '<div class="shell"><div class="head"><span class="dot"></span><span class="kind">Rendu</span>' +
         '<button class="close" type="button" aria-label="Supprimer la bulle">×</button></div>' +
@@ -815,8 +1056,10 @@ button { cursor: pointer; }
     }
     node.style.left = x + "px";
     node.style.top = y + "px";
+    if (opts.pinned) { n.pinned = true; node.classList.add("is-pinned"); }
     nodesLayer.append(node);
     nodes.set(n.id, n);
+    if (BLOCKS[type]) paintBlock(n);
     node.addEventListener("animationend", function () { node.classList.remove("is-entering"); }, { once: true });
     if (opts.still) node.classList.remove("is-entering");
     save();
@@ -824,13 +1067,171 @@ button { cursor: pointer; }
   }
   function autosize(area) { area.style.height = "auto"; area.style.height = Math.min(220, area.scrollHeight + 2) + "px"; }
 
+  // ======================================================================================
+  // Inventaire (V6.2) : blocs avancés du flux. Prisme holographique (relais de verre qui projette ce qui le traverse),
+  // horloge chrono-quantique (source dont l'état change avec le temps), fusion bionique (fond plusieurs flux en une
+  // pensée), émetteur et récepteur sans fil (tout ce qui entre dans un émetteur ressort des récepteurs du même canal).
+  // ======================================================================================
+  var BLOCKS = {
+    holo: { name: "Prisme holographique", color: "#c4b5fd", icon: "◈", sub: "Relais de verre : laisse passer le flux et le projette en hologramme." },
+    chrono: { name: "Horloge chrono-quantique", color: "#7dd3fc", icon: "◷", sub: "Source dont l'état change avec le temps (un état par ligne)." },
+    fuse: { name: "Fusion bionique", color: "#f0abfc", icon: "◉", sub: "Fond tous les flux reçus en une seule pensée." },
+    tx: { name: "Émetteur sans fil", color: "#fcd34d", icon: "⇡", sub: "Émet son flux sur un canal, sans fil." },
+    rx: { name: "Récepteur sans fil", color: "#fcd34d", icon: "⇣", sub: "Reçoit tout ce qui est émis sur son canal." }
+  };
+  var SOURCES = ["context", "chrono", "rx"]; // sans entrée
+  var SINKS = ["render", "tx"];              // sans sortie
+  var PORT_IN = '<span class="port in" data-port="in" title="Entrée"></span>';
+  var PORT_OUT = '<span class="port out" data-port="out" title="Tirer une synapse"></span>';
+  function between(v, lo, hi, dflt) { v = +v; return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : dflt; }
+  function cleanChannel(v) { return String(v == null ? "" : v).replace(/\s+/g, " ").trim().slice(0, 12); }
+  function blockHead(type) {
+    return '<div class="head"><span class="dot"></span><span class="kind">' + esc(BLOCKS[type].name) + "</span>" +
+      '<button class="close" type="button" aria-label="Supprimer la bulle">×</button></div>';
+  }
+  function buildBlock(n, node, type, opts) {
+    node.style.setProperty("--c", BLOCKS[type].color);
+    if (type === "holo") {
+      n.clear = between(opts.clear, 0.1, 0.95, 0.65); // transparence du verre
+      node.innerHTML = '<div class="shell">' + blockHead(type) + '<div class="holo-prism"></div><div class="note"></div>' +
+        '<label class="field">Transparence <input type="range" min="0.1" max="0.95" step="0.05"><b></b></label></div>' + PORT_IN + PORT_OUT;
+      var range = node.querySelector("input");
+      range.value = n.clear;
+      var glass = function () {
+        node.style.setProperty("--glass-a", (1 - n.clear).toFixed(2));
+        node.style.setProperty("--prism-a", (0.3 + n.clear * 0.65).toFixed(2));
+        node.querySelector(".field b").textContent = Math.round(n.clear * 100) + " %";
+      };
+      range.addEventListener("input", function () { n.clear = +range.value; glass(); save(); });
+      glass();
+    } else if (type === "chrono") {
+      n.title = String(opts.title || "Horloge").slice(0, 60);
+      n.states = typeof opts.states === "string" ? opts.states.slice(0, 1200)
+        : "Matin : la classe arrive, fenêtres fermées\nMidi : la cantine vide la salle\nAprès-midi : sport, le CO₂ grimpe";
+      n.period = between(opts.period, 3, 60, 12);
+      n.paused = !!opts.paused;
+      n.phase = Math.max(0, parseInt(opts.phase, 10) || 0);
+      n.t = 0;
+      node.innerHTML = '<div class="shell">' + blockHead(type) + '<div class="chrono-top"><svg class="chrono-ring" viewBox="0 0 40 40" role="button" tabindex="0"' +
+        ' aria-label="Figer ou relancer l\'horloge"><circle class="track" cx="20" cy="20" r="16"/><circle class="arc" cx="20" cy="20" r="16"' +
+        ' transform="rotate(-90 20 20)" stroke-dasharray="100.5" stroke-dashoffset="100.5"/></svg><div><b></b><small></small></div></div>' +
+        '<textarea class="states" spellcheck="false" aria-label="États de l\'horloge, un par ligne"></textarea>' +
+        '<label class="field">Période <input type="range" min="3" max="60" step="1"><b></b></label></div>' + PORT_OUT;
+      var states = node.querySelector("textarea");
+      states.value = n.states;
+      var settle = 0;
+      states.addEventListener("input", function () {
+        n.states = states.value.slice(0, 1200);
+        autosize(states);
+        clearTimeout(settle);
+        settle = setTimeout(function () { paintChrono(n); propagate(); }, 650);
+      });
+      requestAnimationFrame(function () { autosize(states); });
+      var period = node.querySelector("input");
+      period.value = n.period;
+      var showPeriod = function () { node.querySelector(".field b").textContent = n.period + " s"; };
+      period.addEventListener("input", function () { n.period = +period.value; n.t = Math.min(n.t, n.period); showPeriod(); paintChrono(n); save(); });
+      showPeriod();
+      var ring = node.querySelector(".chrono-ring");
+      var toggle = function () { n.paused = !n.paused; paintChrono(n); save(); toast(n.paused ? "Horloge figée : l'état observé ne change plus." : "L'horloge repart."); };
+      ring.addEventListener("click", toggle);
+      ring.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+    } else if (type === "fuse") {
+      node.innerHTML = '<div class="shell">' + blockHead(type) + '<div class="fuse-blob"></div><div class="note"></div></div>' + PORT_IN + PORT_OUT;
+    } else { // émetteur, récepteur
+      n.channel = opts.channel === undefined ? "A" : cleanChannel(opts.channel);
+      node.innerHTML = '<div class="shell">' + blockHead(type) + '<div class="antenna"><i></i><i></i><i></i><b></b></div>' +
+        '<label class="field">Canal <input class="channel" maxlength="12" spellcheck="false" autocomplete="off"></label><div class="note"></div></div>' +
+        (type === "tx" ? PORT_IN : PORT_OUT);
+      var channel = node.querySelector(".channel");
+      channel.value = n.channel;
+      channel.addEventListener("input", function () { n.channel = cleanChannel(channel.value); propagate(); });
+    }
+  }
+  function describe(ins) {
+    var t = ins.filter(function (m) { return m.kind === "thought"; }).length, c = ins.length - t;
+    return [t ? t + (t > 1 ? " pensées" : " pensée") : "", c ? c + (c > 1 ? " contextes" : " contexte") : ""].filter(Boolean).join(" et ");
+  }
+  function wirelessPeers(n) {
+    var count = 0;
+    nodes.forEach(function (o) { if (o.type === (n.type === "tx" ? "rx" : "tx") && n.channel && o.channel === n.channel) count += 1; });
+    return count;
+  }
+  function paintBlock(n, fresh) {
+    var note = n.el.querySelector(".note");
+    var ins = inputsOf(n.id);
+    n.el.classList.toggle("is-on", !!n.memory);
+    if (n.type === "chrono") { paintChrono(n); return; }
+    if (n.type === "holo") {
+      note.textContent = ins.length ? "Projette " + describe(ins) + " : « " + clip(ins[0].lines ? ins[0].lines[0] : ins[0].text, 90) + " »"
+        : "En attente d'un flux à projeter.";
+    } else if (n.type === "fuse") {
+      var cols = ins.map(function (m) { return m.color || (m.kind === "context" ? "#7fdcff" : BLOCKS.fuse.color); });
+      ["--c1", "--c2", "--c3"].forEach(function (v, i) { n.el.style.setProperty(v, cols.length ? cols[i % cols.length] : BLOCKS.fuse.color); });
+      note.textContent = n.memory ? n.memory.lines[0] : "Reliez-lui plusieurs flux : il les fond en une seule pensée.";
+    } else if (n.type === "tx") {
+      var rx = wirelessPeers(n);
+      note.textContent = !n.channel ? "Donnez-lui un canal." : (ins.length ? "Émet " + describe(ins) : "Rien à émettre") + " → " +
+        (rx ? rx + (rx > 1 ? " récepteurs" : " récepteur") : "aucun récepteur") + " sur « " + n.channel + " ».";
+    } else if (n.type === "rx") {
+      var tx = wirelessPeers(n);
+      note.textContent = !n.channel ? "Donnez-lui un canal." : !tx ? "Aucun émetteur sur « " + n.channel + " »."
+        : "Reçoit " + (ins.length ? describe(ins) : "rien pour l'instant") + " de " + tx + (tx > 1 ? " émetteurs" : " émetteur") + " (« " + n.channel + " »).";
+      if (fresh && n.memory) { n.el.classList.remove("is-receiving"); void n.el.offsetWidth; n.el.classList.add("is-receiving"); }
+    }
+  }
+  /** Fusion : une pensée qui garde la voix de chaque flux reçu. */
+  function fuse(ins) {
+    var thoughts = ins.filter(function (m) { return m.kind === "thought"; });
+    var contexts = ins.filter(function (m) { return m.kind === "context"; });
+    var keys = mergeKeys(thoughts.map(function (t) { return t.keys; }).concat([keywords(contexts.map(function (c) { return c.text; }).join(" "), 4)]), 5);
+    var subject = thoughts.length ? thoughts[0].subject : subjectOf(contexts.map(function (c) { return c.text; }).join(" "));
+    var lines = [(thoughts.length ? "Fusion de " + thoughts.map(function (t) { return t.author; }).join(" × ") : "Fusion de " + describe(contexts)) + " : " + cap(subject) + "."];
+    thoughts.forEach(function (t) { lines.push(t.author.split(" ").pop() + " — " + (t.lines[1] || t.lines[0])); });
+    contexts.forEach(function (c) { lines.push((c.title || "Contexte") + " — " + clip(c.text, 140)); });
+    lines = lines.slice(0, 5);
+    var voices = thoughts.length + contexts.length;
+    return { kind: "thought", author: "Fusion", color: BLOCKS.fuse.color, mood: voices + (voices > 1 ? " voix fondues" : " voix"), keys: keys, subject: subject, lines: lines,
+      text: lines.join(" "), action: thoughts.length ? thoughts[0].action : "Explorer", trace: [], memory: "" };
+  }
+  function statesOf(n) { return n.states.split("\n").map(function (x) { return x.trim(); }).filter(Boolean).slice(0, 12); }
+  function chronoMemory(n) {
+    var st = statesOf(n);
+    return st.length ? { kind: "context", title: n.title, text: st[n.phase % st.length] } : null;
+  }
+  function paintChrono(n) {
+    var st = statesOf(n);
+    n.el.querySelector(".chrono-top b").textContent = st.length ? st[n.phase % st.length] : "Aucun état";
+    n.el.querySelector(".chrono-top small").textContent = !st.length ? "Écrivez un état par ligne."
+      : "État " + (n.phase % st.length + 1) + " / " + st.length + (n.paused ? " · figé (observé)" : st.length > 1 ? " · change toutes les " + n.period + " s" : "");
+    n.el.classList.toggle("is-paused", n.paused);
+    n.el.classList.toggle("is-on", st.length > 0);
+    n.el.querySelector(".arc").style.strokeDashoffset = (100.5 * (1 - (n.paused ? 1 : n.t / n.period))).toFixed(1);
+  }
+  /** Les horloges avancent (quand le Nexus est à l'écran) ; un changement d'état repart dans le flux. */
+  function tickChronos(step) {
+    if ($("nexus").hidden || document.hidden) return;
+    var changed = false;
+    nodes.forEach(function (n) {
+      if (n.type !== "chrono") return;
+      var st = statesOf(n);
+      if (!n.paused && st.length > 1) {
+        n.t += step === undefined ? 0.25 : step;
+        if (n.t >= n.period) { n.t = 0; n.phase = (n.phase + 1) % st.length; changed = true; }
+      }
+      paintChrono(n);
+    });
+    if (changed) propagate();
+  }
+  setInterval(tickChronos, 250);
+
   function paintEngram(n) {
     var mood = moodOf(n);
     var e = n.el;
     e.style.setProperty("--mood", mood.color);
     e.querySelector(".mood span").textContent = n.engram ? mood.label : "…";
     e.classList.toggle("is-loading", !n.engram && n.status !== "failed");
-    e.querySelector(".mind-state").textContent = n.engram ? ""
+    e.querySelector(".mind-state").textContent = n.engram ? (n.asleep ? "En veille : hors champ, ou trop d'Engrammes vivants à la fois (Paramètres → Performance)." : "")
       : n.status === "failed" ? n.error || "Engramme indisponible."
       : n.status === "creating" ? "Prism dresse l'Engramme de " + n.name + " (25 s à 1 min 30)…"
       : "Chargement de l'Engramme…";
@@ -882,6 +1283,7 @@ button { cursor: pointer; }
       if (!nodes.has(n.id)) return;
       n.doc = doc;
       frame.onload = function () {
+        if (n.asleep) return; // endormi (hors champ) : son document est vide
         n.el.classList.add("is-live");
         shareBudget();
         if (n.memory && n.memory.trace) traceIn(n);
@@ -954,6 +1356,8 @@ button { cursor: pointer; }
       h.members = h.members.filter(function (m) { return m !== id; });
       if (h.members.length < 2) removeHub(h.id); else placeHub(h);
     });
+    if (n.sayEl) n.sayEl.remove();
+    if (wheelOf === id) closeWheel();
     n.el.style.transition = "opacity .35s, transform .35s";
     n.el.style.opacity = "0";
     n.el.style.transform = "scale(.85)";
@@ -983,7 +1387,7 @@ button { cursor: pointer; }
     return "M" + a.x.toFixed(1) + " " + a.y.toFixed(1) + " C" + (a.x + dx).toFixed(1) + " " + a.y.toFixed(1) + " " +
       (b.x - dx).toFixed(1) + " " + b.y.toFixed(1) + " " + b.x.toFixed(1) + " " + b.y.toFixed(1);
   }
-  function colorOf(n) { return n.type === "engram" ? n.color : n.type === "context" ? "#7fdcff" : "#ffe3b0"; }
+  function colorOf(n) { return n.type === "engram" ? n.color : n.type === "context" ? "#7fdcff" : BLOCKS[n.type] ? BLOCKS[n.type].color : "#ffe3b0"; }
   function svg(tag, attrs) {
     var e = document.createElementNS(SVGNS, tag);
     for (var k in attrs) e.setAttribute(k, attrs[k]);
@@ -993,11 +1397,12 @@ button { cursor: pointer; }
   function canLink(from, to) {
     if (!from || !to || from === to) return false;
     var a = nodes.get(from), b = nodes.get(to);
-    if (!a || !b || a.type === "render" || b.type === "context") return false;
+    if (!a || !b || SINKS.indexOf(a.type) >= 0 || SOURCES.indexOf(b.type) >= 0) return false;
     var exists = false;
     links.forEach(function (l) { if (l.from === from && l.to === to) exists = true; });
     if (exists) return false;
-    // Pas de boucle : la pensée coule dans un sens.
+    // Pas de boucle (fils et liaisons sans fil compris) : la pensée coule dans un sens.
+    var all = edges();
     var seen = new Set();
     var stack = [to];
     while (stack.length) {
@@ -1005,7 +1410,7 @@ button { cursor: pointer; }
       if (cur === from) return false;
       if (seen.has(cur)) continue;
       seen.add(cur);
-      links.forEach(function (l) { if (l.from === cur) stack.push(l.to); });
+      all.forEach(function (e) { if (e.from === cur) stack.push(e.to); });
     }
     return true;
   }
@@ -1116,10 +1521,42 @@ button { cursor: pointer; }
   // Flux : Contexte → Engramme → Rendu. Chaque nœud calcule sa mémoire à partir de ce qu'il reçoit ; un nœud sans entrée
   // n'a pas de mémoire. Les changements parcourent les fils (impulsions), les effacements sont instantanés.
   // ======================================================================================
+  /** Arêtes du flux : les fils, et les liaisons sans fil (émetteur → récepteurs du même canal). */
+  function edges() {
+    var out = [];
+    links.forEach(function (l) { out.push({ from: l.from, to: l.to }); });
+    nodes.forEach(function (tx) {
+      if (tx.type !== "tx" || !tx.channel) return;
+      nodes.forEach(function (rx) { if (rx.type === "rx" && rx.channel === tx.channel) out.push({ from: tx.id, to: rx.id, wireless: true }); });
+    });
+    return out;
+  }
+  /** Ce qu'un nœud reçoit : les mémoires de ses sources, relais (prisme, émetteur, récepteur) dépliés. */
+  function inputsOf(id) {
+    var out = [];
+    var add = function (m) { if (!m) return; if (m.kind === "relay") m.items.forEach(add); else out.push(m); };
+    edges().forEach(function (e) { if (e.to === id && nodes.has(e.from)) add(nodes.get(e.from).memory); });
+    return out;
+  }
+  function placeWireless() {
+    var g = $("wireless");
+    g.replaceChildren();
+    edges().forEach(function (e) {
+      if (!e.wireless) return;
+      var a = nodes.get(e.from), b = nodes.get(e.to);
+      var p = { x: a.x + a.el.offsetWidth / 2, y: a.y + a.el.offsetHeight / 2 };
+      var q = { x: b.x + b.el.offsetWidth / 2, y: b.y + b.el.offsetHeight / 2 };
+      var mx = (p.x + q.x) / 2, my = Math.min(p.y, q.y) - 90 - Math.abs(p.x - q.x) * 0.12;
+      g.append(svg("path", { class: "wireless", "data-from": e.from, "data-to": e.to,
+        d: "M" + p.x.toFixed(1) + " " + p.y.toFixed(1) + " Q" + mx.toFixed(1) + " " + my.toFixed(1) + " " + q.x.toFixed(1) + " " + q.y.toFixed(1) }));
+    });
+  }
+  var loopWarned = false; // une boucle sans fil n'est signalée qu'une fois
   function order() {
+    var all = edges();
     var indeg = new Map();
     nodes.forEach(function (n, id) { indeg.set(id, 0); });
-    links.forEach(function (l) { indeg.set(l.to, (indeg.get(l.to) || 0) + 1); });
+    all.forEach(function (e) { indeg.set(e.to, (indeg.get(e.to) || 0) + 1); });
     var queue = [];
     indeg.forEach(function (d, id) { if (!d) queue.push(id); });
     var out = [];
@@ -1127,11 +1564,11 @@ button { cursor: pointer; }
     while (queue.length) {
       var id = queue.shift();
       out.push(id);
-      links.forEach(function (l) {
-        if (l.from !== id) return;
-        depth.set(l.to, Math.max(depth.get(l.to) || 0, depth.get(id) + 1));
-        indeg.set(l.to, indeg.get(l.to) - 1);
-        if (!indeg.get(l.to)) queue.push(l.to);
+      all.forEach(function (e) {
+        if (e.from !== id) return;
+        depth.set(e.to, Math.max(depth.get(e.to) || 0, depth.get(id) + 1));
+        indeg.set(e.to, indeg.get(e.to) - 1);
+        if (!indeg.get(e.to)) queue.push(e.to);
       });
     }
     return { ids: out, depth: depth };
@@ -1148,12 +1585,24 @@ button { cursor: pointer; }
     var gen = generation;
     var o = order();
     var changes = [];
+    // Un canal qui se reboucle sur lui-même (liaison sans fil) : ces nœuds n'ont plus de mémoire.
+    var looped = 0;
+    nodes.forEach(function (n, id) {
+      if (o.depth.has(id)) return;
+      looped += 1;
+      if (n.memory) { n.memory = null; changes.push({ n: n, erased: true, depth: 0 }); }
+    });
+    if (looped && !loopWarned && !opts.quietLoop) toast("Ce canal sans fil forme une boucle : le flux s'y arrête.");
+    loopWarned = looped > 0;
     o.ids.forEach(function (id) {
       var n = nodes.get(id);
       var before = n.memory ? JSON.stringify(n.memory) : "";
-      var ins = incoming(id).map(function (l) { return nodes.get(l.from).memory; }).filter(Boolean);
+      var ins = inputsOf(id);
       var mem = null;
       if (n.type === "context") mem = n.text.trim() ? { kind: "context", text: n.text.trim(), title: n.title } : null;
+      else if (n.type === "chrono") mem = chronoMemory(n);
+      else if (n.type === "holo" || n.type === "tx" || n.type === "rx") mem = ins.length ? { kind: "relay", via: n.type, items: ins } : null;
+      else if (n.type === "fuse") mem = ins.length ? fuse(ins) : null;
       else if (n.type === "engram") {
         n.pending = null;
         if (!ins.length || !n.engram) mem = null;
@@ -1169,8 +1618,9 @@ button { cursor: pointer; }
       var after = mem ? JSON.stringify(mem) : "";
       if (before !== after) changes.push({ n: n, erased: !mem, depth: o.depth.get(id) || 0 });
     });
+    placeWireless();
     changes.forEach(function (c) {
-      if (c.n.type === "context") return;
+      if (c.n.type === "context" || c.n.type === "chrono") return;
       if (c.erased || opts.instant) {
         // Effacement : immédiat, sans attendre d'impulsion.
         repaint(c.n, true);
@@ -1186,7 +1636,10 @@ button { cursor: pointer; }
         });
       }, delay);
     });
-    nodes.forEach(function (n) { if (n.type === "engram" && !n.memory) paintEngram(n); });
+    nodes.forEach(function (n) {
+      if (n.type === "engram" && !n.memory) paintEngram(n);
+      if (n.type === "tx" || n.type === "rx") paintBlock(n); // compte des pairs du canal
+    });
     renderIntel();
     save();
   }
@@ -1194,7 +1647,9 @@ button { cursor: pointer; }
     if (n.type === "engram") {
       paintEngram(n);
       traceIn(n);
+      if (!erased && n.memory) say(n, n.memory.lines[1] || n.memory.lines[0]); // il le dit, dans l'espace
     }
+    if (BLOCKS[n.type]) paintBlock(n, true); // un flux neuf vient d'arriver
     if (n.type === "render") {
       paintRender(n);
       if (erased) { n.el.classList.remove("is-erased"); void n.el.offsetWidth; n.el.classList.add("is-erased"); }
@@ -1251,11 +1706,22 @@ button { cursor: pointer; }
       markTargets(from, true);
       return;
     }
-    if (nodeEl && !e.target.closest("textarea, [contenteditable], button, .port")) {
+    if (nodeEl && !e.target.closest("textarea, input, select, [contenteditable], button, .port, .chrono-ring")) {
       var n = nodes.get(nodeEl.dataset.id);
       select(n.id);
       var p = toWorld(e.clientX, e.clientY);
-      gesture = { kind: "node", n: n, dx: p.x - n.x, dy: p.y - n.y, moved: false };
+      gesture = { kind: "node", n: n, dx: p.x - n.x, dy: p.y - n.y, moved: false, sx: e.clientX, sy: e.clientY };
+      if (e.pointerType === "touch") {
+        // Appui long (sans bouger) : la roue de réactions.
+        var g0 = gesture;
+        g0.press = setTimeout(function () {
+          if (gesture !== g0 || g0.far) return;
+          gesture = null;
+          gesturing(false);
+          nodeEl.classList.remove("is-dragging");
+          openWheel(n, g0.sx, g0.sy);
+        }, 550);
+      }
       gesturing(true);
       nodeEl.classList.add("is-dragging");
       zTop += 1;
@@ -1302,7 +1768,10 @@ button { cursor: pointer; }
       n.el.style.left = n.x + "px";
       n.el.style.top = n.y + "px";
       gesture.moved = true;
+      if (!gesture.far && Math.hypot(e.clientX - gesture.sx, e.clientY - gesture.sy) > 8) gesture.far = true;
       placeLinksOf(n.id);
+      placeSay(n);
+      if (n.type === "tx" || n.type === "rx") placeWireless();
       hubs.forEach(function (h) { if (h.members.indexOf(n.id) >= 0) placeHub(h); });
     } else if (gesture.kind === "wire") {
       var q = toWorld(e.clientX, e.clientY);
@@ -1330,7 +1799,7 @@ button { cursor: pointer; }
       if (over && over.id === g.id && Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < 8) cutLink(g.id, e.clientX, e.clientY);
       return;
     }
-    if (g.kind === "node") g.n.el.classList.remove("is-dragging");
+    if (g.kind === "node") { clearTimeout(g.press); g.n.el.classList.remove("is-dragging"); }
     if (g.kind === "wire") {
       $("draft").hidden = true;
       $("draft").setAttribute("d", "");
@@ -1389,15 +1858,34 @@ button { cursor: pointer; }
 
   addEventListener("keydown", function (e) {
     var typing = e.target.closest && e.target.closest("input, textarea, [contenteditable]");
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "k" || e.key === "K") && !$("nexus").hidden) {
+      e.preventDefault(); // Ctrl + K : chercher un réglage
+      if ($("settings").hidden) openSettings(); else { $("settings-q").focus(); $("settings-q").select(); }
+      return;
+    }
     if (e.key === "Escape") {
-      if (!$("anatomy").hidden) closeAnatomy();
+      if (!$("wheel").hidden) closeWheel();
+      else if (!$("settings").hidden) closeSettings();
+      else if (!$("anatomy").hidden) closeAnatomy();
+      else if (replyTo) setReply(null);
       else if (!$("room").hidden) closeRoom();
       else { closeMenus(); setHubMode(false); }
       return;
     }
-    if (typing || $("nexus").hidden) return;
+    if (typing || $("nexus").hidden || !$("settings").hidden || !$("wheel").hidden) return;
     if ((e.key === "Delete" || e.key === "Backspace") && selected) removeNode(selected);
     if (e.key === "f") fit(true);
+    if ((e.key === "r" || e.key === "R") && !e.ctrlKey && !e.metaKey && selected && nodes.get(selected)) {
+      var r = nodes.get(selected).el.getBoundingClientRect();
+      openWheel(nodes.get(selected), r.left + r.width / 2, r.top + Math.min(r.height / 2, 120));
+    }
+  });
+  viewport.addEventListener("contextmenu", function (e) {
+    var nodeEl = e.target.closest(".node");
+    if (!nodeEl || !settings.wheel || e.target.closest("textarea, input, [contenteditable]")) return;
+    e.preventDefault(); // clic droit sur une bulle : la roue de réactions
+    select(nodeEl.dataset.id);
+    openWheel(nodes.get(nodeEl.dataset.id), e.clientX, e.clientY);
   });
 
   // ======================================================================================
@@ -1492,8 +1980,68 @@ button { cursor: pointer; }
     menu.hidden = !open;
     $("add-engram").setAttribute("aria-expanded", String(open));
   });
+  var inventory = $("inventory-menu");
+  function addBlock(type, opts) {
+    closeMenus();
+    var s = centerSpot(0);
+    var n = addNode(type, s.x, s.y, opts);
+    select(n.id);
+    propagate();
+    return n;
+  }
+  /** Une paire sans fil : un émetteur et un récepteur sur un canal libre, côte à côte. */
+  function addWirelessPair() {
+    closeMenus();
+    var used = new Set();
+    nodes.forEach(function (n) { if (n.channel) used.add(n.channel); });
+    var channel = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").find(function (c) { return !used.has(c); }) || "Z";
+    var s = centerSpot(-160);
+    var tx = addNode("tx", s.x, s.y, { channel: channel });
+    var rx = addNode("rx", s.x + 420, s.y, { channel: channel });
+    select(rx.id);
+    propagate();
+    toast("Canal « " + channel + " » : ce qui entre dans l'émetteur ressort du récepteur, sans fil.");
+    return [tx, rx];
+  }
+  function inventoryItem(icon, color, title, sub, onClick) {
+    var b = menuItem(color, title, sub, onClick);
+    b.classList.add("inv-item");
+    var orb = b.querySelector(".mini-orb");
+    orb.className = "inv-icon";
+    orb.textContent = icon;
+    return b;
+  }
+  function fillInventory() {
+    inventory.replaceChildren();
+    var sec = function (t) { var d = el("div", "menu-sec", ""); d.textContent = t; d.style.gridColumn = "1 / -1"; inventory.append(d); };
+    sec("Essentiels");
+    inventory.append(
+      inventoryItem("✎", "#7fdcff", "Contexte", "Une donnée brute, une consigne.", function () { closeMenus(); $("add-context").click(); }),
+      inventoryItem("◎", "#b99bff", "Engramme", "Un esprit : démonstrations, les vôtres, ou en créer un.", function (e) {
+        e.stopPropagation(); closeMenus(); fillEngramMenu(); menu.hidden = false; $("add-engram").setAttribute("aria-expanded", "true");
+      }),
+      inventoryItem("▭", "#ffe3b0", "Rendu", "L'écran qui naît du flux.", function () { closeMenus(); $("add-render").click(); }));
+    sec("Blocs avancés");
+    ["holo", "chrono", "fuse"].forEach(function (type) {
+      var b = BLOCKS[type];
+      inventory.append(inventoryItem(b.icon, b.color, b.name, b.sub, function () { addBlock(type); }));
+    });
+    inventory.append(inventoryItem("⇅", BLOCKS.tx.color, "Paire sans fil", "Un émetteur et un récepteur sur un canal libre.", function () { addWirelessPair(); }));
+    ["tx", "rx"].forEach(function (type) {
+      var b = BLOCKS[type];
+      inventory.append(inventoryItem(b.icon, b.color, b.name, b.sub, function () { addBlock(type); }));
+    });
+  }
+  $("inventory").addEventListener("click", function (e) {
+    e.stopPropagation();
+    var open = inventory.hidden;
+    closeMenus();
+    if (open) fillInventory();
+    inventory.hidden = !open;
+    $("inventory").setAttribute("aria-expanded", String(open));
+  });
   function closeMenus() {
-    [["engram-menu", "add-engram"], ["intel-menu", "intel"], ["scene-menu", "scene"]].forEach(function (pair) {
+    [["engram-menu", "add-engram"], ["intel-menu", "intel"], ["scene-menu", "scene"], ["inventory-menu", "inventory"]].forEach(function (pair) {
       $(pair[0]).hidden = true;
       $(pair[1]).setAttribute("aria-expanded", "false");
     });
@@ -1538,6 +2086,7 @@ button { cursor: pointer; }
     var n = nodes.get(id);
     if (!n || anatomyOf || !n.engram) return;
     anatomyOf = id;
+    syncAtmos(false);
     $("nexus").classList.add("is-diving");
     beforeDive = { x: view.x, y: view.y, z: view.z };
     var mind = n.el.querySelector(".mind").getBoundingClientRect();
@@ -1570,7 +2119,9 @@ button { cursor: pointer; }
     }, reduced ? 0 : 300);
     anatomyOf = null;
     $("nexus").classList.remove("is-diving");
+    syncAtmos(true);
     shareBudget();
+    streamSoon();
   }
   $("anat-back").addEventListener("click", closeAnatomy);
 
@@ -1598,7 +2149,7 @@ button { cursor: pointer; }
   function renderPreview() {
     var n = nodes.get(anatomyOf);
     if (!n) return;
-    var ins = incoming(n.id).map(function (l) { return nodes.get(l.from).memory; }).filter(Boolean);
+    var ins = inputsOf(n.id);
     var box = $("anat-preview");
     box.replaceChildren();
     var t = n.memory || think(n, ins.length ? ins : [{ kind: "context", text: "Concevoir un écran d'accueil pour une bibliothèque de quartier." }]);
@@ -1651,6 +2202,7 @@ button { cursor: pointer; }
     hubs.set(id, h);
     e.querySelector("button").addEventListener("click", function () { openRoom(id); });
     placeHub(h);
+    renderChannels();
     save();
     return h;
   }
@@ -1665,34 +2217,61 @@ button { cursor: pointer; }
     h.el.style.left = cx - r + "px";
     h.el.style.top = cy - r + "px";
     h.el.style.width = h.el.style.height = r * 2 + "px";
-    h.el.querySelector(".label b").textContent = h.members.map(function (id) { return nodes.get(id).name.split(" ").pop(); }).join(" × ");
+    h.el.querySelector(".label b").textContent = hubName(h);
   }
+  function hubName(h) { return h.members.map(function (id) { return nodes.get(id).name.split(" ").pop(); }).join(" × "); }
   function removeHub(id) {
     var h = hubs.get(id);
     if (!h) return;
     hubs.delete(id);
     h.el.remove();
     if (roomOf === id) closeRoom();
+    renderChannels();
     save();
   }
 
+  // War Room : un canal par Hub (onglets), réponses en fil sous un message, bulles de dialogue au-dessus des esprits.
   var roomOf = null;
   var debating = false;
+  var replyTo = null;
+  var suggested = ""; // question proposée à l'ouverture d'un canal vide
+  function pageOf(h) { if (!h.page) h.page = el("div", "page"); return h.page; }
   function openRoom(id) {
     var h = hubs.get(id);
     if (!h) return;
+    if (roomOf !== id) setReply(null);
     roomOf = id;
+    h.unread = 0;
     $("room").hidden = false;
+    $("log").replaceChildren(pageOf(h));
+    renderChannels();
     focusHub(h);
     $("room-title").textContent = h.members.map(function (m) { return nodes.get(m).name; }).join(" × ");
     var av = $("room-avatars");
     av.replaceChildren();
     h.members.forEach(function (m) { var s = el("span"); s.style.setProperty("--c", nodes.get(m).color); s.title = nodes.get(m).name; av.append(s); });
-    if (!$("log").children.length) {
+    if (!pageOf(h).children.length) {
       var ctx = firstContext();
-      $("question").value = ctx ? "Comment aborder : " + subjectOf(ctx.text) + " ?" : "Comment rendre un tableau de bord vraiment utile ?";
+      suggested = ctx ? "Comment aborder : " + subjectOf(ctx.text) + " ?" : "Comment rendre un tableau de bord vraiment utile ?";
+      $("question").value = suggested;
     }
+    $("log").scrollTop = $("log").scrollHeight;
     setTimeout(function () { $("question").focus(); }, 50);
+  }
+  /** Onglets des canaux : un par Hub, avec les messages non lus (un débat continue dans son canal). */
+  function renderChannels() {
+    var box = $("channels");
+    box.replaceChildren();
+    hubs.forEach(function (h) {
+      var b = el("button", "", "");
+      b.type = "button";
+      b.setAttribute("role", "tab");
+      b.dataset.hub = h.id;
+      b.setAttribute("aria-selected", String(h.id === roomOf));
+      b.textContent = "# " + hubName(h) + (h.unread ? " · " + h.unread : "");
+      b.addEventListener("click", function () { openRoom(h.id); });
+      box.append(b);
+    });
   }
   function focusHub(h) {
     var r = h.el.offsetWidth / 2;
@@ -1702,7 +2281,7 @@ button { cursor: pointer; }
     var z = Math.max(0.3, Math.min(1, Math.min(free / (2 * r + 60), (innerHeight - 120) / (2 * r + 60))));
     animateView({ z: z, x: 16 + free / 2 - cx * z, y: 70 + (innerHeight - 70) / 2 - cy * z }, 700);
   }
-  function closeRoom() { $("room").hidden = true; roomOf = null; }
+  function closeRoom() { $("room").hidden = true; roomOf = null; setReply(null); }
   $("room-close").addEventListener("click", closeRoom);
   function firstContext() {
     var c = null;
@@ -1710,13 +2289,30 @@ button { cursor: pointer; }
     return c;
   }
 
-  function addMsg(kind, color, who, text) {
+  /** Un message rejoint le canal de son Hub (ou un fil) ; hors de l'écran, il compte comme non lu. */
+  function post(h, m, parent) {
+    (parent || pageOf(h)).append(m);
+    if (roomOf === h.id && !$("room").hidden) $("log").scrollTop = $("log").scrollHeight;
+    else if (!m.classList.contains("typing") && !m.classList.contains("round")) { h.unread = (h.unread || 0) + 1; renderChannels(); }
+  }
+  function addMsg(h, kind, color, who, text, mind, parent) {
     var m = el("div", "msg " + kind);
     if (color) m.style.setProperty("--c", color);
     if (who) { var b = el("b"); b.textContent = who; m.append(b); }
     var body = el("span");
     m.append(body);
-    $("log").append(m);
+    if (mind && kind === "mind") {
+      m.dataset.mind = mind.id;
+      if (!parent) {
+        var r = el("button", "reply-btn", "");
+        r.type = "button";
+        r.textContent = "Répondre en fil";
+        r.addEventListener("click", function () { setReply(m); });
+        m.append(r);
+      }
+      say(mind, text);
+    }
+    post(h, m, parent);
     return { m: m, body: body, text: text };
   }
   function type(entry) {
@@ -1726,61 +2322,57 @@ button { cursor: pointer; }
       var timer = setInterval(function () {
         i = Math.min(entry.text.length, i + 3);
         entry.body.textContent = entry.text.slice(0, i);
-        $("log").scrollTop = $("log").scrollHeight;
+        if (entry.m.isConnected) $("log").scrollTop = $("log").scrollHeight;
         if (i >= entry.text.length) { clearInterval(timer); resolve(); }
       }, 16);
     });
   }
-  function typing(color, who) {
+  function typing(h, color, who, parent) {
     var m = el("div", "msg mind typing", "<b></b><i></i><i></i><i></i>");
     m.style.setProperty("--c", color);
     m.querySelector("b").textContent = who;
-    $("log").append(m);
-    $("log").scrollTop = $("log").scrollHeight;
+    post(h, m, parent);
     return m;
   }
   var wait = function (ms) { return new Promise(function (r) { setTimeout(r, reduced ? 0 : ms); }); };
+  function busyRoom(on) { debating = on; $("ask-send").disabled = on; }
 
   /** Débat : chaque esprit prend position, puis répond à un autre, puis le Hub fait sa synthèse. */
   function debate(question) {
     if (intel === "gemini") return debateRemote(question);
     var h = hubs.get(roomOf);
     if (!h || debating) return Promise.resolve();
-    debating = true;
-    $("ask-send").disabled = true;
     var minds = h.members.map(function (id) { return nodes.get(id); });
     var ctx = firstContext();
     var input = [{ kind: "context", text: question + (ctx ? " " + ctx.text : "") }];
     if (minds.some(function (n) { return !n.engram; })) {
-      debating = false;
-      $("ask-send").disabled = false;
       toast("Un Engramme du Hub se charge encore.");
       return Promise.resolve();
     }
+    busyRoom(true);
     var positions = minds.map(function (n) { return think(n, input); });
     var keys = positions[0].keys.length ? positions[0].keys : ["l'essentiel"];
-    var log = $("log");
-    var u = addMsg("user", null, "Vous", question);
+    var u = addMsg(h, "user", null, "Vous", question);
     u.body.textContent = question;
-    var chain = wait(300).then(function () { var r = el("div", "round", "Tour 1 · positions"); log.append(r); });
+    var chain = wait(300).then(function () { post(h, el("div", "round", "Tour 1 · positions")); });
     minds.forEach(function (n, i) {
       chain = chain.then(function () {
-        var t = typing(n.color, n.name);
+        var t = typing(h, n.color, n.name);
         return wait(650).then(function () {
           t.remove();
-          return type(addMsg("mind", n.color, n.name + " · " + positions[i].mood, positions[i].lines.slice(0, 2).join(" ")));
+          return type(addMsg(h, "mind", n.color, n.name + " · " + positions[i].mood, positions[i].lines.slice(0, 2).join(" "), n));
         });
       });
     });
-    chain = chain.then(function () { log.append(el("div", "round", "Tour 2 · confrontation")); });
+    chain = chain.then(function () { post(h, el("div", "round", "Tour 2 · confrontation")); });
     minds.forEach(function (n, i) {
       chain = chain.then(function () {
         var other = minds[(i + 1) % minds.length];
-        var t = typing(n.color, n.name);
+        var t = typing(h, n.color, n.name);
         return wait(600).then(function () {
           t.remove();
           var reply = reactOf(n, other, keys[i % keys.length], positions[i]);
-          return type(addMsg("mind", n.color, n.name + " → " + other.name.split(" ").pop(), reply));
+          return type(addMsg(h, "mind", n.color, n.name + " → " + other.name.split(" ").pop(), reply, n));
         });
       });
     });
@@ -1799,12 +2391,9 @@ button { cursor: pointer; }
         var li = el("li");
         li.textContent = "Premier geste : « " + positions[0].action + " », validé par " + minds.slice(1).map(function (n) { return n.name.split(" ").pop(); }).join(" et ") + ".";
         ul.append(li);
-        log.append(s);
-        log.scrollTop = log.scrollHeight;
-        debating = false;
-        $("ask-send").disabled = false;
+        post(h, s);
       });
-    });
+    }).finally(function () { busyRoom(false); });
   }
   /** Réponse d'un Engramme à un autre : sa méthode appliquée à une donnée du sujet. */
   function reactOf(n, other, key, position) {
@@ -1813,11 +2402,60 @@ button { cursor: pointer; }
     return who + " voit juste sur l'essentiel. Mais pour « " + key + " », " +
       (eng ? lowerFirst(firstSentence(eng.directive || eng.content, 170)) : "restons au plus près des faits.");
   }
+  /** Répondre en fil à un esprit : il vous répond sous son message (Gemini : prix d'une pensée, au clic sur « Répondre »). */
+  function setReply(m) {
+    replyTo = m || null;
+    var bar = $("reply-to");
+    bar.hidden = !replyTo;
+    var n = replyTo && nodes.get(replyTo.dataset.mind);
+    if (replyTo) {
+      if ($("question").value === suggested) $("question").value = ""; // la question proposée visait le débat
+      bar.querySelector("span").textContent = "Répondre à " + (n ? n.name : "…") + " : « " + clip(replyTo.querySelector("span").textContent, 80) + " »";
+      $("question").placeholder = "Votre réponse à " + (n ? n.name.split(" ").pop() : "…") + "…";
+      $("question").focus();
+    } else $("question").placeholder = "Posez une question au Hub…";
+    renderIntel();
+  }
+  $("reply-cancel").addEventListener("click", function () { setReply(null); });
+  function replyInThread(m, question) {
+    var h = hubs.get(roomOf);
+    var n = nodes.get(m.dataset.mind);
+    if (!h || !n || !n.engram) return Promise.resolve();
+    if (debating) { toast("Attendez la fin du débat en cours."); return Promise.resolve(); }
+    var thread = m.nextElementSibling && m.nextElementSibling.classList.contains("thread") ? m.nextElementSibling : null;
+    if (!thread) { thread = el("div", "thread"); m.after(thread); }
+    var u = addMsg(h, "user", null, "Vous", question, null, thread);
+    u.body.textContent = question;
+    var said = m.querySelector("span").textContent;
+    busyRoom(true);
+    var t = typing(h, n.color, n.name, thread);
+    var answer = function (text) { t.remove(); return type(addMsg(h, "mind", n.color, n.name + " · en fil", text, n, thread)); };
+    var fail = function (err) { t.remove(); var e = addMsg(h, "mind error", null, "Prism", "", null, thread); e.body.textContent = errorText(err); };
+    var run;
+    if (intel === "gemini") {
+      if (!canGemini()) run = Promise.reject({ message: "Connectez-vous (menu Intelligence) pour répondre avec Gemini, ou revenez à la simulation locale." });
+      else {
+        var inputs = [{ kind: "context", title: "Question en fil", text: question }, { kind: "thought", author: n.name, text: said }];
+        run = link.api("/api/nexus/think", { method: "POST", body: { mind: mindOf(n), inputs: inputs.map(toInput), language: "fr" } })
+          .then(function (res) {
+            if (link.setSparks) link.setSparks(res.sparks);
+            return answer(res.thought.lines.join(" "));
+          });
+      }
+    } else {
+      var thought = think(n, [{ kind: "context", text: question + " " + said }]);
+      run = wait(600).then(function () {
+        return answer("À propos de « " + clip(question, 60) + " » : " + lowerFirst(thought.lines[1] || thought.lines[0]));
+      });
+    }
+    return run.catch(fail).finally(function () { busyRoom(false); });
+  }
   $("ask").addEventListener("submit", function (e) {
     e.preventDefault();
     var q = $("question").value.trim();
     if (!q) return;
     $("question").value = "";
+    if (replyTo) { var target = replyTo; setReply(null); replyInThread(target, q); return; }
     debate(q);
   });
 
@@ -1835,6 +2473,7 @@ button { cursor: pointer; }
   function enterNexus() {
     $("gate").classList.add("is-leaving");
     $("nexus").hidden = false;
+    syncAtmos(true);
     requestAnimationFrame(function () { $("nexus").classList.add("is-on"); });
     if (!seeded) {
       seeded = true;
@@ -1847,6 +2486,8 @@ button { cursor: pointer; }
     $("gate").hidden = false;
     requestAnimationFrame(function () { $("gate").classList.remove("is-leaving"); });
     $("nexus").classList.remove("is-on");
+    syncAtmos(false);
+    closeSettings();
     setTimeout(function () { $("nexus").hidden = true; }, reduced ? 0 : 900);
     history.replaceState(null, "", location.pathname + location.search);
   }
@@ -1925,10 +2566,15 @@ button { cursor: pointer; }
     var set = new Set();
     nodes.forEach(function (n) { if (n.type === "engram" && n.pending) set.add(n.id); });
     var stack = Array.from(set);
+    var all = edges();
+    var seen = new Set(stack);
     while (stack.length) {
       var id = stack.pop();
-      links.forEach(function (l) {
-        if (l.from === id && nodes.get(l.to).type === "engram" && !set.has(l.to)) { set.add(l.to); stack.push(l.to); }
+      all.forEach(function (e) {
+        if (e.from !== id || seen.has(e.to)) return;
+        seen.add(e.to);
+        stack.push(e.to); // à travers les blocs (prisme, fusion, sans fil)
+        if (nodes.get(e.to).type === "engram") set.add(e.to);
       });
     }
     return Array.from(set);
@@ -1964,7 +2610,7 @@ button { cursor: pointer; }
   }
   function thinkRemote(n) {
     var sig = n.pending;
-    var ins = incoming(n.id).map(function (l) { return nodes.get(l.from).memory; }).filter(Boolean);
+    var ins = inputsOf(n.id);
     thinkingNow.add(n.id);
     n.el.classList.add("is-thinking");
     paintEngram(n);
@@ -1985,34 +2631,33 @@ button { cursor: pointer; }
   function debateRemote(question) {
     var h = hubs.get(roomOf);
     if (!h || debating) return Promise.resolve();
-    var log = $("log");
-    var u = addMsg("user", null, "Vous", question);
+    var u = addMsg(h, "user", null, "Vous", question);
     u.body.textContent = question;
     if (!canGemini()) {
-      var m = addMsg("mind error", null, "Prism", "");
+      var m = addMsg(h, "mind error", null, "Prism", "");
       m.body.textContent = "Connectez-vous (menu Intelligence) pour débattre avec Gemini, ou revenez à la simulation locale.";
       return Promise.resolve();
     }
-    debating = true;
-    $("ask-send").disabled = true;
+    busyRoom(true);
     var minds = h.members.map(function (id) { return nodes.get(id); });
     var ctx = firstContext();
     var byName = {};
     minds.forEach(function (n) { byName[n.name.trim().replace(/\s+/g, " ").toLowerCase()] = n; });
-    var tint = function (name) { var n = byName[String(name).toLowerCase()]; return n ? n.color : "#c9b8ff"; };
+    var mindNamed = function (name) { return byName[String(name).trim().replace(/\s+/g, " ").toLowerCase()] || null; };
+    var tint = function (name) { var n = mindNamed(name); return n ? n.color : "#c9b8ff"; };
     var short = function (name) { return String(name).split(" ").pop(); };
-    var t = typing("#c9b8ff", "War Room · Gemini");
+    var t = typing(h, "#c9b8ff", "War Room · Gemini");
     return link.api("/api/nexus/debate", { method: "POST", body: { minds: minds.map(mindOf), question: question,
       context: ctx ? ctx.text.slice(0, 3000) : "", language: "fr" } })
       .then(function (res) {
         if (link.setSparks) link.setSparks(res.sparks);
         t.remove();
         var d = res.debate;
-        var chain = Promise.resolve().then(function () { log.append(el("div", "round", "Tour 1 · positions")); });
-        d.positions.forEach(function (p) { chain = chain.then(function () { return type(addMsg("mind", tint(p.author), p.author, p.text)); }); });
-        chain = chain.then(function () { log.append(el("div", "round", "Tour 2 · confrontation")); });
+        var chain = Promise.resolve().then(function () { post(h, el("div", "round", "Tour 1 · positions")); });
+        d.positions.forEach(function (p) { chain = chain.then(function () { return type(addMsg(h, "mind", tint(p.author), p.author, p.text, mindNamed(p.author))); }); });
+        chain = chain.then(function () { post(h, el("div", "round", "Tour 2 · confrontation")); });
         d.replies.forEach(function (r) {
-          chain = chain.then(function () { return type(addMsg("mind", tint(r.author), r.author + " → " + short(r.to), r.text)); });
+          chain = chain.then(function () { return type(addMsg(h, "mind", tint(r.author), r.author + " → " + short(r.to), r.text, mindNamed(r.author))); });
         });
         return chain.then(function () {
           var s = el("div", "msg synth");
@@ -2025,19 +2670,15 @@ button { cursor: pointer; }
             li.textContent = pt;
             ul.append(li);
           });
-          log.append(s);
+          post(h, s);
         });
       })
       .catch(function (err) {
         t.remove();
-        var m = addMsg("mind error", null, "Prism", "");
+        var m = addMsg(h, "mind error", null, "Prism", "");
         m.body.textContent = errorText(err);
       })
-      .then(function () {
-        debating = false;
-        $("ask-send").disabled = false;
-        log.scrollTop = log.scrollHeight;
-      });
+      .then(function () { busyRoom(false); });
   }
 
   function setIntel(mode) {
@@ -2057,7 +2698,8 @@ button { cursor: pointer; }
     btn.disabled = busy;
     btn.textContent = busy ? "Réflexion…" : "Penser · " + sparksLabel(todo.length * priceOf("nexus_think"));
     btn.title = todo.length + (todo.length > 1 ? " esprits pensent" : " esprit pense") + " avec Gemini (" + sparksLabel(priceOf("nexus_think")) + " chacun)";
-    $("ask-send").textContent = gem ? "Débattre · " + sparksLabel(priceOf("nexus_debate")) : "Débattre";
+    $("ask-send").textContent = replyTo ? (gem ? "Répondre · " + sparksLabel(priceOf("nexus_think")) : "Répondre")
+      : gem ? "Débattre · " + sparksLabel(priceOf("nexus_debate")) : "Débattre";
     $("room-note").textContent = gem ? "Débat par Gemini, à partir de l'anatomie de chaque Engramme : " + sparksLabel(priceOf("nexus_debate")) +
       ", débité seulement au clic sur « Débattre »."
       : "Débat simulé localement, à partir de l'anatomie de chaque Engramme. Pour un vrai débat : menu Intelligence → Gemini.";
@@ -2128,6 +2770,10 @@ button { cursor: pointer; }
     nodes.forEach(function (n) {
       var o = { id: n.id, type: n.type, x: n.x, y: n.y };
       if (n.type === "context") { o.title = n.title; o.text = n.text; }
+      if (n.type === "holo") o.clear = n.clear;
+      if (n.type === "chrono") { o.title = n.title; o.states = n.states; o.period = n.period; o.paused = n.paused; o.phase = n.phase; }
+      if (n.type === "tx" || n.type === "rx") o.channel = n.channel;
+      if (n.pinned) o.pinned = true;
       if (n.type === "engram") {
         o.name = n.name;
         o.color = n.color;
@@ -2159,9 +2805,10 @@ button { cursor: pointer; }
     restoring = true;
     try {
       data.nodes.forEach(function (o) {
-        if (!o || ["context", "engram", "render"].indexOf(o.type) < 0 || nodes.has(String(o.id))) return;
+        if (!o || ["context", "engram", "render"].concat(Object.keys(BLOCKS)).indexOf(o.type) < 0 || nodes.has(String(o.id))) return;
         addNode(o.type, +o.x || 0, +o.y || 0, { id: String(o.id), title: o.title, text: o.text, name: o.name, color: o.color,
-          source: o.source, engram: o.engram, cache: o.cache, still: true });
+          source: o.source, engram: o.engram, cache: o.cache, clear: o.clear, states: o.states, period: o.period, paused: o.paused,
+          phase: o.phase, channel: o.channel, pinned: o.pinned, still: true });
         var num = parseInt(String(o.id).slice(1), 10);
         if (num > seq) seq = num;
       });
@@ -2178,7 +2825,7 @@ button { cursor: pointer; }
     } finally {
       restoring = false;
     }
-    propagate({ instant: true });
+    propagate({ instant: true, quietLoop: true });
     if (links.size) { hintHidden = true; $("hint").style.opacity = "0"; } // une scène déjà tissée : l'aide n'est plus utile
     if (!nodes.size) toast("Scène vide : double-cliquez dans le vide pour un contexte.");
     return true;
@@ -2190,9 +2837,12 @@ button { cursor: pointer; }
     links.clear();
     hubs.forEach(function (h) { h.el.remove(); });
     hubs.clear();
-    nodes.forEach(function (n) { n.el.remove(); });
+    nodes.forEach(function (n) { n.el.remove(); if (n.sayEl) n.sayEl.remove(); });
     nodes.clear();
     selected = null;
+    $("wireless").replaceChildren();
+    $("channels").replaceChildren();
+    setReply(null);
     $("log").replaceChildren();
   }
   // Remplacer la scène efface le travail : un second clic confirme.
@@ -2230,6 +2880,467 @@ button { cursor: pointer; }
     $("scene").setAttribute("aria-expanded", String(open));
   });
 
+  // ======================================================================================
+  // Social (V6.2) : bulles de dialogue dans l'espace (au-dessus des esprits, lisibles à tout zoom) et roue de réactions
+  // (clic droit, appui long, ou R sur la bulle choisie) : réagir, pinger, épingler.
+  // ======================================================================================
+  function say(n, text, emoji) {
+    if (!settings.says || !n || !nodes.has(n.id) || !text) return;
+    if (n.sayEl) n.sayEl.remove();
+    var b = el("div", "say" + (emoji ? " is-emoji" : ""));
+    b.style.setProperty("--c", colorOf(n));
+    b.textContent = emoji ? text : clip(text, 130);
+    $("says").append(b);
+    n.sayEl = b;
+    placeSay(n);
+    clearTimeout(n.sayTimer);
+    n.sayTimer = setTimeout(function () {
+      b.classList.add("is-leaving");
+      setTimeout(function () { b.remove(); if (n.sayEl === b) n.sayEl = null; }, 520);
+    }, emoji ? 2600 : 5600);
+  }
+  function placeSay(n) {
+    if (!n.sayEl) return;
+    n.sayEl.style.left = n.x + n.el.offsetWidth / 2 + "px";
+    n.sayEl.style.top = n.y + "px";
+  }
+  var REACTIONS = [["👍", "Approuver"], ["💡", "Une idée"], ["❓", "Une question"], ["⚠️", "Attention"], ["📍", "Ping"], ["📌", "Épingler"]];
+  var wheelOf = null;
+  function openWheel(n, x, y) {
+    if (!settings.wheel || !n || !nodes.has(n.id)) return;
+    closeWheel();
+    var w = $("wheel");
+    x = Math.max(110, Math.min(innerWidth - 110, x));
+    y = Math.max(110, Math.min(innerHeight - 110, y));
+    w.style.left = x + "px";
+    w.style.top = y + "px";
+    var center = el("div", "wheel-center", "");
+    center.textContent = n.name || n.title || (BLOCKS[n.type] ? BLOCKS[n.type].name : "Rendu");
+    w.append(center);
+    REACTIONS.forEach(function (r, i) {
+      var a = -Math.PI / 2 + (i * 2 * Math.PI) / REACTIONS.length;
+      var label = r[0] === "📌" && n.pinned ? "Désépingler" : r[1];
+      var b = el("button", "wheel-item", "");
+      b.type = "button";
+      b.setAttribute("role", "menuitem");
+      b.setAttribute("aria-label", label);
+      b.dataset.reaction = r[0];
+      b.textContent = r[0];
+      var tip = el("span", "", "");
+      tip.textContent = label;
+      b.append(tip);
+      b.style.left = (Math.cos(a) * 84).toFixed(1) + "px";
+      b.style.top = (Math.sin(a) * 84).toFixed(1) + "px";
+      b.style.setProperty("--fx", (-Math.cos(a) * 84).toFixed(1) + "px");
+      b.style.setProperty("--fy", (-Math.sin(a) * 84).toFixed(1) + "px");
+      b.style.animationDelay = i * 0.03 + "s";
+      b.addEventListener("click", function (e) { e.stopPropagation(); closeWheel(); react(n, r[0]); });
+      w.append(b);
+    });
+    w.hidden = false;
+    wheelOf = n.id;
+    w.querySelector(".wheel-item").focus();
+  }
+  function closeWheel() {
+    var w = $("wheel");
+    if (w.hidden) return;
+    w.hidden = true;
+    w.replaceChildren();
+    wheelOf = null;
+  }
+  document.addEventListener("pointerdown", function (e) { if (!$("wheel").hidden && !e.target.closest("#wheel")) closeWheel(); }, true);
+  function react(n, emoji) {
+    if (!nodes.has(n.id)) return;
+    if (emoji === "📌") {
+      n.pinned = !n.pinned;
+      n.el.classList.toggle("is-pinned", n.pinned);
+      toast(n.pinned ? "Épinglée : toujours vivante et peinte, même hors champ." : "Désépinglée.");
+      save();
+      streamSoon();
+      return;
+    }
+    if (emoji === "📍") {
+      n.el.classList.remove("is-pinged");
+      void n.el.offsetWidth;
+      n.el.classList.add("is-pinged");
+      setTimeout(function () { n.el.classList.remove("is-pinged"); }, 2600);
+    }
+    say(n, emoji, true);
+  }
+
+  // ======================================================================================
+  // Anti-lag (V6.2) : streaming prédictif des Engrammes. La caméra est suivie (vitesse) : un Engramme hors du champ —
+  // actuel ou prévu 0,65 s plus loin — s'endort après 2,5 s (son document s'arrête), et ceux vers lesquels elle se
+  // dirige se réveillent avant d'entrer à l'écran. Au-delà du plafond, les plus proches du centre passent devant. Les
+  // bulles hors champ ne sont plus peintes (occlusion).
+  // ======================================================================================
+  var motion = { x: 0, y: 0, t: 0, vx: 0, vy: 0 };
+  var streamQueued = false;
+  var SLEEP_MS = 2500, LEAD_MS = 650, MARGIN = 220;
+  function trackMotion() {
+    if (!motion) return; // première vue, avant l'initialisation
+    var now = performance.now();
+    var dt = now - motion.t;
+    if (dt > 0 && dt < 400) { // au-delà, la caméra s'était arrêtée
+      motion.vx = motion.vx * 0.6 + ((view.x - motion.x) / dt) * 0.4;
+      motion.vy = motion.vy * 0.6 + ((view.y - motion.y) / dt) * 0.4;
+    } else { motion.vx = 0; motion.vy = 0; }
+    motion.x = view.x; motion.y = view.y; motion.t = now;
+    streamSoon();
+  }
+  function streamSoon() {
+    if (streamQueued) return;
+    streamQueued = true;
+    requestAnimationFrame(function () { streamQueued = false; streamFrames(); });
+  }
+  function streamFrames() {
+    if ($("nexus").hidden || !settings) return;
+    var now = performance.now();
+    var lead = now - motion.t > 400 ? 0 : LEAD_MS;
+    var px = motion.vx * lead, py = motion.vy * lead;
+    var W = innerWidth, H = innerHeight;
+    var wanted = [];
+    nodes.forEach(function (n) {
+      var w = n.el.offsetWidth * view.z, h = n.el.offsetHeight * view.z;
+      var sx = view.x + n.x * view.z, sy = view.y + n.y * view.z;
+      var inside = function (dx, dy) { return sx + dx + w > -MARGIN && sx + dx < W + MARGIN && sy + dy + h > -MARGIN && sy + dy < H + MARGIN; };
+      var keep = inside(0, 0) || inside(px, py) || n.pinned || (gesture && gesture.n === n);
+      n.el.classList.toggle("is-culled", settings.cull && !keep);
+      if (n.type === "engram" && keep && !anatomyOf) {
+        wanted.push({ n: n, d: Math.hypot(sx + w / 2 - W / 2, sy + h / 2 - H / 2) - (n.pinned ? 1e7 : 0) });
+      }
+    });
+    wanted.sort(function (a, b) { return a.d - b.d; });
+    var awake = new Set(wanted.slice(0, settings.maxLive).map(function (x) { return x.n.id; }));
+    nodes.forEach(function (n) {
+      if (n.type !== "engram" || !n.doc) return;
+      if (!settings.stream || awake.has(n.id)) {
+        n.lastAwake = now;
+        if (n.asleep) wake(n);
+      } else if (!n.asleep && now - (n.lastAwake || now) > SLEEP_MS) sleep(n);
+      else if (!n.lastAwake) n.lastAwake = now;
+    });
+  }
+  function sleep(n) {
+    n.asleep = true;
+    n.el.classList.remove("is-live");
+    n.el.classList.add("is-asleep");
+    n.el.querySelector(".engram-frame").srcdoc = ""; // son fil de rendu s'arrête
+    paintEngram(n);
+    shareBudget();
+  }
+  function wake(n) {
+    n.asleep = false;
+    n.el.classList.remove("is-asleep");
+    paintEngram(n);
+    n.el.querySelector(".engram-frame").srcdoc = n.doc; // à son chargement : vivant, budget partagé, trace
+  }
+  function streamStats() {
+    var st = { live: 0, asleep: 0, culled: 0, engrams: 0 };
+    nodes.forEach(function (n) {
+      if (n.type === "engram") { st.engrams += 1; if (n.asleep) st.asleep += 1; else if (n.el.classList.contains("is-live")) st.live += 1; }
+      if (n.el.classList.contains("is-culled")) st.culled += 1;
+    });
+    return st;
+  }
+  setInterval(streamFrames, 900);
+
+  // ======================================================================================
+  // Atmosphère (V6.2) : brume volumétrique sous le canvas, éclairée par les bulles (engine/nexus/atmosphere.js).
+  // ======================================================================================
+  var atmos = null;
+  var atmosActive = false;
+  function rgb01(hex) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "").trim());
+    var v = m ? parseInt(m[1], 16) : 0xc9b8ff;
+    return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255];
+  }
+  function atmosLights() {
+    var out = [];
+    nodes.forEach(function (n) {
+      if (n.el.classList.contains("is-culled")) return;
+      var w = n.el.offsetWidth * view.z, h = n.el.offsetHeight * view.z;
+      var x = view.x + n.x * view.z + w / 2, y = view.y + n.y * view.z + h / 2;
+      var i = n.type === "engram" ? (n.el.classList.contains("is-thinking") ? 1.6 : n.memory ? 1.1 : 0.7) : n.memory ? 0.85 : 0.45;
+      if (n.id === selected) i += 0.35;
+      out.push({ x: x, y: y, r: Math.max(36, Math.min(w, h) * 0.5), color: rgb01(colorOf(n)), i: i });
+    });
+    return out;
+  }
+  function atmosOptions(s, on) {
+    return { enabled: s.atmos && on, density: s.density, weather: s.weather, light: s.light, fps: s.fps,
+      reduced: s.motion === "reduced" || (s.motion === "system" && systemReduced) };
+  }
+  function syncAtmos(on) {
+    atmosActive = on;
+    if (!atmos && on && settings.atmos && window.PrismAtmosphere) atmos = PrismAtmosphere.create($("atmos"), { lights: atmosLights });
+    if (atmos) atmos.set(atmosOptions(settings, atmosActive));
+  }
+
+  // ======================================================================================
+  // Paramètres « Liquid Glass » (V6.2) : chaque réglage s'essaie dans l'aperçu en direct avant « Appliquer ».
+  // Recherche instantanée (Ctrl + K), sections, réglages par défaut. Enregistrés sur cet appareil.
+  // ======================================================================================
+  var SETTINGS_KEY = "prism:nexus:settings";
+  var pct = function (v) { return Math.round(v * 100) + " %"; };
+  var SECTIONS = ["Rendu", "Performance", "Social", "Accessibilité"];
+  var SETTINGS = [
+    { key: "atmos", sec: "Rendu", type: "switch", label: "Atmosphère volumétrique", help: "Brume en volutes sous le canvas, éclairée par la lumière des bulles (WebGL).", tags: "brume fog lumiere volumetrique webgl nuage" },
+    { key: "weather", sec: "Rendu", type: "choice", label: "Météo", help: "Cycle automatique (clair, brume, aurore, orage) ou météo fixe.", tags: "meteo aurore orage eclair pluie ciel",
+      options: [["auto", "Auto"], ["clair", "Clair"], ["brume", "Brume"], ["aurore", "Aurore"], ["orage", "Orage"]] },
+    { key: "density", sec: "Rendu", type: "range", min: 0.1, max: 1, step: 0.05, fmt: pct, label: "Densité de la brume", help: "Plus dense : la lumière des bulles s'y voit davantage.", tags: "brume epaisseur fog" },
+    { key: "light", sec: "Rendu", type: "range", min: 0, max: 1.5, step: 0.05, fmt: pct, label: "Éclairage volumétrique", help: "Intensité de la lumière que chaque bulle diffuse dans la brume.", tags: "lumiere rayons glow halo" },
+    { key: "gi", sec: "Rendu", type: "switch", label: "Illumination globale", help: "Chaque bulle teinte la surface sous elle (ombre douce colorée) et diffuse sa couleur dans son verre.", tags: "ombres douces soft shadows gi diffusion sous-surface sss" },
+    { key: "grid", sec: "Rendu", type: "switch", label: "Grille du canvas", help: "Les points de repère du fond.", tags: "fond points repere" },
+    { key: "glass", sec: "Rendu", type: "range", min: 0.35, max: 0.95, step: 0.05, fmt: pct, label: "Opacité du verre", help: "Plus opaque : plus lisible ; plus transparent : plus d'atmosphère à travers les bulles.", tags: "liquid glass transparence verre flou lisibilite" },
+    { key: "fps", sec: "Performance", type: "choice", label: "Images par seconde de l'atmosphère", help: "30 ménage la batterie ; « Écran » suit la fréquence de votre écran (jusqu'à 144 et plus).", tags: "fps 144 hz fluidite images frequence",
+      options: [[30, "30"], [60, "60"], [0, "Écran"]] },
+    { key: "stream", sec: "Performance", type: "switch", label: "Streaming prédictif des Engrammes", help: "Hors champ, un Engramme s'endort ; ceux vers lesquels la caméra se dirige se réveillent avant d'entrer à l'écran.", tags: "lag chargement predictif frustum veille memoire cpu" },
+    { key: "maxLive", sec: "Performance", type: "range", min: 2, max: 12, step: 1, label: "Engrammes vivants à la fois", help: "Au-delà, les plus proches du centre de l'écran passent devant.", tags: "limite plafond cpu" },
+    { key: "cull", sec: "Performance", type: "switch", label: "Ne pas peindre ce qui est hors champ", help: "Occlusion : les bulles hors de l'écran ne coûtent plus rien au rendu.", tags: "occlusion culling rendu lag" },
+    { key: "perf", sec: "Performance", type: "switch", label: "Afficher les performances", help: "Images par seconde, Engrammes vivants et en veille, bulles hors champ.", tags: "fps compteur statistiques debug" },
+    { key: "says", sec: "Social", type: "switch", label: "Bulles de dialogue dans l'espace", help: "Ce que disent les esprits apparaît au-dessus d'eux, dans le canvas, lisible à tout zoom.", tags: "chat bulle message spatial parole" },
+    { key: "autohide", sec: "Social", type: "switch", label: "Effacer la War Room pendant un geste", help: "Le panneau de discussion s'efface quand vous déplacez, reliez ou entourez.", tags: "chat masquer auto discussion hub" },
+    { key: "wheel", sec: "Social", type: "switch", label: "Roue de réactions", help: "Clic droit, appui long ou touche R sur une bulle : réagir, pinger, épingler.", tags: "emoji ping reaction radial menu" },
+    { key: "motion", sec: "Accessibilité", type: "choice", label: "Animations", help: "« Système » suit la préférence de votre appareil ; « Réduites » fige l'atmosphère et les transitions.", tags: "mouvement reduire animation vestibulaire",
+      options: [["system", "Système"], ["full", "Complètes"], ["reduced", "Réduites"]] }
+  ];
+  var cores = navigator.hardwareConcurrency || 4;
+  var DEFAULTS = { atmos: true, weather: "auto", density: 0.55, light: 0.7, gi: true, grid: true, glass: 0.66, fps: 30, stream: true,
+    maxLive: cores <= 4 ? 4 : 8, cull: true, perf: false, says: true, autohide: true, wheel: true, motion: "system" };
+  function validSetting(d, v) {
+    if (d.type === "switch") return typeof v === "boolean";
+    if (d.type === "range") return typeof v === "number" && isFinite(v) && v >= d.min && v <= d.max;
+    return d.options.some(function (o) { return o[0] === v; });
+  }
+  function loadSettings() {
+    var out = Object.assign({}, DEFAULTS);
+    try {
+      var saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
+      if (saved && typeof saved === "object") SETTINGS.forEach(function (d) { if (validSetting(d, saved[d.key])) out[d.key] = saved[d.key]; });
+    } catch (e) { /* stockage indisponible */ }
+    return out;
+  }
+  var settings = loadSettings();
+  var draft = null;
+  var preview = null;
+  var perfEl = null, perfRaf = 0, perfFrames = 0, perfT0 = 0;
+
+  function applySettings() {
+    var nx = $("nexus");
+    reduced = settings.motion === "reduced" || (settings.motion === "system" && systemReduced);
+    nx.classList.toggle("reduce-motion", settings.motion === "reduced");
+    nx.classList.toggle("gi", settings.gi);
+    nx.classList.toggle("autohide-chat", settings.autohide);
+    viewport.classList.toggle("no-grid", !settings.grid);
+    nx.style.setProperty("--glass-deep", "rgba(12, 14, 22, " + settings.glass + ")");
+    if (!settings.says) { $("says").replaceChildren(); nodes.forEach(function (n) { n.sayEl = null; }); }
+    if (!settings.wheel) closeWheel();
+    syncAtmos(atmosActive);
+    perfHud(settings.perf);
+    streamSoon();
+  }
+  function perfHud(on) {
+    if (on && !perfEl) {
+      perfEl = el("div", "perf", "…");
+      perfEl.id = "perf";
+      $("nexus").append(perfEl);
+      perfT0 = performance.now();
+      perfFrames = 0;
+      perfRaf = requestAnimationFrame(perfTick);
+    } else if (!on && perfEl) {
+      cancelAnimationFrame(perfRaf);
+      perfEl.remove();
+      perfEl = null;
+    }
+  }
+  function perfTick(now) {
+    perfFrames += 1;
+    if (now - perfT0 >= 1000) {
+      var st = streamStats();
+      perfEl.textContent = Math.round((perfFrames * 1000) / (now - perfT0)) + " i/s · " + st.live + " vivant" + (st.live > 1 ? "s" : "") +
+        " · " + st.asleep + " en veille · " + st.culled + " hors champ" + (atmos && atmosActive && settings.atmos ? " · " + atmos.weather() + " (" + atmos.mode + ")" : "");
+      perfFrames = 0;
+      perfT0 = now;
+    }
+    perfRaf = requestAnimationFrame(perfTick);
+  }
+
+  function norm(t) { return plain(String(t).toLowerCase()); }
+  function openSettings() {
+    closeMenus();
+    closeWheel();
+    draft = Object.assign({}, settings);
+    $("settings").hidden = false;
+    $("settings-q").value = "";
+    renderSettings();
+    if (!preview && window.PrismAtmosphere) {
+      // Les deux cartes de l'aperçu éclairent sa brume, comme les bulles du Nexus.
+      preview = PrismAtmosphere.create($("preview-canvas"), { lights: function () {
+        return previewSpots().map(function (p, i) { return { x: p.x, y: p.y, r: 64, color: i ? [0.98, 0.44, 0.52] : [0.5, 0.86, 1], i: 1.35 }; });
+      } });
+    }
+    updatePreview();
+    $("preview-note").textContent = "Survolez un réglage pour le comprendre ; changez-le pour le voir ici, puis « Appliquer ».";
+    setTimeout(function () { $("settings-q").focus(); }, 30);
+  }
+  function closeSettings() {
+    if ($("settings").hidden) return;
+    $("settings").hidden = true;
+    draft = null;
+    if (preview) preview.set({ enabled: false });
+  }
+  function renderSettings() {
+    var raw = $("settings-q").value.trim();
+    var words = norm(raw).split(/\s+/).filter(Boolean);
+    var list = $("settings-list"), nav = $("settings-nav");
+    list.replaceChildren();
+    nav.replaceChildren();
+    var shown = 0;
+    SECTIONS.forEach(function (sec) {
+      var items = SETTINGS.filter(function (d) {
+        var hay = norm(d.label + " " + (d.help || "") + " " + (d.tags || "") + " " + sec);
+        return d.sec === sec && words.every(function (w) { return hay.indexOf(w) >= 0; });
+      });
+      if (!items.length) return;
+      var h = el("h3", "", "");
+      h.textContent = sec;
+      list.append(h);
+      var nb = el("button", "", "");
+      nb.type = "button";
+      nb.textContent = sec;
+      nb.addEventListener("click", function () { h.scrollIntoView({ block: "start", behavior: reduced ? "auto" : "smooth" }); });
+      nav.append(nb);
+      items.forEach(function (d) { list.append(settingRow(d)); shown += 1; });
+    });
+    if (!shown) {
+      var empty = el("div", "settings-empty", "");
+      empty.textContent = "Aucun réglage pour « " + raw + " ».";
+      list.append(empty);
+    }
+    renderDirty();
+  }
+  function settingRow(d) {
+    var row = el("div", "setting", '<div class="txt"><b></b><small></small></div>');
+    row.dataset.key = d.key;
+    row.querySelector("b").textContent = d.label;
+    row.querySelector("small").textContent = d.help || "";
+    var ctl;
+    if (d.type === "switch") {
+      ctl = el("button", "switch", "");
+      ctl.type = "button";
+      ctl.setAttribute("role", "switch");
+      ctl.setAttribute("aria-label", d.label);
+      ctl.setAttribute("aria-checked", String(draft[d.key]));
+      ctl.addEventListener("click", function () { setDraft(d, !draft[d.key]); ctl.setAttribute("aria-checked", String(draft[d.key])); });
+    } else if (d.type === "range") {
+      ctl = el("div", "range", '<input type="range"><output></output>');
+      var input = ctl.querySelector("input"), out = ctl.querySelector("output");
+      input.min = d.min; input.max = d.max; input.step = d.step; input.value = draft[d.key];
+      input.setAttribute("aria-label", d.label);
+      var show = function () { out.textContent = d.fmt ? d.fmt(draft[d.key]) : String(draft[d.key]); };
+      input.addEventListener("input", function () { setDraft(d, +input.value); show(); });
+      show();
+    } else {
+      ctl = el("div", "segmented", "");
+      ctl.setAttribute("role", "group");
+      ctl.setAttribute("aria-label", d.label);
+      d.options.forEach(function (o, i) {
+        var b = el("button", "", "");
+        b.type = "button";
+        b.textContent = o[1];
+        b.setAttribute("aria-pressed", String(draft[d.key] === o[0]));
+        b.addEventListener("click", function () {
+          setDraft(d, o[0]);
+          ctl.querySelectorAll("button").forEach(function (x, j) { x.setAttribute("aria-pressed", String(d.options[j][0] === draft[d.key])); });
+        });
+        ctl.append(b);
+      });
+    }
+    row.append(ctl);
+    row.classList.toggle("is-dirty", draft[d.key] !== settings[d.key]);
+    row.addEventListener("pointerenter", function () { describeSetting(d); });
+    row.addEventListener("focusin", function () { describeSetting(d); });
+    return row;
+  }
+  function describeSetting(d) {
+    var v = draft ? draft[d.key] : settings[d.key];
+    var shown = d.type === "switch" ? (v ? "activé" : "désactivé") : d.type === "range" ? (d.fmt ? d.fmt(v) : String(v))
+      : (d.options.find(function (o) { return o[0] === v; }) || ["", ""])[1];
+    $("preview-note").textContent = d.label + " · " + shown + (v !== settings[d.key] ? " (aperçu, pas encore appliqué)" : "") + " — " + (d.help || "");
+  }
+  function setDraft(d, v) {
+    draft[d.key] = v;
+    var row = $("settings-list").querySelector('[data-key="' + d.key + '"]');
+    if (row) row.classList.toggle("is-dirty", v !== settings[d.key]);
+    describeSetting(d);
+    renderDirty();
+    updatePreview();
+  }
+  function dirtyCount() { return draft ? SETTINGS.filter(function (d) { return draft[d.key] !== settings[d.key]; }).length : 0; }
+  function renderDirty() {
+    var n = dirtyCount();
+    $("settings-dirty").textContent = n ? n + (n > 1 ? " réglages modifiés" : " réglage modifié") + " : en aperçu, appliqué au clic sur « Appliquer »." : "Aucune modification.";
+    $("settings-apply").disabled = !n;
+  }
+  function previewSpots() {
+    var stage = $("preview-stage");
+    var st = stage.getBoundingClientRect();
+    return [".pv-a", "#pv-engram"].map(function (sel) {
+      var r = stage.querySelector(sel).getBoundingClientRect();
+      return { x: r.left - st.left + r.width / 2, y: r.top - st.top + r.height / 2, left: r.left - st.left, right: r.right - st.left };
+    });
+  }
+  function updatePreview() {
+    if (!draft) return;
+    var stage = $("preview-stage");
+    // Le fil de l'aperçu relie vraiment ses deux cartes, quelle que soit la largeur.
+    var sp = previewSpots(), a = sp[0], b = sp[1];
+    var dx = Math.max(30, (b.left - a.right) / 2);
+    stage.querySelector(".pv-wire").setAttribute("viewBox", "0 0 " + stage.clientWidth + " " + stage.clientHeight);
+    stage.querySelector(".pv-wire path").setAttribute("d", "M" + a.right + " " + a.y + " C" + (a.right + dx) + " " + a.y + " " + (b.left - dx) + " " + b.y + " " + b.left + " " + b.y);
+    var still = draft.motion === "reduced" || (draft.motion === "system" && systemReduced);
+    stage.classList.toggle("no-grid", !draft.grid);
+    stage.classList.toggle("is-still", still);
+    stage.style.setProperty("--pv-glass", String(draft.glass));
+    $("pv-say").hidden = !draft.says;
+    if (preview) preview.set(atmosOptions(draft, true));
+    $("preview-meta").textContent = (preview ? (preview.mode === "webgl" ? "Rendu WebGL" : "Rendu 2D (sans WebGL matériel)") : "Atmosphère indisponible") +
+      (draft.atmos ? " · météo " + (draft.weather === "auto" ? "automatique" : draft.weather) : " · atmosphère coupée") +
+      " · " + (draft.fps ? draft.fps + " i/s" : "fréquence de l'écran");
+  }
+  function applyDraft() {
+    if (!draft) return;
+    settings = Object.assign({}, draft);
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* stockage indisponible */ }
+    applySettings();
+    renderSettings();
+    toast("Paramètres appliqués.");
+  }
+  $("settings-btn").addEventListener("click", function (e) { e.stopPropagation(); openSettings(); });
+  $("settings-close").addEventListener("click", closeSettings);
+  $("settings-cancel").addEventListener("click", closeSettings);
+  $("settings-apply").addEventListener("click", applyDraft);
+  $("settings-reset").addEventListener("click", function () {
+    draft = Object.assign({}, DEFAULTS);
+    renderSettings();
+    updatePreview();
+    $("preview-note").textContent = "Réglages par défaut en aperçu : « Appliquer » pour les garder.";
+  });
+  $("settings-q").addEventListener("input", renderSettings);
+  $("settings-q").addEventListener("keydown", function (e) {
+    if (e.key !== "Enter") return;
+    e.preventDefault(); // Entrée : le premier réglage trouvé
+    var row = $("settings-list").querySelector(".setting");
+    if (!row) return;
+    row.classList.remove("is-flash");
+    void row.offsetWidth;
+    row.classList.add("is-flash");
+    var ctl = row.querySelector("button, input");
+    if (ctl) ctl.focus();
+  });
+  $("settings").addEventListener("pointerdown", function (e) { if (e.target === $("settings")) closeSettings(); });
+
   // Accès pour les tests et démonstrations (lecture et commandes).
   window.__nexus = {
     nodes: nodes, links: links, hubs: hubs, view: view,
@@ -2237,9 +3348,16 @@ button { cursor: pointer; }
     connect: addLink, cut: cutLink, open: openAnatomy, close: closeAnatomy, hub: createHub, room: openRoom, debate: debate,
     setIntel: setIntel, intel: function () { return intel; }, thinkAll: thinkAll, pendingCount: function () { return toThink().length; },
     saveNow: saveNow, clearScene: clearScene, think: think, createEngram: createEngram, linkAt: linkAt,
+    add: function (type, x, y, opts) { var n = addNode(type, x, y, opts); propagate(); return n; }, remove: removeNode, pair: addWirelessPair,
+    edges: edges, inputs: inputsOf, tick: tickChronos, stream: streamStats, streamNow: streamFrames, react: react, wheel: openWheel,
+    settings: function () { return Object.assign({}, settings); }, openSettings: openSettings, closeSettings: closeSettings,
+    atmos: function () { return atmos ? { mode: atmos.mode, weather: atmos.weather(), enabled: atmos.options().enabled } : null; },
+    unhub: removeHub,
+    setView: function (x, y, z) { Object.assign(view, { x: x, y: y, z: z || view.z }); applyView(); },
     enter: enterNexus, find: function (name) { var f = null; nodes.forEach(function (n) { if (!f && (n.name === name || n.title === name || n.type === name)) f = n; }); return f; }
   };
 
+  applySettings();
   applyView();
   renderIntel();
   if (location.hash === "#nexus") { $("gate").classList.add("is-leaving"); enterNexus(); }

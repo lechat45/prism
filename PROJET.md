@@ -1,6 +1,6 @@
 # Prism — description complète du projet
 
-> Version décrite : **6.1.0-alpha.2** (30 septembre 2026). En ligne : <https://lechat45.github.io/prism/>,
+> Version décrite : **6.2.0-alpha.1** (30 septembre 2026). En ligne : <https://lechat45.github.io/prism/>,
 > API : <https://prism-api-0x4z.onrender.com>. Code : <https://github.com/lechat45/prism> (branches `v3` = site public
 > sur GitHub Pages, `v4` = branche déployée par Render pour l'API, `v5` et `v6` = développement ; identiques à chaque publication).
 > Ce document est mis à jour à chaque livraison ; le détail technique de chaque version est dans `CHANGELOG.md`.
@@ -9,6 +9,13 @@
 
 Les dernières mises à jour, de la plus récente à la plus ancienne.
 
+- **6.2.0-alpha.1 — 30 septembre 2026 · le Nexus prend de l'atmosphère.** Une brume en volutes flotte sous le canvas,
+  éclairée par les bulles, avec sa météo (clair, brume, aurore, orage). Un **Inventaire** apporte de nouveaux blocs :
+  prisme holographique, horloge chrono-quantique (un contexte qui change avec le temps), fusion bionique, émetteur et
+  récepteur sans fil. Les esprits parlent dans l'espace (bulles au-dessus d'eux), un clic droit ouvre une roue de
+  réactions, et la War Room a un canal par Hub et des réponses en fil. Les Engrammes hors de l'écran s'endorment et se
+  réveillent avant d'y revenir (moins de lag). Nouveaux **Paramètres** (⚙ ou Ctrl + K) avec recherche et aperçu en
+  direct avant d'appliquer.
 - **6.1.0-alpha.2 — 30 septembre 2026 · correctif.** Couper un fil dans le Nexus fonctionne à coup sûr, même avec
   plusieurs Engrammes vivants à l'écran.
 - **6.1.0-alpha.1 — 30 septembre 2026 · les vrais Engrammes dans le Nexus.** Dans le Nexus, chaque Engramme est de
@@ -286,6 +293,7 @@ le laboratoire. Franchir la porte Nexus fait plonger la vue dans le canvas.
 | **Contexte** (verre cyan) | une donnée brute : un brief, une consigne, un texte ; titre et texte modifiables |
 | **Engramme** (carte de verre) | un vrai Engramme cognitif, vivant : il reçoit, pense à partir de ses bulles, transmet sa pensée |
 | **Rendu** (écran) | la sortie : titre, données clés, voix de chaque esprit, action principale |
+| **Blocs avancés** (Inventaire) | prisme holographique, horloge chrono-quantique, fusion bionique, émetteur et récepteur sans fil (section 6.8) |
 
 On tire une **synapse** depuis le port lumineux de droite d'une bulle jusqu'à une autre bulle ; le fil prend les
 couleurs des deux bulles, et une impulsion le parcourt quand l'information passe. Le flux va toujours
@@ -300,6 +308,8 @@ Contexte, depuis un Rendu, en boucle) sont refusés.
 | Double-clic sur l'en-tête d'un Engramme (ou ⤢) | **plonger** dedans, en grand |
 | Double-clic dans le vide | un nouveau Contexte |
 | Alt + glisser (ou l'outil Hub) | entourer des Engrammes : un **Hub** |
+| Clic droit, appui long, ou R sur la bulle choisie | la **roue de réactions** (section 6.10) |
+| Ctrl + K (ou ⚙) | les **Paramètres**, recherche d'un réglage (section 6.11) |
 
 ### 6.3 Le flux, et le fil coupé
 
@@ -322,7 +332,11 @@ son climat émotionnel, sa pensée dans le Nexus, ce qu'il reçoit et les évèn
 ### 6.5 Hubs : les War Rooms
 
 Entourer plusieurs Engrammes crée un **Hub** (un anneau qui les suit). Sa **War Room** les réunit : on pose une
-question, chacun prend position, puis répond à un autre, et le Hub livre une **synthèse** commune.
+question, chacun prend position, puis répond à un autre, et le Hub livre une **synthèse** commune. Chaque Hub a son
+**canal** (onglets en haut de la War Room, messages non lus) : un débat continue dans le sien pendant qu'on en lit un
+autre. Sous le message d'un esprit, **« Répondre en fil »** lui pose une question à lui seul ; il répond dans le fil
+(avec Gemini : le prix d'une pensée, 0,25 Spark, affiché sur « Répondre »). Le panneau s'efface pendant un geste sur
+le canvas.
 
 ### 6.6 Intelligence : simulation locale ou Gemini
 
@@ -347,7 +361,50 @@ dresse en 25 s à 1 min 30, pour 2 Sparks débités seulement à la réussite. L
 vue, pensées payées) est **gardée sur l'appareil** et retrouvée en revenant ; le menu « ⋯ » repart d'une scène vide ou
 de la démonstration (un second clic confirme).
 
-### 6.8 Prochaines étapes
+### 6.8 Inventaire : les blocs avancés
+
+Le menu **Inventaire** réunit les essentiels (Contexte, Engramme, Rendu) et cinq blocs qui enrichissent le flux :
+
+| Bloc | Rôle |
+| --- | --- |
+| **Prisme holographique** | relais de verre : laisse passer le flux et le projette (transparence réglable) |
+| **Horloge chrono-quantique** | une source dont l'état change avec le temps : un état par ligne, période de 3 à 60 s ; un clic sur son anneau la fige (l'état observé) ; un Engramme qui la reçoit pense « avec ce moment » |
+| **Fusion bionique** | fond tous les flux reçus en une seule pensée, qui garde la voix de chacun |
+| **Émetteur / Récepteur sans fil** | tout ce qui entre dans un émetteur ressort des récepteurs du même canal, sans fil (liaison en pointillés) ; « Paire sans fil » crée les deux sur un canal libre |
+
+Les règles du flux valent pour eux : une horloge ou un récepteur ne reçoivent pas de fil, un écran ou un émetteur n'en
+émettent pas, et aucune boucle n'est permise, liaisons sans fil comprises (une boucle créée en changeant de canal est
+signalée et le flux s'y arrête).
+
+### 6.9 Atmosphère et anti-lag
+
+Sous le canvas flotte une **brume volumétrique** (WebGL) éclairée par les bulles : chacune est une source de lumière
+qui se diffuse dans la brume et transparaît à travers le verre, plus vive quand l'esprit pense. La météo change d'elle-
+même (clair, brume, aurore, orage aux éclairs brefs) ou se fixe dans les Paramètres ; l'**illumination globale** teinte
+la surface sous chaque bulle. Sans carte graphique (rendu logiciel), la brume devient de simples lueurs, bien moins
+coûteuses ; elle se met en pause quand la page est cachée ou pendant une plongée.
+
+**Streaming prédictif** : la caméra est suivie ; un Engramme hors de l'écran (et de là où la caméra va dans 0,65 s)
+s'endort après 2,5 s, et ceux vers lesquels elle se dirige se réveillent avant d'entrer à l'écran. Au-delà d'un
+plafond d'Engrammes vivants (4 ou 8 selon la machine), les plus proches du centre passent devant ; une bulle épinglée
+reste toujours vivante. Les bulles hors champ ne sont plus peintes. Un compteur facultatif affiche les performances.
+
+### 6.10 Social : bulles de dialogue et roue de réactions
+
+Ce que pense ou dit un esprit (dans le flux ou dans la War Room) apparaît dans une **bulle de dialogue** au-dessus de
+lui, dans le canvas, lisible à tout zoom. La **roue de réactions** (clic droit, appui long sur écran tactile, ou R sur
+la bulle choisie) propose : approuver, une idée, une question, attention, **ping** (la bulle pulse) et **épingler**.
+
+### 6.11 Paramètres « Liquid Glass »
+
+Le bouton ⚙ (ou **Ctrl + K**, qui place directement dans la recherche) ouvre les Paramètres du Nexus : Rendu
+(atmosphère, météo, densité, éclairage, illumination globale, grille, opacité du verre), Performance (images par
+seconde, streaming, plafond, occlusion, compteur), Social (bulles, War Room, roue) et Accessibilité (animations). La
+recherche filtre en direct (sans accents, mots-clés : « brume », « fps », « emoji »…). Chaque changement s'essaie dans
+l'**aperçu en direct** à droite ; rien ne change dans le Nexus avant « Appliquer » ; « Annuler » et « Réglages par
+défaut ». Les réglages sont gardés sur l'appareil.
+
+### 6.12 Prochaines étapes
 
 Générer de vrais widgets dans les bulles de Rendu (moteur du Mode Focus), converser avec un Engramme depuis la
 plongée, et synchroniser les scènes dans Mon Hub.
@@ -383,7 +440,7 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
 - **Socle (V5, phase 1)** : rendu des Engrammes dans un Web Worker ; une portée par carte défaite à sa fermeture (rien ne
   reste en mémoire, vérifié par la CI) ; bouclier API (une demande déjà servie au même compte revient sans appel au
   modèle).
-- **Qualité** : 171 tests Python (sur SQLite et PostgreSQL), 93 tests Node, parité Python ↔ navigateur sur des cas
+- **Qualité** : 171 tests Python (sur SQLite et PostgreSQL), 97 tests Node, parité Python ↔ navigateur sur des cas
   partagés, sept scénarios E2E dans Chrome (site statique, serveur de démo, faux Gemini, GitHub Pages → API, Engramme en
   mode serveur et statique, Mode Nexus), contrôle de l'image Docker ; tout est rejoué par la CI GitHub à chaque envoi. Aucun test ne
   touche la production.
@@ -411,6 +468,7 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
 | alpha.4 | Nexus : solde relu après « Penser » ; tests de bout en bout plus robustes (export, écran de rendu) |
 | 6.1.0-alpha.1 | Nexus : les vrais Engrammes (vivants, pensée fondée sur leurs bulles, plongée), Néo-Constellation |
 | alpha.2 | Nexus : couper un fil fonctionne à coup sûr (géométrie des fils testée par le Nexus) |
+| 6.2.0-alpha.1 | Nexus : atmosphère volumétrique et météo, streaming prédictif des Engrammes, Inventaire (prisme, horloge, fusion, sans fil), bulles de dialogue, roue de réactions, canaux et fils de la War Room, Paramètres avec recherche et aperçu |
 
 ## 9. Limites connues
 
@@ -424,4 +482,6 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
   dans un widget.
 - Le Mode Nexus garde sa scène sur l'appareil seulement (pas encore dans Mon Hub) ; ses bulles de Rendu composent un
   écran à partir des pensées, pas encore un widget généré.
+- La brume du Nexus demande une carte graphique (WebGL matériel) ; sinon, simples lueurs. Un Engramme endormi
+  (hors champ) redémarre en une à deux secondes quand il revient à l'écran.
 - Les Engrammes restent des interprétations : leur qualité dépend du dossier public de la personne et du modèle.
