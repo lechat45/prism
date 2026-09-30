@@ -46,7 +46,9 @@ CORES = {
 }
 MOODS = ("Fatiguée", "Créative", "Patiente", "Concentrée")
 LANGUAGES = engram.LANGUAGES
-LIMITS = {"line": 280, "key": 40, "title": 90, "action": 40, "debate": 420, "point": 220}
+LIMITS = {"line": 280, "key": 40, "title": 90, "action": 40, "debate": 420, "point": 220, "why": 60}
+ENGRAM_MAX_JSON = 150_000  # un Engramme reçu (données du client) au plus
+TRACE_MAX = 4
 
 
 class NexusError(Exception):
@@ -63,6 +65,8 @@ class Mind(BaseModel):
     patience: int = Field(50, ge=0, le=100)
     creativity: int = Field(50, ge=0, le=100)
     memories: list[Annotated[str, Field(max_length=300)]] = Field([], max_length=16)
+    # V6.1 : l'Engramme cognitif complet (bulles, climat, liens) ; le modèle pense à partir de lui.
+    engram: dict | None = None
 
 
 class Input(BaseModel):
@@ -125,6 +129,15 @@ def mood_of(mind: Mind) -> str:
 
 
 def describe(mind: Mind) -> str:
+    if mind.engram:
+        # L'Engramme complet (dossier compact, identifiants des bulles compris) : le modèle pense à partir de lui.
+        lines = [f"name: {_clean(mind.engram.get('person') or mind.name, 120)}",
+                 "ENGRAM (interpretive map of this mind: think from it; node ids in brackets):", engram.chat_dossier(mind.engram)]
+        if mind.mood:
+            lines.append(f"mood: {_clean(mind.mood, 40)}")
+        memories = _memories(mind)
+        lines.append("memories:" + ("".join(f"\n- {m}" for m in memories) if memories else " (none)"))
+        return "\n".join(lines)
     label, desc, _ = CORES[mind.core]
     lines = [f"name: {_clean(mind.name, 120)}"]
     if mind.role.strip():
@@ -176,7 +189,15 @@ def normalize_thought(raw, mind: Mind) -> dict:
     memory = next((m for m in memories if m.lower() == memory.lower()), "")  # jamais un souvenir inventé
     if not title:
         raise NexusError("titre manquant")
-    return {"lines": lines, "keys": keys[:5], "title": title, "action": action, "memory": memory}
+    # Bulles de l'Engramme mobilisées (ronds de la logique dans l'Engramme vivant) : seulement des bulles qui existent.
+    ids = {n["id"] for n in engram.chat_nodes(mind.engram)} if mind.engram else set()
+    trace, seen = [], set()
+    for step in raw.get("trace") if isinstance(raw.get("trace"), list) else []:
+        node_id = _clean(step.get("id") if isinstance(step, dict) else "", 60)
+        if node_id in ids and node_id not in seen:
+            seen.add(node_id)
+            trace.append({"id": node_id, "why": _clean(step.get("why"), LIMITS["why"])})
+    return {"lines": lines, "keys": keys[:5], "title": title, "action": action, "memory": memory, "trace": trace[:TRACE_MAX]}
 
 
 def _match(name, minds: list[str]) -> str:
@@ -238,12 +259,25 @@ def demo_thought(req: ThinkRequest) -> dict:
     label, desc, action = CORES[req.mind.core]
     name = _clean(req.mind.name, 120)
     memories = _memories(req.mind)
+    if req.mind.engram:
+        nodes = engram.chat_nodes(req.mind.engram)
+        core = next((n for n in nodes if n["category"] == "core"), None)
+        engine = next((n for n in nodes if n["category"] == "engine"), None)
+        memories = _memories(req.mind)
+        return {
+            "lines": [f"(Mode démo : sans modèle de langage, {name} ne pense pas vraiment.)",
+                      f"Son axiome : « {core['title']} »." if core else "Son axiome guiderait sa pensée.",
+                      f"Sa méthode : {engine['title']}." if engine else "Sa méthode guiderait la suite."],
+            "keys": _keys(" ".join(i.text for i in req.inputs)), "title": _title(req),
+            "action": _clean(engine["title"], LIMITS["action"]) if engine else "Explorer", "memory": memories[0] if memories else "",
+            "trace": [{"id": n["id"], "why": why} for n, why in ((core, "axiome"), (engine, "méthode")) if n],
+        }
     return {
         "lines": [f"(Mode démo : sans modèle de langage, {name} ne pense pas vraiment.)",
                   f"Son Core « {label} » l'amènerait à {desc}.",
                   f"Humeur : {mood_of(req.mind).lower()}."],
         "keys": _keys(" ".join(i.text for i in req.inputs)),
-        "title": _title(req), "action": action, "memory": memories[0] if memories else "",
+        "title": _title(req), "action": action, "memory": memories[0] if memories else "", "trace": [],
     }
 
 
@@ -303,9 +337,19 @@ async def _billed(user: User, action: str, work):
     return result, sparks, billing.as_sparks(reservation.cost_cents)
 
 
+def _check_engrams(minds: list[Mind]) -> None:
+    """Engrammes reçus du client : bornés, et lisibles (sinon rien n'est facturé)."""
+    for mind in minds:
+        if mind.engram is None:
+            continue
+        if len(json.dumps(mind.engram, ensure_ascii=False)) > ENGRAM_MAX_JSON or not engram.chat_nodes(mind.engram):
+            raise HTTPException(status_code=422, detail="Engramme illisible ou trop volumineux.")
+
+
 @router.post("/think", response_model=ThinkResponse)
 async def think(req: ThinkRequest, user: User = Depends(current_user)) -> ThinkResponse:
     """Un esprit du Nexus pense à partir de ses entrées (0,25 Spark, rendus en cas d'échec)."""
+    _check_engrams([req.mind])
     async def work(app):
         providers = app.active_providers()
         if not providers:
@@ -320,6 +364,7 @@ async def think(req: ThinkRequest, user: User = Depends(current_user)) -> ThinkR
 @router.post("/debate", response_model=DebateResponse)
 async def debate(req: DebateRequest, user: User = Depends(current_user)) -> DebateResponse:
     """War Room d'un Hub : deux tours de débat et une synthèse (1 Spark, rendu en cas d'échec)."""
+    _check_engrams(req.minds)
     names = [_clean(m.name, 120) for m in req.minds]
     if len({n.lower() for n in names}) != len(names):
         raise HTTPException(status_code=422, detail="Chaque esprit d'un Hub doit avoir un nom distinct.")

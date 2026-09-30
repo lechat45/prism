@@ -273,9 +273,9 @@ Le canvas devient un milieu : les cartes fusionnent, s'adaptent à ceux qui les 
 
 `frontend/nexus.html`, accueil du site (la racine y redirige) : un seul fichier HTML, CSS et JS. Porte d'entrée (logo
 `assets/logo_prism.svg`, la Lentille Continua ; portes Focus → `index.html` et Nexus), puis le Mode Nexus : bulles de
-Contexte, d'Engramme et de Rendu, synapses tirées de port à port (flux Contexte → Engramme → Rendu, sans boucle),
-impulsions le long des fils, fil coupé au clic qui efface à l'instant la mémoire en aval, anatomie d'un Engramme au
-double-clic (Core, State, Memories), Hubs au lasso (Alt + glisser) et War Room où les Engrammes débattent. Détails :
+Contexte, d'Engramme (le vrai Engramme cognitif vivant, moteur du Mode Focus) et de Rendu, synapses tirées de port à port (flux Contexte → Engramme → Rendu, sans boucle),
+impulsions le long des fils, fil coupé au clic qui efface à l'instant la mémoire en aval, plongée dans un Engramme
+(double-clic sur son en-tête), Hubs au lasso (Alt + glisser) et War Room où les Engrammes débattent. Détails :
 [PROJET.md, section 6](PROJET.md). `window.__nexus` expose l'état pour les tests.
 
 Avec le serveur, les esprits pensent avec Gemini (`backend/nexus.py`) : `POST /api/nexus/think` (0,25 Spark) et

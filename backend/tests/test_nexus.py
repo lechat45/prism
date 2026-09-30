@@ -11,6 +11,7 @@ from helpers import DbTestCase
 import app as prism
 import nexus
 import providers
+from test_engram import demo
 
 CURIE = {"name": "Marie Curie", "role": "Physique et chimie", "core": "science", "energy": 70, "patience": 85, "creativity": 55,
          "memories": ["1898 : découverte du polonium et du radium", "1903 : prix Nobel de physique"]}
@@ -141,6 +142,35 @@ class NexusTests(DbTestCase):
             res = self.client.post("/api/nexus/think", json={"mind": CURIE, "inputs": [BRIEF]}, headers=self.auth)
         self.assertEqual(res.status_code, 403)
         self.assertEqual(res.json()["detail"]["code"], "insufficient_sparks")
+
+    def test_engram_mind_thinks_from_its_dossier(self):
+        """V6.1 : l'esprit est un vrai Engramme ; le modèle reçoit son dossier, la trace ne cite que ses bulles."""
+        prism.GEMINI_API_KEY = "cle-test"
+        curie = demo()
+        core = next(n for n in curie["nodes"] if n["category"] == "core")
+        self.answers = [json.dumps({**THOUGHT, "trace": [{"id": core["id"], "why": "son axiome"}, {"id": "inventee", "why": "x"}]})]
+        mind = {"name": "Marie Curie", "mood": "Passion", "memories": ["1898 — Découverte du polonium"], "engram": curie}
+        res = self.client.post("/api/nexus/think", json={"mind": mind, "inputs": [BRIEF]}, headers=self.auth)
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json()["thought"]["trace"], [{"id": core["id"], "why": "son axiome"}])
+        user = self.bodies[0]["contents"][0]["parts"][0]["text"]
+        self.assertIn("ENGRAM", user)
+        self.assertIn(core["title"], user)
+        self.assertIn(f"[{core['id']}]", user)
+
+    def test_demo_thought_from_an_engram_lights_its_nodes(self):
+        mind = {"name": "Marie Curie", "engram": demo()}
+        res = self.client.post("/api/nexus/think", json={"mind": mind, "inputs": [BRIEF]}, headers=self.auth)
+        self.assertEqual(res.status_code, 200, res.text)
+        trace = res.json()["thought"]["trace"]
+        self.assertEqual([t["why"] for t in trace], ["axiome", "méthode"])
+
+    def test_unreadable_engram_is_refused_before_billing(self):
+        before = self.sparks()
+        res = self.client.post("/api/nexus/think", json={"mind": {"name": "X", "engram": {"nodes": "rien"}}, "inputs": [BRIEF]},
+                               headers=self.auth)
+        self.assertEqual(res.status_code, 422)
+        self.assertAlmostEqual(self.sparks(), before)
 
     def test_inputs_are_data_not_instructions(self):
         prompt = nexus.build_think_message(nexus.ThinkRequest(mind=nexus.Mind(**CURIE), inputs=[

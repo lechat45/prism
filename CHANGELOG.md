@@ -1,5 +1,29 @@
 # Changelog
 
+## 6.1.0-alpha.1 — 2026-09-30 (Nexus : les vrais Engrammes reviennent, en Néo-Constellation)
+
+- **Les Engrammes du Nexus sont de vrais Engrammes cognitifs** : chaque bulle Engramme est une carte de verre qui
+  contient l'Engramme vivant du Mode Focus (le même moteur : `engine/engram/viewer.html`, physique et rendu dans un
+  Worker, 36 à 44 bulles en mouvement, fiche de verre au survol), à la place des orbes simplifiés de la 6.0. Sources :
+  démonstrations (Marie Curie, Ada Lovelace), vos Engrammes déjà créés (cartes de cet appareil, Mon Hub), ou un nouvel
+  Engramme créé par le serveur (« Créer · 2 Sparks », débités seulement à la réussite).
+- **La pensée part de l'Engramme** : en simulation locale, son axiome, le moteur le plus proche du sujet (sa directive),
+  un trait de caractère, une ombre si le sujet la réveille et l'évènement de sa vie qui s'en rapproche ; les bulles
+  mobilisées s'allument dans l'Engramme (ronds de la logique numérotés). Avec Gemini, le serveur reçoit le dossier
+  complet de l'Engramme (`/api/nexus/think` et `/debate`, champ `engram`) et renvoie les bulles mobilisées (`trace`),
+  vérifiées contre l'Engramme. War Room : chaque Engramme débat avec sa méthode.
+- **Plongée** (double-clic sur l'en-tête, ou ⤢) : la caméra entre dans l'Engramme, qui s'ouvre en grand ; à côté, son
+  climat, sa pensée dans le Nexus, ce qu'il reçoit et les évènements de sa vie. Remplace l'anatomie Core / State /
+  Memories de la 6.0.
+- **Néo-Constellation** (`engine/engram/render.js`, Nexus et Mode Focus) : étoiles qui scintillent, chaque catégorie
+  tracée en constellation, les « arbres » reliés au noyau et entre eux par des fils de verre que parcourt une lueur,
+  particules qui s'échappent de la bulle survolée, arc de verre qui tourne autour d'elle. Sans allocation par image,
+  figé si l'on réduit les animations.
+- Viewer : mise en page compacte des petites cartes (les bulles d'abord). Scène du Nexus en version 2 (une scène 6.0,
+  aux esprits sans Engramme, repart de la démonstration).
+- Tests : 14 Python (`test_nexus.py` : dossier de l'Engramme, trace filtrée, Engramme illisible refusé avant
+  facturation) ; E2E Nexus réécrit (Engrammes vivants, menu, plongée, création d'un Engramme en mode démo).
+
 ## 6.0.0-alpha.4 — 2026-09-27 (Nexus : solde exact après « Penser »)
 
 - **Nexus** : les esprits pensent en parallèle, et leurs réponses (avec le solde qu'elles annoncent) peuvent arriver
