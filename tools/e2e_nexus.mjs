@@ -209,7 +209,7 @@ try {
   const [cx, cy] = await evaluate(cutAt);
   const under = await evaluate(`(()=>{const c=__nexus.find('Marie Curie').id,x=__nexus.find('context').id;const want=[...__nexus.links.values()].find(l=>l.from===x&&l.to===c).id;
     const top=document.elementFromPoint(${cx},${cy});const got=top&&top.closest('.link');
-    window.__ev=[];for(const t of ['pointerdown','pointerup','click'])addEventListener(t,(e)=>{const l=e.target.closest&&e.target.closest('.link');window.__ev.push(t+':'+(e.target.tagName||'?')+(l?'#'+l.dataset.id:'')+':'+e.button+':'+e.pointerType)},true);
+    window.__ev=[];for(const t of ['pointerdown','pointerup','click'])addEventListener(t,(e)=>{const l=e.target.closest&&e.target.closest('.link');const nd=e.target.closest&&e.target.closest('.node');window.__ev.push(t+':'+(e.target.tagName||'?')+'.'+String(e.target.className||'').slice(0,30)+(e.target.id?'#'+e.target.id:'')+(l?' fil '+l.dataset.id:'')+(nd?' carte '+nd.dataset.id:'')+' @'+Math.round(e.clientX)+','+Math.round(e.clientY))},true);
     return document.elementsFromPoint(${cx},${cy}).slice(0,3).map(e=>e.tagName+'.'+[...e.classList].join('.')).join(' > ')+' ; fil visé '+want+', fil sous le point '+(got?got.dataset.id:'aucun')})()`);
   await click(`[${cx},${cy}]`);
   if (await evaluate("__nexus.links.size") !== 3) console.log(`  diagnostic : clic en ${Math.round(cx)}, ${Math.round(cy)} sur ${under} ; évènements : ${await evaluate("(window.__ev||[]).join(', ')")}`);
