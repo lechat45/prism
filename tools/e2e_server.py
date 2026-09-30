@@ -79,6 +79,17 @@ def fake_widget(user_message: str) -> str:
 def fake_nexus(system: str, user: str) -> str:
     """V6 : pensée d'un esprit du Nexus, ou débat d'une War Room (JSON du schéma, noms repris du message)."""
     names = re.findall(r"^name: (.+)$", user, re.M)
+    # V6.3, Conseil : une voix par esprit, la synthèse, l'arbitre d'une pensée.
+    if "COUNCIL VOICE" in system:
+        return json.dumps({"text": f"{names[0]} parle au Conseil (faux Gemini)."}, ensure_ascii=False)
+    if "COUNCIL SYNTHESIS" in system:
+        return json.dumps({"summary": "Synthèse du Conseil (faux Gemini).", "points": [f"{n} — son apport" for n in names],
+                           "first_step": "Premier pas du Conseil."}, ensure_ascii=False)
+    if "COUNCIL ARBITER" in system:
+        ids = re.findall(r"^\[([^\]]+)\] ", user, re.M)
+        return json.dumps({"lines": [f"{names[0]} tranche au Conseil (faux Gemini).", "Deuxième phrase de l'arbitre."],
+                           "keys": ["CO₂", "température"], "title": "Titre de l'arbitre", "action": "Agir ensemble",
+                           "memory": "", "trace": [{"id": i, "why": "faux arbitre"} for i in ids[:2]]}, ensure_ascii=False)
     if "War Room" in system:
         return json.dumps({
             "positions": [{"author": n, "text": f"{n} (faux Gemini) prend position."} for n in names],

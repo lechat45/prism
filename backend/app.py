@@ -48,7 +48,7 @@ import nexus
 import security
 import widgets
 from mocks import mock_component
-from providers import FatalGenerationError, GenerationError, Provider
+from providers import KEYS, FatalGenerationError, GenerationError, Provider
 from models import User, Widget
 from widgets import WidgetSummary
 from sanitize import (
@@ -61,7 +61,7 @@ from sanitize import (
     validate_document,
 )
 
-__version__ = "6.2.0a1"
+__version__ = "6.3.0a1"
 
 BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
@@ -99,6 +99,13 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_RETRY_DELAY = float(os.getenv("GEMINI_RETRY_DELAY", "2"))  # nouvelle tentative après une surcharge (503)
 GEMINI_URL = os.getenv("GEMINI_URL", GEMINI_DEFAULTS["url"])  # surcharge : faux serveur des tests E2E
 GEMINI_MODELS = _models("GEMINI_MODELS", GEMINI_DEFAULTS)
+# V6.3, orchestre de modèles : familles (rôles), chaîne de chaque tâche, voix du Conseil (cf. engine/gemini.json).
+# Une liste imposée (variable GEMINI_MODELS, ou les tests) vaut pour toutes les tâches et toutes les voix.
+GEMINI_DEFAULT_MODELS = list(GEMINI_DEFAULTS["models"])
+GEMINI_ROLES = GEMINI_DEFAULTS["roles"]
+GEMINI_TASKS = GEMINI_DEFAULTS["tasks"]
+GEMINI_COUNCIL = GEMINI_DEFAULTS["council"]
+GEMINI_THINKING = os.getenv("GEMINI_THINKING", GEMINI_DEFAULTS["thinking"])
 GEMINI_MAX_OUTPUT_TOKENS = int(os.getenv("GEMINI_MAX_OUTPUT_TOKENS", str(GEMINI_DEFAULTS["max_output_tokens"])))
 
 # Groq, secours facultatif : essayé seulement si GROQ_API_KEY est défini et que Gemini échoue.
@@ -108,6 +115,12 @@ GROQ_MODELS = _models("GROQ_MODELS", GROQ_DEFAULTS)
 GROQ_REASONING_EFFORT = os.getenv("GROQ_REASONING_EFFORT", GROQ_DEFAULTS["reasoning_effort"])
 MAX_TOKENS = int(os.getenv("PRISM_MAX_TOKENS", str(GROQ_DEFAULTS["max_completion_tokens"])))
 TIMEOUT_S = float(os.getenv("PRISM_TIMEOUT", "90"))
+# V6.3 : le Nexus attend moins un modèle (petites réponses JSON) : un modèle muet passe la main au suivant de l'orchestre.
+NEXUS_TIMEOUT_S = float(os.getenv("PRISM_NEXUS_TIMEOUT", "40"))  # pensée, voix du Conseil
+NEXUS_LONG_TIMEOUT_S = float(os.getenv("PRISM_NEXUS_LONG_TIMEOUT", "60"))  # débat, arbitre, synthèse, mode Profond
+# Course des modèles : sans réponse après ce délai, le modèle suivant de la chaîne part en parallèle (autre clé).
+NEXUS_HEDGE_S = float(os.getenv("PRISM_NEXUS_HEDGE", "10"))
+NEXUS_LONG_HEDGE_S = float(os.getenv("PRISM_NEXUS_LONG_HEDGE", "25"))
 HOST = os.getenv("PRISM_HOST", "127.0.0.1")
 # PORT : fourni par la plupart des hébergeurs (Render, Cloud Run, Koyeb…).
 PORT = int(os.getenv("PRISM_PORT") or os.getenv("PORT") or "8000")
@@ -370,11 +383,41 @@ def _http_client() -> httpx.AsyncClient:
     return httpx.AsyncClient()
 
 
-def active_providers() -> list[Provider]:
-    """Fournisseurs configurés, dans l'ordre d'essai (lu à chaque appel : les tests ajustent les clés)."""
+def gemini_chain(task: str = "widget") -> list[str]:
+    """Modèles Gemini d'une tâche, dans l'ordre d'essai : ses rôles bout à bout, sans doublon."""
+    if GEMINI_MODELS != GEMINI_DEFAULT_MODELS:
+        return list(GEMINI_MODELS)
+    chain: list[str] = []
+    for role in GEMINI_TASKS.get(task, GEMINI_TASKS["widget"]):
+        chain += [m for m in GEMINI_ROLES.get(role, []) if m not in chain]
+    return chain
+
+
+def council_voices() -> list[list[str]]:
+    """Voix du Conseil : chacune sa chaîne (un modèle, puis ses remplaçants)."""
+    if GEMINI_MODELS != GEMINI_DEFAULT_MODELS:
+        return [list(GEMINI_MODELS) for _ in GEMINI_COUNCIL]
+    return [list(voice) for voice in GEMINI_COUNCIL]
+
+
+def orchestra() -> dict:
+    """État de l'orchestre pour /api/health : familles, chaînes, voix, capacité (couples clé × modèle), jamais les clés."""
+    tasks = {task: gemini_chain(task) for task in GEMINI_TASKS}
+    every = []
+    for chain in list(tasks.values()) + council_voices():
+        every += [m for m in chain if m not in every]
+    keys = [k for p in active_providers() if p.name == "gemini" for k in p.keys]
+    return {"roles": GEMINI_ROLES if GEMINI_MODELS == GEMINI_DEFAULT_MODELS else {"override": list(GEMINI_MODELS)},
+            "tasks": tasks, "council": council_voices(), "thinking": GEMINI_THINKING, "models": len(every),
+            "capacity": KEYS.stats(keys, every)}
+
+
+def active_providers(task: str = "widget") -> list[Provider]:
+    """Fournisseurs configurés, dans l'ordre d'essai, avec la chaîne de modèles de la tâche (lu à chaque appel :
+    les tests ajustent les clés)."""
     providers = []
     if GEMINI_API_KEY:
-        providers.append(Provider("gemini", GEMINI_API_KEY, GEMINI_MODELS, GEMINI_URL, {
+        providers.append(Provider("gemini", GEMINI_API_KEY, gemini_chain(task), GEMINI_URL, {
             "temperature": GEMINI_DEFAULTS["temperature"], "max_output_tokens": GEMINI_MAX_OUTPUT_TOKENS,
             "retry_delay": GEMINI_RETRY_DELAY}))
     if GROQ_API_KEY:
@@ -419,6 +462,8 @@ async def health() -> dict:
         "providers": [p.name for p in providers],
         # Nombre de clés Gemini réparties (jamais les clés elles-mêmes).
         "gemini_keys": sum(len(p.keys) for p in providers if p.name == "gemini"),
+        # V6.3 : orchestre de modèles (familles, chaîne de chaque tâche, voix du Conseil, capacité clés × modèles).
+        "orchestra": orchestra() if any(p.name == "gemini" for p in providers) else None,
         "auth": True,
         "pricing": {action: billing.as_sparks(cents) for action, cents in billing.PRICES.items()},
         "signup_sparks": billing.as_sparks(billing.SIGNUP_BONUS),

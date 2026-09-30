@@ -24,7 +24,11 @@ PRICES = {"generate": 1 * CENTS, "refactor": CENTS // 2, "engram": 2 * CENTS,  #
           "engram_chat": CENTS // 4,  # un message de conversation avec un Engramme
           "engram_fusion": 3 * CENTS,  # V5 : Hyper-Engramme né de deux Engrammes
           "nexus_think": CENTS // 4,  # V6 : un esprit du Nexus pense (Gemini)
-          "nexus_debate": 1 * CENTS}  # V6 : débat d'une War Room (deux tours et une synthèse)
+          "nexus_debate": 1 * CENTS,  # V6 : débat d'une War Room (deux tours et une synthèse)
+          # V6.3, orchestre de modèles : Profond (modèles les plus capables, réflexion poussée) et Conseil (plusieurs
+          # modèles en parallèle sur les clés, un arbitre ; en War Room, une voix par esprit).
+          "nexus_think_deep": CENTS // 2, "nexus_think_council": 1 * CENTS,
+          "nexus_debate_deep": 2 * CENTS, "nexus_debate_council": 3 * CENTS}
 
 
 def as_sparks(cents: int) -> float:

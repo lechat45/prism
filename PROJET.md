@@ -1,6 +1,6 @@
 # Prism — description complète du projet
 
-> Version décrite : **6.2.0-alpha.1** (30 septembre 2026). En ligne : <https://lechat45.github.io/prism/>,
+> Version décrite : **6.3.0-alpha.1** (30 septembre 2026). En ligne : <https://lechat45.github.io/prism/>,
 > API : <https://prism-api-0x4z.onrender.com>. Code : <https://github.com/lechat45/prism> (branches `v3` = site public
 > sur GitHub Pages, `v4` = branche déployée par Render pour l'API, `v5` et `v6` = développement ; identiques à chaque publication).
 > Ce document est mis à jour à chaque livraison ; le détail technique de chaque version est dans `CHANGELOG.md`.
@@ -9,6 +9,12 @@
 
 Les dernières mises à jour, de la plus récente à la plus ancienne.
 
+- **6.3.0-alpha.1 — 30 septembre 2026 · un orchestre de modèles.** Prism utilise désormais 13 modèles Google au lieu
+  de 3 (Pro, Flash, Lite et Gemma), et ses 3 clés travaillent avec chacun d'eux : 39 quotas au lieu de 3. Chaque tâche
+  a sa chaîne de modèles, un modèle saturé ou trop lent passe aussitôt la main, et quand un modèle tarde, le suivant
+  part en parallèle. Dans le Nexus, trois profondeurs de pensée : **Rapide**, **Profond** (les modèles les plus
+  capables, réflexion poussée) et **Conseil** (trois modèles pensent ensemble, un arbitre tranche ; en War Room, chaque
+  esprit parle avec son propre modèle). Le prix de chaque profondeur est affiché avant de penser.
 - **6.2.0-alpha.1 — 30 septembre 2026 · le Nexus prend de l'atmosphère.** Une brume en volutes flotte sous le canvas,
   éclairée par les bulles, avec sa météo (clair, brume, aurore, orage). Un **Inventaire** apporte de nouveaux blocs :
   prisme holographique, horloge chrono-quantique (un contexte qui change avec le temps), fusion bionique, émetteur et
@@ -353,6 +359,18 @@ Le serveur vérifie tout ce que le modèle renvoie (un souvenir cité doit exist
 rend les Sparks si rien n'aboutit. Une pensée payée est gardée pour exactement ces entrées : refaire un fil coupé ne
 coûte rien.
 
+Avec Gemini, trois **profondeurs** (menu Intelligence ; prix par esprit / par débat, affichés sur les boutons) :
+
+| Profondeur | Pensée | Débat | Ce qui se passe |
+| --- | --- | --- | --- |
+| **Rapide** | 0,25 | 1 | Gemini Flash, relayé par Lite puis Gemma si Google sature |
+| **Profond** | 0,5 | 2 | les modèles les plus capables d'abord (Pro quand l'offre y donne droit), réflexion poussée |
+| **Conseil** | 1 | 3 | trois modèles différents pensent en parallèle, chacun sur sa clé ; un arbitre écrit la pensée finale. En War Room, chaque esprit parle avec son propre modèle, les deux tours en parallèle, et l'arbitre écrit la synthèse |
+
+L'écran de Rendu, la plongée et la War Room disent d'où vient chaque pensée (le modèle, ou les voix du Conseil et
+leur arbitre). Changer de profondeur remet les esprits concernés en attente : une pensée payée vaut pour une
+profondeur.
+
 ### 6.7 D'où viennent les Engrammes, scène gardée
 
 Le menu Engramme propose des **démonstrations** (Marie Curie, Ada Lovelace), **vos Engrammes** déjà créés dans Prism
@@ -429,7 +447,7 @@ backend/   (FastAPI, Python 3.13)
   engram.py     Engramme, conversation, fusion      auth.py   comptes, sessions JWT, compte d'essai
   billing.py    Sparks (réservation, confirmation, remboursement, grand livre)
   nexus.py      V6 : pensée d'un esprit du Nexus, débat de War Room (vérifiés, remboursés en cas d'échec)
-  widgets.py    Mon Hub      providers.py   Gemini (répartition entre les clés, relais) et Groq en secours
+  widgets.py    Mon Hub      providers.py   Gemini (quotas par couple clé × modèle, relais) et Groq en secours
   db.py, models.py   SQLAlchemy : SQLite en local, PostgreSQL (Neon) en production
 tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesures de performance
 ```
@@ -437,10 +455,17 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
 - **Déploiement** : API + frontend sur **Render** (image Docker, offre gratuite, déploiement seulement après une CI
   verte), base **PostgreSQL sur Neon**, site public sur **GitHub Pages** (branche `v3`) branché sur l'API par la balise
   `<meta name="prism-api">`. Secrets (clés Gemini, base, secret de session) uniquement dans le tableau de bord de Render.
+- **Orchestre de modèles (V6.3)** : 13 modèles Gemini en quatre familles (Pro, Flash, Lite, Gemma 4), une chaîne par
+  tâche (`engine/gemini.json` : widgets, Engrammes, conversation, Nexus, Profond, arbitre, voix du Conseil). Les clés
+  se partagent le travail, et chaque couple clé × modèle a son quota (3 × 13 = 39) : un modèle au quota, saturé ou
+  trop lent se repose sur cette clé (ou sur toutes s'il est trop lent), et la chaîne passe au suivant sans l'attendre ;
+  dans le Nexus, un modèle qui tarde voit le suivant partir en parallèle (course), la première réponse valable gagne.
+  `/api/health` décrit l'orchestre sans jamais montrer les clés. Pour ajouter une clé : l'ajouter à `GEMINI_API_KEY`
+  dans Render (séparées par des virgules), elle rejoint aussitôt l'orchestre.
 - **Socle (V5, phase 1)** : rendu des Engrammes dans un Web Worker ; une portée par carte défaite à sa fermeture (rien ne
   reste en mémoire, vérifié par la CI) ; bouclier API (une demande déjà servie au même compte revient sans appel au
   modèle).
-- **Qualité** : 171 tests Python (sur SQLite et PostgreSQL), 97 tests Node, parité Python ↔ navigateur sur des cas
+- **Qualité** : 185 tests Python (sur SQLite et PostgreSQL), 97 tests Node, parité Python ↔ navigateur sur des cas
   partagés, sept scénarios E2E dans Chrome (site statique, serveur de démo, faux Gemini, GitHub Pages → API, Engramme en
   mode serveur et statique, Mode Nexus), contrôle de l'image Docker ; tout est rejoué par la CI GitHub à chaque envoi. Aucun test ne
   touche la production.
@@ -469,6 +494,7 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
 | 6.1.0-alpha.1 | Nexus : les vrais Engrammes (vivants, pensée fondée sur leurs bulles, plongée), Néo-Constellation |
 | alpha.2 | Nexus : couper un fil fonctionne à coup sûr (géométrie des fils testée par le Nexus) |
 | 6.2.0-alpha.1 | Nexus : atmosphère volumétrique et météo, streaming prédictif des Engrammes, Inventaire (prisme, horloge, fusion, sans fil), bulles de dialogue, roue de réactions, canaux et fils de la War Room, Paramètres avec recherche et aperçu |
+| 6.3.0-alpha.1 | orchestre de 13 modèles (Pro, Flash, Lite, Gemma), 39 quotas clé × modèle, course des modèles ; Nexus : profondeurs Rapide, Profond et Conseil (plusieurs modèles, un arbitre, une voix par esprit) |
 
 ## 9. Limites connues
 

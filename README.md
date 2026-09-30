@@ -283,6 +283,12 @@ Avec le serveur, les esprits pensent avec Gemini (`backend/nexus.py`) : `POST /a
 Sparks rendus en cas d'échec. La page réutilise la session du Mode Focus (module `js/account.js`) ; rien n'est débité
 sans un clic sur « Penser » ou « Débattre », qui affichent leur prix. La scène est gardée en `localStorage`.
 
+V6.3 : orchestre de modèles (`frontend/engine/gemini.json` : familles, chaîne de chaque tâche, voix du Conseil ;
+quotas par couple clé × modèle dans `backend/providers.py`) et, dans le Nexus, les profondeurs Rapide, Profond
+(`thinkingLevel: high`) et Conseil (`nexus.council_think`, `nexus.council_debate` : plusieurs modèles en parallèle,
+arbitre, une voix par esprit en War Room ; prompts `frontend/engine/nexus/council-*`, `voice-*`, `synthesis-*`), avec
+course des modèles (`nexus.run`, paramètre `hedge`).
+
 V6.2 : atmosphère volumétrique éclairée par les bulles (`frontend/engine/nexus/atmosphere.js`, WebGL, repli 2D),
 streaming prédictif des Engrammes (endormis hors champ, réveillés avant d'entrer à l'écran), Inventaire (prisme
 holographique, horloge chrono-quantique, fusion bionique, émetteur et récepteur sans fil), bulles de dialogue
@@ -440,7 +446,10 @@ API ajoutée en phase 1 (jeton `Authorization: Bearer …` sauf `register`/`logi
 | --- | --- | --- |
 | `GEMINI_API_KEY` | vide (mode démo) | clé API Gemini (Google AI Studio) ; plusieurs clés séparées par des virgules se partagent le travail : chaque appel part sur la moins occupée (puis la moins récemment servie) ; une clé surchargée (503), au quota (429) ou refusée passe aussitôt la main |
 | `GEMINI_RETRY_DELAY` | `2` | surcharge passagère (503 « high demand ») : nouvelle tentative après ce délai, puis modèle suivant |
-| `GEMINI_MODELS` | `gemini.json` (3.8-flash, 3.6-flash, 3.5-flash-lite) | chaîne de modèles, séparés par des virgules (le suivant prend le relais) ; le modèle « lite » final, peu demandé, répond quand Google est saturé |
+| `GEMINI_MODELS` | orchestre de `gemini.json` | vide : l'orchestre (V6.3), une chaîne par tâche parmi 13 modèles (Pro, Flash, Lite, Gemma 4) ; une liste (séparée par des virgules) impose ces modèles à toutes les tâches |
+| `GEMINI_THINKING` | `high` | niveau de réflexion du mode Profond du Nexus et de son arbitre |
+| `PRISM_NEXUS_TIMEOUT`, `PRISM_NEXUS_LONG_TIMEOUT` | `40`, `60` | délai d'un modèle pour une pensée ou une voix du Conseil ; pour un débat, un arbitre, une synthèse ou le mode Profond |
+| `PRISM_NEXUS_HEDGE`, `PRISM_NEXUS_LONG_HEDGE` | `10`, `25` | course des modèles : au-delà, le modèle suivant de la chaîne part en parallèle |
 | `GEMINI_MAX_OUTPUT_TOKENS` | `32768` | tokens de sortie max par appel |
 | `GROQ_API_KEY` | vide | secours facultatif, essayé seulement si tous les modèles Gemini échouent |
 | `GROQ_MODELS` | `groq.json` | chaîne de modèles Groq |

@@ -362,6 +362,16 @@ button { cursor: pointer; }
 .intel-menu .status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 10px 8px 36px; font-size: 11.5px; color: var(--muted); }
 .intel-menu .status a { color: #cfe3ff; }
 .intel-menu .status .glass-btn { padding: 5px 10px; font-size: 11.5px; }
+/* V6.3 · profondeur de la pensée Gemini (Rapide, Profond, Conseil) et état de l'orchestre de modèles */
+.intel-menu .depths { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 2px 4px 6px; }
+.intel-menu .depth { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 9px; border-radius: 12px;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); text-align: left; width: auto; }
+.intel-menu .depth b { font-size: 12.5px; }
+.intel-menu .depth small { font-size: 10.5px; color: var(--faint); }
+.intel-menu .depth[aria-pressed="true"] { border-color: rgba(201, 184, 255, 0.6); background: rgba(201, 184, 255, 0.12); }
+.intel-menu .depth-note { margin: 0 8px 6px; font-size: 11px; line-height: 1.45; color: var(--muted); }
+.intel-menu .orchestra { margin: 0 8px 8px; font-size: 10.5px; color: var(--faint); font-family: var(--mono); }
+.msg .model { display: inline-block; margin-left: 6px; font-size: 9px; letter-spacing: 0.08em; text-transform: none; color: var(--faint); font-weight: 500; }
 .node.engram.is-pending .thought { color: #d6c8ff; }
 .menu .menu-sec { padding: 8px 10px 4px; font-size: 9.5px; font-weight: 650; letter-spacing: 0.22em; text-transform: uppercase; color: var(--faint); }
 .menu .menu-note { padding: 2px 10px 8px; font-size: 11.5px; color: var(--faint); }
@@ -1237,7 +1247,7 @@ button { cursor: pointer; }
       : "Chargement de l'Engramme…";
     e.classList.toggle("is-pending", !n.memory && !!n.pending);
     e.querySelector(".thought").textContent = n.memory ? n.memory.lines[0]
-      : n.pending ? (thinkingNow.has(n.id) ? "Réflexion avec Gemini…" : "Prêt à penser · " + sparksLabel(priceOf("nexus_think")) + " au clic sur « Penser »")
+      : n.pending ? (thinkingNow.has(n.id) ? "Réflexion avec Gemini…" : "Prêt à penser · " + sparksLabel(priceOf(thinkAction())) + " au clic sur « Penser »")
       : "";
   }
 
@@ -1342,7 +1352,13 @@ button { cursor: pointer; }
     }).join("");
     var by = m.thoughts.length ? "Pensé par " + m.thoughts.map(function (t) { return t.author; }).join(" × ") : "Contexte seul (aucun esprit)";
     var remote = m.thoughts.filter(function (t) { return t.source === "api"; });
-    if (remote.length) by += remote.every(function (t) { return t.mode !== "mock"; }) ? " · Gemini" : " · serveur (mode démo)";
+    if (remote.length) {
+      var how = remote.every(function (t) { return t.mode !== "mock"; }) ? " · Gemini" : " · serveur (mode démo)";
+      var council = remote.filter(function (t) { return t.council && t.council.length; });
+      if (council.length && how === " · Gemini") how += " · Conseil de " + council[0].council.length + " modèles";
+      else if (remote.some(function (t) { return t.depth === "deep"; }) && how === " · Gemini") how += " · Profond";
+      by += how;
+    }
     screen.innerHTML = '<div class="out-ui" style="--c:' + c + '"><h3>' + esc(m.title) + '</h3><div class="by">' + esc(by) + '</div>' +
       '<div class="tiles">' + tiles + '</div><div class="voices">' + voices + '</div>' +
       '<button class="cta" type="button">' + esc(m.action) + ' →</button></div>';
@@ -2154,6 +2170,7 @@ button { cursor: pointer; }
     box.replaceChildren();
     var t = n.memory || think(n, ins.length ? ins : [{ kind: "context", text: "Concevoir un écran d'accueil pour une bibliothèque de quartier." }]);
     (t ? t.lines : []).forEach(function (line) { box.append(el("p", "", "")); box.lastChild.textContent = line; });
+    if (n.memory && provenance(n.memory)) { var from = el("p", "quiet", ""); from.textContent = "Pensé par : " + provenance(n.memory); box.append(from); }
     if (!n.memory) {
       var note = el("p", "quiet", "");
       note.textContent = n.pending ? "En attente : Gemini pensera au clic sur « Penser »." : ins.length ? "" : "Aperçu : reliez-lui un contexte pour qu'il pense à votre sujet.";
@@ -2436,7 +2453,7 @@ button { cursor: pointer; }
       if (!canGemini()) run = Promise.reject({ message: "Connectez-vous (menu Intelligence) pour répondre avec Gemini, ou revenez à la simulation locale." });
       else {
         var inputs = [{ kind: "context", title: "Question en fil", text: question }, { kind: "thought", author: n.name, text: said }];
-        run = link.api("/api/nexus/think", { method: "POST", body: { mind: mindOf(n), inputs: inputs.map(toInput), language: "fr" } })
+        run = link.api("/api/nexus/think", { method: "POST", body: { mind: mindOf(n), inputs: inputs.map(toInput), language: "fr", depth: depth } })
           .then(function (res) {
             if (link.setSparks) link.setSparks(res.sparks);
             return answer(res.thought.lines.join(" "));
@@ -2521,7 +2538,18 @@ button { cursor: pointer; }
   var link = window.__prismLink || null;
   var busy = false;
   var thinkingNow = new Set();
-  var PRICES = { nexus_think: 0.25, nexus_debate: 1, engram: 2 };
+  var PRICES = { nexus_think: 0.25, nexus_debate: 1, engram: 2, nexus_think_deep: 0.5, nexus_think_council: 1,
+    nexus_debate_deep: 2, nexus_debate_council: 3 };
+  // V6.3 : profondeur de la pensée Gemini. Rapide (orchestre Flash → Lite → Gemma), Profond (modèles les plus capables,
+  // réflexion poussée), Conseil (plusieurs modèles en parallèle sur les clés, un arbitre ; en War Room, une voix par esprit).
+  var DEPTHS = {
+    fast: { name: "Rapide", note: "Gemini Flash, relayé par Lite puis Gemma si Google sature." },
+    deep: { name: "Profond", note: "Les modèles les plus capables d'abord (Pro quand votre offre y donne droit), réflexion poussée." },
+    council: { name: "Conseil", note: "Trois modèles pensent en parallèle, chacun sur sa clé ; un arbitre tranche. En War Room, chaque esprit a sa propre voix." }
+  };
+  var depth = "fast";
+  function thinkAction() { return depth === "fast" ? "nexus_think" : "nexus_think_" + depth; }
+  function debateAction() { return depth === "fast" ? "nexus_debate" : "nexus_debate_" + depth; }
   addEventListener("prism:link", function (e) { link = e.detail; engineReady(); renderIntel(); });
 
   function priceOf(action) {
@@ -2535,7 +2563,7 @@ button { cursor: pointer; }
   function canGemini() { return !!(link && link.ready && link.account && link.account.user); }
   function signature(n, ins) {
     var eg = n.engram || {};
-    return JSON.stringify([eg.person, (eg.nodes || []).length, eg.summary, ins.map(function (m) { return [m.kind, m.author || "", m.title || "", m.text]; })]);
+    return JSON.stringify([eg.person, (eg.nodes || []).length, eg.summary, ins.map(function (m) { return [m.kind, m.author || "", m.title || "", m.text]; }), depth]);
   }
   function mindOf(n) {
     return { name: n.name, role: (n.engram && n.engram.domain) || "", mood: moodOf(n).label, memories: memoriesOf(n.engram), engram: n.engram };
@@ -2544,11 +2572,23 @@ button { cursor: pointer; }
     return m.kind === "context" ? { kind: "context", title: String(m.title || "").slice(0, 120), text: m.text.slice(0, 3000) }
       : { kind: "thought", author: String(m.author || "").slice(0, 120), text: m.text.slice(0, 3000) };
   }
-  function fromRemote(n, t, mode) {
+  function fromRemote(n, t, mode, res) {
     var lines = t.lines.slice();
     if (t.memory) lines.push("Souvenir mobilisé : " + t.memory + ".");
+    res = res || {};
     return { kind: "thought", author: n.name, color: n.color, mood: moodOf(n).label, keys: t.keys || [],
-      subject: t.title, lines: lines, text: t.lines.join(" "), action: t.action, source: "api", mode: mode, trace: t.trace || [], memory: t.memory || "" };
+      subject: t.title, lines: lines, text: t.lines.join(" "), action: t.action, source: "api", mode: mode, trace: t.trace || [], memory: t.memory || "",
+      depth: res.depth || "fast", model: res.model || "", council: res.council || null };
+  }
+  /** D'où vient une pensée : le modèle, ou les voix du Conseil et leur arbitre. */
+  function provenance(t) {
+    if (!t || t.source !== "api") return "";
+    if (t.mode === "mock") return "serveur (mode démo)";
+    if (t.council && t.council.length) {
+      var voices = t.council.map(function (v) { return v.model; });
+      return "Conseil : " + voices.join(", ") + (voices.length > 1 ? " → arbitre " + t.model : "");
+    }
+    return (t.depth === "deep" ? "Profond · " : "") + (t.model || "Gemini");
   }
   function errorText(err) {
     if (!err) return "Erreur inconnue.";
@@ -2615,10 +2655,10 @@ button { cursor: pointer; }
     n.el.classList.add("is-thinking");
     paintEngram(n);
     incoming(n.id).forEach(function (l) { pulse(l, 900); });
-    return link.api("/api/nexus/think", { method: "POST", body: { mind: mindOf(n), inputs: ins.map(toInput), language: "fr" } })
+    return link.api("/api/nexus/think", { method: "POST", body: { mind: mindOf(n), inputs: ins.map(toInput), language: "fr", depth: depth } })
       .then(function (res) {
         if (link.setSparks) link.setSparks(res.sparks);
-        if (nodes.get(n.id) === n) n.cache = { sig: sig, thought: fromRemote(n, res.thought, res.mode) };
+        if (nodes.get(n.id) === n) n.cache = { sig: sig, thought: fromRemote(n, res.thought, res.mode, res) };
       })
       .finally(function () {
         thinkingNow.delete(n.id);
@@ -2646,23 +2686,32 @@ button { cursor: pointer; }
     var mindNamed = function (name) { return byName[String(name).trim().replace(/\s+/g, " ").toLowerCase()] || null; };
     var tint = function (name) { var n = mindNamed(name); return n ? n.color : "#c9b8ff"; };
     var short = function (name) { return String(name).split(" ").pop(); };
-    var t = typing(h, "#c9b8ff", "War Room · Gemini");
+    var t = typing(h, "#c9b8ff", "War Room · Gemini" + (depth === "fast" ? "" : " · " + DEPTHS[depth].name));
     return link.api("/api/nexus/debate", { method: "POST", body: { minds: minds.map(mindOf), question: question,
-      context: ctx ? ctx.text.slice(0, 3000) : "", language: "fr" } })
+      context: ctx ? ctx.text.slice(0, 3000) : "", language: "fr", depth: depth } })
       .then(function (res) {
         if (link.setSparks) link.setSparks(res.sparks);
         t.remove();
         var d = res.debate;
+        // Conseil : chaque esprit a parlé avec sa propre voix (son modèle), affichée à côté de son nom.
+        var voiceOf = {};
+        (res.council || []).forEach(function (v) { voiceOf[String(v.author).toLowerCase()] = v.model; });
+        var tag = function (entry, author) {
+          var model = voiceOf[String(author).toLowerCase()];
+          if (model) { var b = el("span", "model", ""); b.textContent = model; entry.m.querySelector("b").append(b); }
+          return entry;
+        };
         var chain = Promise.resolve().then(function () { post(h, el("div", "round", "Tour 1 · positions")); });
-        d.positions.forEach(function (p) { chain = chain.then(function () { return type(addMsg(h, "mind", tint(p.author), p.author, p.text, mindNamed(p.author))); }); });
+        d.positions.forEach(function (p) { chain = chain.then(function () { return type(tag(addMsg(h, "mind", tint(p.author), p.author, p.text, mindNamed(p.author)), p.author)); }); });
         chain = chain.then(function () { post(h, el("div", "round", "Tour 2 · confrontation")); });
         d.replies.forEach(function (r) {
-          chain = chain.then(function () { return type(addMsg(h, "mind", tint(r.author), r.author + " → " + short(r.to), r.text, mindNamed(r.author))); });
+          chain = chain.then(function () { return type(tag(addMsg(h, "mind", tint(r.author), r.author + " → " + short(r.to), r.text, mindNamed(r.author)), r.author)); });
         });
         return chain.then(function () {
           var s = el("div", "msg synth");
           s.innerHTML = "<b></b><span></span><ul></ul>";
-          s.querySelector("b").textContent = "Synthèse du Hub" + (res.mode === "mock" ? " · serveur (mode démo)" : " · Gemini");
+          s.querySelector("b").textContent = "Synthèse du Hub" + (res.mode === "mock" ? " · serveur (mode démo)"
+            : res.council ? " · Conseil (arbitre " + res.model + ")" : " · Gemini" + (res.depth === "deep" ? " profond" : ""));
           s.querySelector("span").textContent = d.synthesis.summary;
           var ul = s.querySelector("ul");
           d.synthesis.points.concat(d.synthesis.first_step ? ["Premier geste : " + d.synthesis.first_step] : []).forEach(function (pt) {
@@ -2681,6 +2730,13 @@ button { cursor: pointer; }
       .then(function () { busyRoom(false); });
   }
 
+  function setDepth(key) {
+    if (!DEPTHS[key] || key === depth) return;
+    depth = key;
+    propagate(); // une pensée payée vaut pour une profondeur : les esprits concernés repassent « prêts à penser »
+    if (anatomyOf) renderPreview();
+    toast("Profondeur : " + DEPTHS[key].name + " — " + DEPTHS[key].note);
+  }
   function setIntel(mode) {
     if (mode === "gemini" && !canGemini()) { openIntel(); return false; }
     intel = mode === "gemini" ? "gemini" : "local";
@@ -2696,12 +2752,13 @@ button { cursor: pointer; }
     var btn = $("think-all");
     btn.hidden = !gem || (!todo.length && !busy);
     btn.disabled = busy;
-    btn.textContent = busy ? "Réflexion…" : "Penser · " + sparksLabel(todo.length * priceOf("nexus_think"));
-    btn.title = todo.length + (todo.length > 1 ? " esprits pensent" : " esprit pense") + " avec Gemini (" + sparksLabel(priceOf("nexus_think")) + " chacun)";
-    $("ask-send").textContent = replyTo ? (gem ? "Répondre · " + sparksLabel(priceOf("nexus_think")) : "Répondre")
-      : gem ? "Débattre · " + sparksLabel(priceOf("nexus_debate")) : "Débattre";
-    $("room-note").textContent = gem ? "Débat par Gemini, à partir de l'anatomie de chaque Engramme : " + sparksLabel(priceOf("nexus_debate")) +
-      ", débité seulement au clic sur « Débattre »."
+    btn.textContent = busy ? "Réflexion…" : "Penser · " + sparksLabel(todo.length * priceOf(thinkAction()));
+    btn.title = todo.length + (todo.length > 1 ? " esprits pensent" : " esprit pense") + " avec Gemini, mode " + DEPTHS[depth].name +
+      " (" + sparksLabel(priceOf(thinkAction())) + " chacun)";
+    $("ask-send").textContent = replyTo ? (gem ? "Répondre · " + sparksLabel(priceOf(thinkAction())) : "Répondre")
+      : gem ? "Débattre · " + sparksLabel(priceOf(debateAction())) : "Débattre";
+    $("room-note").textContent = gem ? "Débat par Gemini (" + DEPTHS[depth].name + "), à partir de l'anatomie de chaque Engramme : " +
+      sparksLabel(priceOf(debateAction())) + ", débité seulement au clic sur « Débattre »."
       : "Débat simulé localement, à partir de l'anatomie de chaque Engramme. Pour un vrai débat : menu Intelligence → Gemini.";
     $("anat-preview-label").textContent = gem ? "Sa pensée dans le Nexus · Gemini, au clic sur « Penser »" : "Sa pensée dans le Nexus";
     if (!$("intel-menu").hidden) fillIntel();
@@ -2721,8 +2778,36 @@ button { cursor: pointer; }
       return b;
     };
     option("local", "Simulation locale", "Gratuite et instantanée : les esprits raisonnent par règles, sans modèle ni compte.");
-    var gem = option("gemini", "Gemini", "Vraie pensée : " + sparksLabel(priceOf("nexus_think")) + " par esprit, " + sparksLabel(priceOf("nexus_debate")) +
+    var gem = option("gemini", "Gemini", "Vraie pensée : " + sparksLabel(priceOf(thinkAction())) + " par esprit, " + sparksLabel(priceOf(debateAction())) +
       " par débat. Rien n'est dépensé sans votre clic sur « Penser » ou « Débattre ».");
+    // Profondeur de la pensée Gemini : son prix est affiché, puis repris par « Penser » et « Débattre ».
+    box.append(el("div", "micro", "Profondeur (Gemini)"));
+    var depths = el("div", "depths", "");
+    depths.setAttribute("role", "group");
+    depths.setAttribute("aria-label", "Profondeur de la pensée Gemini");
+    Object.keys(DEPTHS).forEach(function (key) {
+      var b = el("button", "depth", "<b></b><small></small>");
+      b.type = "button";
+      b.dataset.depth = key;
+      b.setAttribute("aria-pressed", String(depth === key));
+      b.querySelector("b").textContent = DEPTHS[key].name;
+      var think = key === "fast" ? "nexus_think" : "nexus_think_" + key, argue = key === "fast" ? "nexus_debate" : "nexus_debate_" + key;
+      b.querySelector("small").textContent = sparksLabel(priceOf(think)) + " / " + sparksLabel(priceOf(argue));
+      b.title = DEPTHS[key].note + " " + sparksLabel(priceOf(think)) + " par esprit, " + sparksLabel(priceOf(argue)) + " par débat.";
+      b.addEventListener("click", function (e) { e.stopPropagation(); setDepth(key); fillIntel(); });
+      depths.append(b);
+    });
+    box.append(depths);
+    var note = el("p", "depth-note", "");
+    note.textContent = DEPTHS[depth].note + " Prix : par esprit / par débat.";
+    box.append(note);
+    var orch = link && link.info && link.info.orchestra;
+    if (orch) {
+      var o = el("div", "orchestra", "");
+      o.textContent = "Orchestre : " + orch.models + " modèles · " + link.info.gemini_keys + " clés · " + orch.capacity.pairs + " quotas" +
+        (orch.capacity.paused ? " (" + orch.capacity.paused + " au repos)" : "");
+      box.append(o);
+    }
     var status = el("div", "status");
     if (!link || !link.ready) {
       gem.disabled = intel !== "gemini";
@@ -2766,7 +2851,7 @@ button { cursor: pointer; }
   var restoring = false;
   var saveTimer = 0;
   function snapshot() {
-    var out = { v: 2, intel: intel, view: { x: view.x, y: view.y, z: view.z }, nodes: [], links: [], hubs: [] };
+    var out = { v: 2, intel: intel, depth: depth, view: { x: view.x, y: view.y, z: view.z }, nodes: [], links: [], hubs: [] };
     nodes.forEach(function (n) {
       var o = { id: n.id, type: n.type, x: n.x, y: n.y };
       if (n.type === "context") { o.title = n.title; o.text = n.text; }
@@ -2822,6 +2907,7 @@ button { cursor: pointer; }
         if (members.length >= 2) createHub(members);
       });
       intel = data.intel === "gemini" ? "gemini" : "local";
+      depth = DEPTHS[data.depth] ? data.depth : "fast";
     } finally {
       restoring = false;
     }
@@ -3346,7 +3432,7 @@ button { cursor: pointer; }
     nodes: nodes, links: links, hubs: hubs, view: view,
     memory: function (id) { var n = nodes.get(id); return n && n.memory; },
     connect: addLink, cut: cutLink, open: openAnatomy, close: closeAnatomy, hub: createHub, room: openRoom, debate: debate,
-    setIntel: setIntel, intel: function () { return intel; }, thinkAll: thinkAll, pendingCount: function () { return toThink().length; },
+    setIntel: setIntel, intel: function () { return intel; }, setDepth: setDepth, depth: function () { return depth; }, thinkAll: thinkAll, pendingCount: function () { return toThink().length; },
     saveNow: saveNow, clearScene: clearScene, think: think, createEngram: createEngram, linkAt: linkAt,
     add: function (type, x, y, opts) { var n = addNode(type, x, y, opts); propagate(); return n; }, remove: removeNode, pair: addWirelessPair,
     edges: edges, inputs: inputsOf, tick: tickChronos, stream: streamStats, streamNow: streamFrames, react: react, wheel: openWheel,

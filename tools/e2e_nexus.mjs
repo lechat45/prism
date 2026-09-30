@@ -518,6 +518,38 @@ try {
       await check("« Créer un Engramme » : un vrai Engramme vivant rejoint le Nexus (2 Sparks)",
         "[[...__nexus.nodes.values()].filter(n=>n.source==='created').map(n=>n.engram.nodes.length>=36).join(), __prismLink.account.user.sparks]", ["true", start - 3.5]);
     }
+    // --- V6.3 · Orchestre de modèles : profondeurs, Conseil (trois voix et un arbitre ; en War Room, une voix par esprit) ---
+    await click(center("document.getElementById('intel')"));
+    await waitFor("!document.getElementById('intel-menu').hidden && !!document.querySelector('#intel-menu .depth[data-depth=council]')", "profondeurs");
+    await check("profondeurs Rapide, Profond, Conseil, chacune avec son prix (par esprit / par débat)",
+      "[...document.querySelectorAll('#intel-menu .depth')].map(b=>b.textContent).join(' | ')",
+      "Rapide0,25 Spark / 1 Spark | Profond0,5 Spark / 2 Sparks | Conseil1 Spark / 3 Sparks");
+    await click(center("document.querySelector('#intel-menu .depth[data-depth=council]')"));
+    await key("Escape");
+    await waitFor("__nexus.depth() === 'council' && !document.getElementById('think-all').hidden", "Conseil choisi");
+    const beforeCouncil = await evaluate("__prismLink.account.user.sparks");
+    await check("en Conseil, Ada repasse « prête à penser » et « Penser » annonce le prix du Conseil, rien n'est dépensé",
+      "[document.getElementById('think-all').textContent, __prismLink.account.user.sparks]", ["Penser · 1 Spark", beforeCouncil]);
+    await click(center("document.getElementById('think-all')"));
+    await waitFor("document.getElementById('think-all').hidden && [...__nexus.nodes.values()].every(n=>!n.el.classList.contains('is-thinking'))", "pensée du Conseil", 120000);
+    await check("pensée du Conseil (1 Spark) : trois voix entendues puis l'arbitre (en mode démo : pensée honnête du serveur)",
+      "(()=>{const m=__nexus.find('Ada Lovelace').memory;return [m.depth, m.mode==='mock' || (m.council.length===3 && /tranche au Conseil/.test(m.lines[0])), __prismLink.account.user.sparks]})()",
+      ["council", true, beforeCouncil - 1]);
+    await click(center("document.getElementById('fit')"));
+    await sleep(300);
+    await viewStill();
+    await click(center("document.querySelector('.hub .label button')"));
+    await waitFor("!document.getElementById('room').hidden", "War Room (Conseil)");
+    await check("« Débattre » annonce le prix du Conseil", "document.getElementById('ask-send').textContent", "Débattre · 3 Sparks");
+    await evaluate("document.querySelector('#log .page').replaceChildren(); document.getElementById('question').value = 'Qui mesure quoi ?'");
+    await click(center("document.getElementById('ask-send')"));
+    await waitFor("!!document.querySelector('#log .msg.synth') && !document.getElementById('ask-send').disabled", "débat du Conseil", 120000);
+    await check("War Room en Conseil (3 Sparks) : chaque esprit parle avec sa voix, un arbitre écrit la synthèse",
+      `[document.querySelectorAll('#log .msg.mind:not(.typing):not(.error)').length, __prismLink.info.mode === 'mock' || document.querySelectorAll('#log .msg.mind .model').length === 4,
+        /Synthèse du Hub · (Conseil|serveur)/.test(document.querySelector('#log .msg.synth b').textContent), __prismLink.account.user.sparks]`,
+      [4, true, true, beforeCouncil - 4]);
+    await shot("nexus-12-conseil.png");
+    await key("Escape");
     await cdp.send("Page.navigate", { url: `${URL_NEXUS}?retour=2#nexus` }, S);
     await waitFor("window.__nexus && __nexus.nodes.size >= 4 && window.__prismLink && __prismLink.ready && __prismLink.account.user", "retour avec le compte", 30000);
     await waitFor(engramsLive, "Engrammes de retour", 90000);

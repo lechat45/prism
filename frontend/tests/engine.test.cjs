@@ -9,8 +9,8 @@ const { runFixtures, fixtures, fileFetch, libs } = require("./run_fixtures.cjs")
 const GOOD =
   '<!DOCTYPE html>\n<html><head><style>b{}</style></head><body><button id="b">0</button>' +
   '<script>let n = 0; document.getElementById("b").onclick = () => { n++; };</script></body></html>';
-const PRIMARY = "gemini-3.8-flash";
-const SECONDARY = "gemini-3.6-flash";
+// Les deux premiers modèles de la chaîne partagée (engine/gemini.json), quels qu'ils soient.
+const [PRIMARY, SECONDARY] = require("../engine/gemini.json").models;
 
 // --------------------------------------------------------------------------
 // Cas partagés avec Python

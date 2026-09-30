@@ -5,6 +5,13 @@ modèle échoue :
   POST /api/nexus/think   un esprit pense à partir de ce que ses fils lui apportent (contextes, pensées en amont) ;
   POST /api/nexus/debate  War Room d'un Hub : chaque esprit prend position, répond à un autre, puis synthèse.
 
+V6.3, trois profondeurs (champ « depth ») :
+  fast     la chaîne rapide de l'orchestre (Gemini Flash, puis Lite, puis Gemma) ;
+  deep     les modèles les plus capables d'abord (Pro quand la clé y a droit), réflexion poussée (thinkingLevel high) ;
+  council  Conseil de modèles : plusieurs modèles pensent en parallèle (chacun part sur la clé la moins occupée, donc
+           sur des clés différentes), puis un arbitre tranche ; en War Room, chaque esprit a sa propre voix (son
+           modèle), les deux tours se jouent en parallèle et un arbitre écrit la synthèse.
+
 L'esprit arrive du navigateur tel que l'utilisateur l'a réglé dans son anatomie : Core (mode de raisonnement), State
 (énergie, patience, créativité → humeur), Memories. Tout ce qui vient du modèle est vérifié avant d'être livré (le
 modèle suivant prend le relais sinon). Sans modèle (mode démo), une pensée mécanique et honnête.
@@ -36,6 +43,19 @@ THINK_SCHEMA = json.loads((NEXUS_DIR / "think-schema.json").read_text(encoding="
 DEBATE_SYSTEM = (NEXUS_DIR / "debate-system.txt").read_text(encoding="utf-8").strip()
 DEBATE_TEMPLATE = (NEXUS_DIR / "debate-template.txt").read_text(encoding="utf-8").strip()
 DEBATE_SCHEMA = json.loads((NEXUS_DIR / "debate-schema.json").read_text(encoding="utf-8"))
+COUNCIL_SYSTEM = (NEXUS_DIR / "council-system.txt").read_text(encoding="utf-8").strip()
+COUNCIL_TEMPLATE = (NEXUS_DIR / "council-template.txt").read_text(encoding="utf-8").strip()
+VOICE_SYSTEM = (NEXUS_DIR / "voice-system.txt").read_text(encoding="utf-8").strip()
+VOICE_TEMPLATE = (NEXUS_DIR / "voice-template.txt").read_text(encoding="utf-8").strip()
+VOICE_SCHEMA = json.loads((NEXUS_DIR / "voice-schema.json").read_text(encoding="utf-8"))
+SYNTHESIS_SYSTEM = (NEXUS_DIR / "synthesis-system.txt").read_text(encoding="utf-8").strip()
+SYNTHESIS_TEMPLATE = (NEXUS_DIR / "synthesis-template.txt").read_text(encoding="utf-8").strip()
+SYNTHESIS_SCHEMA = json.loads((NEXUS_DIR / "synthesis-schema.json").read_text(encoding="utf-8"))
+
+Depth = Literal["fast", "deep", "council"]
+# Action facturée selon la profondeur (billing.PRICES).
+THINK_ACTIONS = {"fast": "nexus_think", "deep": "nexus_think_deep", "council": "nexus_think_council"}
+DEBATE_ACTIONS = {"fast": "nexus_debate", "deep": "nexus_debate_deep", "council": "nexus_debate_council"}
 
 CORES = {
     "science": ("Méthode scientifique stricte", "mesurer avant de conclure, ne retenir que ce qui se vérifie", "Lancer une mesure"),
@@ -80,6 +100,7 @@ class ThinkRequest(BaseModel):
     mind: Mind
     inputs: list[Input] = Field(..., min_length=1, max_length=8)
     language: Literal["fr", "en"] = "fr"
+    depth: Depth = "fast"
 
 
 class DebateRequest(BaseModel):
@@ -87,6 +108,7 @@ class DebateRequest(BaseModel):
     question: str = Field(..., min_length=2, max_length=400)
     context: str = Field("", max_length=3000)
     language: Literal["fr", "en"] = "fr"
+    depth: Depth = "fast"
 
 
 class ThinkResponse(BaseModel):
@@ -95,6 +117,9 @@ class ThinkResponse(BaseModel):
     model: str
     sparks: float
     cost: float
+    depth: str = "fast"
+    # Conseil : chaque voix entendue ({"model", "line"}), l'arbitre étant « model ».
+    council: list[dict] | None = None
 
 
 class DebateResponse(BaseModel):
@@ -103,6 +128,9 @@ class DebateResponse(BaseModel):
     model: str
     sparks: float
     cost: float
+    depth: str = "fast"
+    # Conseil : la voix (le modèle) de chaque esprit ({"author", "model"}), l'arbitre de la synthèse étant « model ».
+    council: list[dict] | None = None
 
 
 # --------------------------------------------------------------------------- outils
@@ -154,14 +182,50 @@ def _fill(template: str, values: dict) -> str:
     return re.sub(r"\{\{(\w+)\}\}", lambda m: values.get(m.group(1), m.group(0)), template)
 
 
-def build_think_message(req: ThinkRequest) -> str:
+def think_inputs(req: ThinkRequest) -> str:
     inputs = []
     for i, item in enumerate(req.inputs, 1):
         head = f"[{i}] context" + (f" « {_clean(item.title, 120)} »" if item.title.strip() else "") if item.kind == "context" \
             else f"[{i}] thought of {_clean(item.author, 120) or 'another mind'}"
         inputs.append(f"{head}:\n{_clean(item.text, 3000)}")
+    return "\n\n".join(inputs)
+
+
+def build_think_message(req: ThinkRequest) -> str:
     return _fill(THINK_TEMPLATE, {"language": LANGUAGES.get(req.language, "French"), "mind": describe(req.mind),
-                                  "inputs": "\n\n".join(inputs)})
+                                  "inputs": think_inputs(req)})
+
+
+def build_council_message(req: ThinkRequest, heard: list[tuple[str, dict]]) -> str:
+    candidates = []
+    for i, (model, t) in enumerate(heard, 1):
+        extra = [f"keys: {', '.join(t['keys'])}" if t["keys"] else "", f"title: {t['title']}", f"action: {t['action']}",
+                 f"memory: {t['memory']}" if t["memory"] else "",
+                 "trace: " + ", ".join(f"{s['id']} ({s['why']})" for s in t["trace"]) if t["trace"] else ""]
+        candidates.append(f"[{i}] by {model}:\n" + " ".join(t["lines"]) + "\n" + "\n".join(e for e in extra if e))
+    return _fill(COUNCIL_TEMPLATE, {"language": LANGUAGES.get(req.language, "French"), "mind": describe(req.mind),
+                                    "inputs": think_inputs(req),
+                                    "candidates": "\n\n".join(candidates)})
+
+
+def build_voice_message(req: DebateRequest, index: int, positions: dict[str, str], to: str = "") -> str:
+    names = [_clean(m.name, 120) for m in req.minds]
+    task = (f"reply — answer {to}'s position (agree, qualify or disagree concretely)." if to
+            else "position — give your position on the question.")
+    shown = "\n".join(f"- {name}: {text}" for name, text in positions.items()) or "(none yet)"
+    return _fill(VOICE_TEMPLATE, {"language": LANGUAGES.get(req.language, "French"), "mind": describe(req.minds[index]),
+                                  "others": ", ".join(n for i, n in enumerate(names) if i != index),
+                                  "question": _clean(req.question, 400), "context": _clean(req.context, 3000) or "(none)",
+                                  "positions": shown, "task": task})
+
+
+def build_synthesis_message(req: DebateRequest, positions: list[dict], replies: list[dict]) -> str:
+    debate = "\n".join([f"Round 1 — {p['author']}: {p['text']}" for p in positions] +
+                       [f"Round 2 — {r['author']} to {r['to']}: {r['text']}" for r in replies])
+    return _fill(SYNTHESIS_TEMPLATE, {"language": LANGUAGES.get(req.language, "French"),
+                                      "minds": "\n\n".join(describe(m) for m in req.minds),
+                                      "question": _clean(req.question, 400), "context": _clean(req.context, 3000) or "(none)",
+                                      "debate": debate})
 
 
 def build_debate_message(req: DebateRequest) -> str:
@@ -198,6 +262,23 @@ def normalize_thought(raw, mind: Mind) -> dict:
             seen.add(node_id)
             trace.append({"id": node_id, "why": _clean(step.get("why"), LIMITS["why"])})
     return {"lines": lines, "keys": keys[:5], "title": title, "action": action, "memory": memory, "trace": trace[:TRACE_MAX]}
+
+
+def normalize_voice(raw) -> str:
+    text = _clean(raw.get("text"), LIMITS["debate"]) if isinstance(raw, dict) else ""
+    if not text:
+        raise NexusError("voix muette")
+    return text
+
+
+def normalize_synthesis(raw, minds: list[str]) -> dict:
+    if not isinstance(raw, dict):
+        raise NexusError("réponse qui n'est pas un objet JSON")
+    summary = _clean(raw.get("summary"), LIMITS["debate"])
+    if not summary:
+        raise NexusError("synthèse manquante")
+    points = [p for p in (_clean(x, LIMITS["point"]) for x in raw.get("points") or [] if isinstance(x, str)) if p]
+    return {"summary": summary, "points": points[: len(minds) + 1], "first_step": _clean(raw.get("first_step"), LIMITS["point"])}
 
 
 def _match(name, minds: list[str]) -> str:
@@ -296,26 +377,72 @@ def demo_debate(req: DebateRequest) -> dict:
 
 
 # --------------------------------------------------------------------------- appel du modèle
-async def run(providers, http_client, system: str, user: str, schema: dict, normalize, timeout: float, what: str):
-    """(résultat, fournisseur, modèle) : réponse JSON imposée à Gemini (schéma), JSON simple si le schéma est refusé."""
+async def run(providers, http_client, system: str, user: str, schema: dict, normalize, timeout: float, what: str,
+              thinking: str | None = None, hedge: float | None = None):
+    """(résultat, fournisseur, modèle) : réponse JSON imposée à Gemini (schéma), JSON simple si le schéma est refusé ;
+    thinking : niveau de réflexion du mode Profond.
+
+    V6.3, course des modèles : la chaîne est parcourue dans l'ordre, et un modèle qui échoue passe aussitôt la main ;
+    avec « hedge » (secondes), un modèle qui tarde à répondre voit le suivant entrer dans la course en parallèle (il
+    part sur une autre clé, la moins occupée) : la première réponse valable gagne, les autres appels sont annulés.
+    Quand Google sature, on n'attend plus le délai complet d'un modèle muet avant d'essayer le suivant."""
+    attempts = [(provider, model) for provider in providers for model in provider.models]
     errors: list[str] = []
+    refused: set[str] = set()  # fournisseurs aux clés refusées : leurs autres modèles ne sont plus essayés
+    pending: set[asyncio.Task] = set()
+
+    async def attempt(client, provider, model):
+        for response_schema in ((schema, None) if provider.name == "gemini" else (None,)):
+            try:
+                text = await provider.complete(client, model, system, user, timeout, json_mode=True, schema=response_schema,
+                                               thinking=thinking)
+            except SchemaRejected as exc:
+                errors.append(str(exc))
+                continue
+            return normalize(engram.parse(text)), provider.name, model
+        raise NexusError("schéma refusé, même en JSON simple")
+
     async with http_client() as client:
-        for provider in providers:
-            for model in provider.models:
-                for response_schema in ((schema, None) if provider.name == "gemini" else (None,)):
+        def launch() -> bool:
+            while attempts:
+                provider, model = attempts.pop(0)
+                if provider.name in refused:
+                    continue
+                task = asyncio.ensure_future(attempt(client, provider, model))
+                task.prism = (provider.name, model)
+                pending.add(task)
+                return True
+            return False
+
+        try:
+            launch()
+            while pending:
+                done, _ = await asyncio.wait(pending, timeout=hedge if attempts else None, return_when=asyncio.FIRST_COMPLETED)
+                if not done:  # personne n'a encore répondu : un modèle de plus entre dans la course
+                    if hedge is not None:
+                        log.info("%s : %s tarde, %d modèle(s) en course", what, ", ".join(t.prism[1] for t in pending), len(pending) + 1)
+                    launch()
+                    continue
+                failed = 0
+                for task in done:
+                    pending.discard(task)
+                    name, model = task.prism
                     try:
-                        text = await provider.complete(client, model, system, user, timeout, json_mode=True, schema=response_schema)
-                        return normalize(engram.parse(text)), provider.name, model
-                    except SchemaRejected as exc:
-                        errors.append(str(exc))
-                        continue
+                        return task.result()
                     except FatalGenerationError as exc:
+                        refused.add(name)
                         errors.append(str(exc))
-                        break
                     except (GenerationError, NexusError, engram.EngramError) as exc:
                         log.warning("%s : %s", what, exc)
                         errors.append(f"{model}: {exc}" if not isinstance(exc, GenerationError) else str(exc))
-                        break
+                    failed += 1
+                for _ in range(failed):  # chaque échec libère sa place : le suivant de la chaîne, sans attendre
+                    launch()
+        finally:
+            for task in pending:  # une réponse a gagné (ou tout a échoué) : les appels encore en course s'arrêtent
+                task.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
     raise HTTPException(status_code=502, detail=f"{what} impossible : " + " | ".join(errors[-6:]))
 
 
@@ -346,35 +473,118 @@ def _check_engrams(minds: list[Mind]) -> None:
             raise HTTPException(status_code=422, detail="Engramme illisible ou trop volumineux.")
 
 
+def _voices(app) -> list[list]:
+    """Chaînes de fournisseurs des voix du Conseil : Gemini restreint à chaque voix, puis les autres fournisseurs."""
+    base = app.active_providers("nexus")
+    gemini = next((p for p in base if p.name == "gemini"), None)
+    others = [p for p in base if p.name != "gemini"]
+    return [[gemini.only(chain)] + others if gemini else others for chain in app.council_voices()] if base else []
+
+
+async def council_think(app, req: ThinkRequest):
+    """Conseil : chaque voix pense en parallèle (clés différentes), puis un arbitre écrit la pensée finale."""
+    message = build_think_message(req)
+
+    def normalize(raw):
+        return normalize_thought(raw, req.mind)
+
+    results = await asyncio.gather(*(run(chain, app._http_client, THINK_SYSTEM, message, THINK_SCHEMA, normalize, app.NEXUS_TIMEOUT_S,
+                                         "Voix du Conseil", hedge=app.NEXUS_HEDGE_S) for chain in _voices(app)), return_exceptions=True)
+    heard = [(model, thought) for r in results if not isinstance(r, BaseException) for thought, _mode, model in [r]]
+    for r in results:
+        if isinstance(r, BaseException) and not isinstance(r, HTTPException):
+            raise r
+    if not heard:
+        raise HTTPException(status_code=502, detail="Conseil impossible : aucune voix n'a répondu.")
+    council = [{"model": model, "line": thought["lines"][0]} for model, thought in heard]
+    mode = app.active_providers("nexus")[0].name
+    if len(heard) == 1:
+        return heard[0][1], mode, heard[0][0], council
+    try:
+        thought, mode, judge = await run(app.active_providers("judge"), app._http_client, COUNCIL_SYSTEM,
+                                         build_council_message(req, heard), THINK_SCHEMA, normalize, app.NEXUS_LONG_TIMEOUT_S,
+                                         "Arbitrage du Conseil", thinking=app.GEMINI_THINKING, hedge=app.NEXUS_LONG_HEDGE_S)
+    except HTTPException:  # arbitre indisponible : la première voix entendue fait foi
+        thought, judge = heard[0][1], heard[0][0]
+    return thought, mode, judge, council
+
+
+async def council_debate(app, req: DebateRequest, names: list[str]):
+    """War Room en Conseil : chaque esprit parle avec sa propre voix (son modèle), les deux tours en parallèle ;
+    une voix qui échoue passe la parole au modèle de la voix suivante ; un arbitre écrit la synthèse."""
+    voices = _voices(app)
+
+    async def speak(index: int, positions: dict[str, str], to: str = ""):
+        message = build_voice_message(req, index, positions, to)
+        errors = []
+        for k in range(len(voices)):
+            chain = voices[(index + k) % len(voices)]
+            try:
+                text, _mode, model = await run(chain, app._http_client, VOICE_SYSTEM, message, VOICE_SCHEMA, normalize_voice,
+                                               app.NEXUS_TIMEOUT_S, f"Voix de {names[index]}", hedge=app.NEXUS_HEDGE_S)
+                return text, model
+            except HTTPException as exc:
+                errors.append(str(exc.detail))
+        raise HTTPException(status_code=502, detail=f"{names[index]} n'a pas pu parler : " + " | ".join(errors[-3:]))
+
+    first = await asyncio.gather(*(speak(i, {}) for i in range(len(names))))
+    positions = {names[i]: text for i, (text, _model) in enumerate(first)}
+    targets = [names[(i + 1) % len(names)] for i in range(len(names))]
+    second = await asyncio.gather(*(speak(i, positions, targets[i]) for i in range(len(names))))
+    debate = {"positions": [{"author": n, "text": positions[n]} for n in names],
+              "replies": [{"author": names[i], "to": targets[i], "text": text} for i, (text, _model) in enumerate(second)]}
+    try:
+        synthesis, mode, judge = await run(app.active_providers("judge"), app._http_client, SYNTHESIS_SYSTEM,
+                                           build_synthesis_message(req, debate["positions"], debate["replies"]), SYNTHESIS_SCHEMA,
+                                           lambda raw: normalize_synthesis(raw, names), app.NEXUS_LONG_TIMEOUT_S, "Synthèse du Conseil",
+                                           thinking=app.GEMINI_THINKING, hedge=app.NEXUS_LONG_HEDGE_S)
+    except HTTPException:
+        raise HTTPException(status_code=502, detail="Synthèse du Conseil impossible : aucun modèle n'a répondu.") from None
+    debate["synthesis"] = synthesis
+    council = [{"author": names[i], "model": model} for i, (_text, model) in enumerate(first)]
+    return debate, mode, judge, council
+
+
 @router.post("/think", response_model=ThinkResponse)
 async def think(req: ThinkRequest, user: User = Depends(current_user)) -> ThinkResponse:
-    """Un esprit du Nexus pense à partir de ses entrées (0,25 Spark, rendus en cas d'échec)."""
+    """Un esprit du Nexus pense à partir de ses entrées (0,25 Spark ; Profond 0,5 ; Conseil 1 ; rendus en cas d'échec)."""
     _check_engrams([req.mind])
-    async def work(app):
-        providers = app.active_providers()
-        if not providers:
-            return demo_thought(req), "mock", "mock:nexus-think"
-        return await run(providers, app._http_client, THINK_SYSTEM, build_think_message(req), THINK_SCHEMA,
-                         lambda raw: normalize_thought(raw, req.mind), app.TIMEOUT_S, "Pensée")
 
-    (thought, mode, model), sparks, cost = await _billed(user, "nexus_think", work)
-    return ThinkResponse(thought=thought, mode=mode, model=model, sparks=sparks, cost=cost)
+    async def work(app):
+        providers = app.active_providers("deep" if req.depth == "deep" else "nexus")
+        if not providers:
+            return demo_thought(req), "mock", "mock:nexus-think", None
+        if req.depth == "council":
+            return await council_think(app, req)
+        result = await run(providers, app._http_client, THINK_SYSTEM, build_think_message(req), THINK_SCHEMA,
+                           lambda raw: normalize_thought(raw, req.mind),
+                           app.NEXUS_LONG_TIMEOUT_S if req.depth == "deep" else app.NEXUS_TIMEOUT_S, "Pensée",
+                           thinking=app.GEMINI_THINKING if req.depth == "deep" else None,
+                           hedge=app.NEXUS_LONG_HEDGE_S if req.depth == "deep" else app.NEXUS_HEDGE_S)
+        return (*result, None)
+
+    (thought, mode, model, council), sparks, cost = await _billed(user, THINK_ACTIONS[req.depth], work)
+    return ThinkResponse(thought=thought, mode=mode, model=model, sparks=sparks, cost=cost, depth=req.depth, council=council)
 
 
 @router.post("/debate", response_model=DebateResponse)
 async def debate(req: DebateRequest, user: User = Depends(current_user)) -> DebateResponse:
-    """War Room d'un Hub : deux tours de débat et une synthèse (1 Spark, rendu en cas d'échec)."""
+    """War Room d'un Hub : deux tours de débat et une synthèse (1 Spark ; Profond 2 ; Conseil 3 ; rendus en cas d'échec)."""
     _check_engrams(req.minds)
     names = [_clean(m.name, 120) for m in req.minds]
     if len({n.lower() for n in names}) != len(names):
         raise HTTPException(status_code=422, detail="Chaque esprit d'un Hub doit avoir un nom distinct.")
 
     async def work(app):
-        providers = app.active_providers()
+        providers = app.active_providers("deep" if req.depth == "deep" else "nexus")
         if not providers:
-            return demo_debate(req), "mock", "mock:nexus-debate"
-        return await run(providers, app._http_client, DEBATE_SYSTEM, build_debate_message(req), DEBATE_SCHEMA,
-                         lambda raw: normalize_debate(raw, names), app.TIMEOUT_S, "Débat")
+            return demo_debate(req), "mock", "mock:nexus-debate", None
+        if req.depth == "council":
+            return await council_debate(app, req, names)
+        result = await run(providers, app._http_client, DEBATE_SYSTEM, build_debate_message(req), DEBATE_SCHEMA,
+                           lambda raw: normalize_debate(raw, names), app.NEXUS_LONG_TIMEOUT_S, "Débat",
+                           thinking=app.GEMINI_THINKING if req.depth == "deep" else None, hedge=app.NEXUS_LONG_HEDGE_S)
+        return (*result, None)
 
-    (result, mode, model), sparks, cost = await _billed(user, "nexus_debate", work)
-    return DebateResponse(debate=result, mode=mode, model=model, sparks=sparks, cost=cost)
+    (result, mode, model, council), sparks, cost = await _billed(user, DEBATE_ACTIONS[req.depth], work)
+    return DebateResponse(debate=result, mode=mode, model=model, sparks=sparks, cost=cost, depth=req.depth, council=council)

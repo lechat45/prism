@@ -30,7 +30,9 @@ class DbTestCase(unittest.TestCase):
 
     def setUp(self):
         import app  # noqa: PLC0415 — clés des fournisseurs neutralisées : seuls les tests les activent
+        import providers  # noqa: PLC0415
 
+        providers.KEYS.clear()  # pauses (clé, modèle) d'un test précédent : chaque test part d'un orchestre reposé
         self._keys = (app.GEMINI_API_KEY, app.GROQ_API_KEY, app.GEMINI_RETRY_DELAY)
         app.GEMINI_API_KEY = app.GROQ_API_KEY = ""
         app.GEMINI_RETRY_DELAY = 0  # nouvelle tentative immédiate après une surcharge simulée
