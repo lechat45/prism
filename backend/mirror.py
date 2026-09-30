@@ -360,7 +360,7 @@ async def create_mirror(req: MirrorRequest, user: User = Depends(current_user)) 
         raise HTTPException(status_code=422, detail={"code": "mirror_insufficient", "message": str(exc)}) from exc
     data = usage(widgets, ledger)
     label = LABEL[req.language]
-    providers = app.active_providers()
+    providers = app.active_providers("engram")
     if providers:
         mirror, mode, model = await run_mirror(providers, app._http_client, data, events, label, req.language, app.TIMEOUT_S)
     else:

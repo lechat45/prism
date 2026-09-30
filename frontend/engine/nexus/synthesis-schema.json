@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "The shared solution in one sentence."
+    },
+    "points": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "One entry per mind, starting with its exact name: what it brings (under 160 characters)."
+    },
+    "first_step": {
+      "type": "string",
+      "description": "The first concrete action (under 120 characters)."
+    }
+  },
+  "required": [
+    "summary",
+    "points",
+    "first_step"
+  ],
+  "propertyOrdering": [
+    "summary",
+    "points",
+    "first_step"
+  ]
+}

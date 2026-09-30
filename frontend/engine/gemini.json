@@ -1,7 +1,91 @@
 {
-  "_doc": "Réglages Gemini (API REST officielle, celle qu'appellent les SDK), partagés par le backend (surchargés par les variables d'environnement) et le moteur navigateur. {model} est remplacé par l'identifiant du modèle. Chaîne : les plus capables d'abord, puis un modèle « lite », bien moins demandé quand Google est saturé (HTTP 503 « high demand »).",
+  "_doc": "Réglages Gemini (API REST officielle, celle qu'appellent les SDK), partagés par le backend (surchargés par les variables d'environnement) et le moteur navigateur. {model} est remplacé par l'identifiant du modèle. « models » : chaîne des widgets et du moteur navigateur, les plus capables d'abord, puis les modèles « lite », bien moins demandés quand Google est saturé (HTTP 503 « high demand »). V6.3, orchestre de modèles (serveur) : « roles » regroupe les modèles par famille, « tasks » donne la chaîne de chaque tâche (ses rôles bout à bout), « council » les voix du mode Conseil du Nexus (chacune avec ses remplaçants, jusqu'à son propre modèle Lite : trois modèles différents même quand Google sature), « thinking » le niveau de réflexion du mode Profond. Les modèles Pro n'ont pas de quota sur l'offre gratuite : essayés en premier, ils se reposent une heure par clé dès le premier refus, et prendront le relais d'eux-mêmes sur une offre payante.",
   "url": "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-  "models": ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"],
+  "models": [
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-3-flash-preview",
+    "gemini-flash-latest",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-flash-lite-latest"
+  ],
+  "roles": {
+    "pro": [
+      "gemini-3.1-pro-preview",
+      "gemini-pro-latest"
+    ],
+    "fast": [
+      "gemini-3.8-flash",
+      "gemini-3.7-flash",
+      "gemini-3.6-flash",
+      "gemini-3.5-flash",
+      "gemini-3-flash-preview",
+      "gemini-flash-latest"
+    ],
+    "lite": [
+      "gemini-3.5-flash-lite",
+      "gemini-3.1-flash-lite",
+      "gemini-flash-lite-latest"
+    ],
+    "open": [
+      "gemma-4-31b-it",
+      "gemma-4-26b-a4b-it"
+    ]
+  },
+  "tasks": {
+    "widget": [
+      "fast",
+      "lite"
+    ],
+    "engram": [
+      "pro",
+      "fast",
+      "lite"
+    ],
+    "chat": [
+      "fast",
+      "lite",
+      "open"
+    ],
+    "nexus": [
+      "fast",
+      "lite",
+      "open"
+    ],
+    "deep": [
+      "pro",
+      "fast",
+      "lite"
+    ],
+    "judge": [
+      "pro",
+      "fast",
+      "lite"
+    ]
+  },
+  "council": [
+    [
+      "gemini-3.8-flash",
+      "gemini-3.7-flash",
+      "gemini-3.6-flash",
+      "gemini-3.5-flash-lite"
+    ],
+    [
+      "gemini-3-flash-preview",
+      "gemini-3.5-flash",
+      "gemini-flash-latest",
+      "gemini-flash-lite-latest"
+    ],
+    [
+      "gemma-4-31b-it",
+      "gemma-4-26b-a4b-it",
+      "gemini-3.1-flash-lite"
+    ]
+  ],
+  "thinking": "high",
   "temperature": 0.6,
   "max_output_tokens": 32768
 }

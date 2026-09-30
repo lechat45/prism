@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "text": {
+      "type": "string",
+      "description": "What this mind says in this round: 1 or 2 sentences, under 400 characters."
+    }
+  },
+  "required": [
+    "text"
+  ],
+  "propertyOrdering": [
+    "text"
+  ]
+}

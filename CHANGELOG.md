@@ -1,5 +1,38 @@
 # Changelog
 
+## 6.3.0-alpha.1 — 2026-09-30 (orchestre de modèles : 13 modèles, 3 clés, modes Profond et Conseil)
+
+- **Orchestre de modèles** (`engine/gemini.json`, `backend/app.py`) : 13 modèles au lieu de 3, sondés sur les clés du
+  serveur, en quatre familles : Pro (`gemini-3.1-pro-preview`, `gemini-pro-latest`), Flash (3.8, 3.7, 3.6, 3.5,
+  3 preview, latest), Lite (3.5, 3.1, latest) et Gemma 4 (31B, 26B A4B, modèles ouverts au quota séparé). Chaque
+  tâche a sa chaîne : widgets Flash → Lite ; Engrammes (création, fusion, Miroir) Pro → Flash → Lite ; conversation et
+  Nexus Flash → Lite → Gemma. Les modèles Pro, sans quota sur l'offre gratuite, sont essayés en premier pour les
+  Engrammes et le mode Profond : au premier refus « limit: 0 », ils se reposent une heure par clé, et prendront le
+  relais d'eux-mêmes sur une offre payante. `GEMINI_MODELS` impose toujours une liste unique (tests, E2E).
+- **Les 3 clés × 13 modèles = 39 quotas** (`providers.py`, `KeyPool`) : Google compte les quotas par modèle ; une pause
+  vise désormais le couple (clé, modèle) et non plus toute la clé. Quota nul ou journalier : une heure ; quota à la
+  minute : 60 s ; surcharge (503) ou lenteur (délai dépassé) : 45 s, sur toutes les clés pour un modèle trop lent. Un
+  modèle au repos sur toutes les clés est sauté sans appel. `/api/health` décrit l'orchestre (familles, chaînes, voix,
+  capacité `pairs` / `paused`), jamais les clés ; Paramètres → Moteur du Mode Focus l'affiche.
+- **Nexus, trois profondeurs** (menu Intelligence, prix affichés, débités au clic seulement) :
+  - **Rapide** (0,25 Spark par esprit, 1 par débat) : Flash, relayé par Lite puis Gemma ;
+  - **Profond** (0,5 / 2) : les modèles les plus capables d'abord, réflexion poussée (`thinkingLevel: high`, retirée
+    d'elle-même pour un modèle qui la refuse) ;
+  - **Conseil** (1 / 3) : trois modèles différents pensent en parallèle, chacun sur sa clé (Flash 3.8, Flash 3
+    preview, Gemma 4 ; chaque voix a ses remplaçants jusqu'à son propre modèle Lite, pour rester trois quand Google
+    sature), puis un arbitre écrit la pensée finale (`council-system.txt`). En War Room, chaque esprit parle avec sa
+    propre voix (son modèle) : positions en parallèle, réponses en parallèle, synthèse par l'arbitre
+    (`voice-*`, `synthesis-*`) ; une voix muette passe la parole au modèle de la voix suivante.
+  L'écran, la plongée et la War Room disent d'où vient chaque pensée (modèle, voix du Conseil et arbitre). Une pensée
+  payée vaut pour une profondeur ; la profondeur est gardée avec la scène.
+- **Course des modèles** (`nexus.run`) : un modèle qui tarde (10 s, 25 s en Profond, arbitre et synthèse) voit le
+  suivant de la chaîne partir en parallèle sur une autre clé ; la première réponse valable gagne, les autres appels
+  sont annulés. Délais du Nexus raccourcis (40 s, 60 s) : un modèle muet passe la main. Mesuré ce soir, Google saturé
+  (Flash en « high demand ») : pensée rapide 121 s → 32 s, Conseil 309 s → 56 à 73 s.
+- Tests : 14 Python (`test_orchestra.py` : chaînes, santé, pauses par couple, quota nul, modèle lent, course, Profond,
+  Conseil, voix de la War Room, relais d'une voix muette) ; E2E Nexus avec serveur : profondeurs, pensée et débat en
+  Conseil. Les tests repartent d'un orchestre reposé ; le test du moteur navigateur lit sa chaîne dans `gemini.json`.
+
 ## 6.2.0-alpha.1 — 2026-09-30 (Nexus : atmosphère, inventaire, social, Paramètres « Liquid Glass »)
 
 Le brief « piliers 2 à 6 » décrivait un jeu de blocs en 3D ; ils sont transposés au Nexus, ce que Prism est réellement.

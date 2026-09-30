@@ -692,7 +692,7 @@ async def create_engram(req: EngramRequest, user: User = Depends(current_user)) 
     except billing.InsufficientSparks as exc:
         raise app.insufficient(exc) from exc
     try:
-        providers = app.active_providers()
+        providers = app.active_providers("engram")
         if providers:
             engram, mode, model = await run_models(providers, app._http_client, person, req.language, app.TIMEOUT_S)
         else:
@@ -724,7 +724,7 @@ async def chat_with_engram(req: ChatRequest, user: User = Depends(current_user))
         raise app.insufficient(exc) from exc
     history = [turn.model_dump() for turn in req.history]
     try:
-        providers = app.active_providers()
+        providers = app.active_providers("chat")
         if providers:
             answer, mode, model = await run_chat(providers, app._http_client, req.engram, history, req.message, req.language, app.TIMEOUT_S)
         else:
@@ -762,7 +762,7 @@ async def fuse_engrams(req: FusionRequest, user: User = Depends(current_user)) -
     except billing.InsufficientSparks as exc:
         raise app.insufficient(exc) from exc
     try:
-        providers = app.active_providers()
+        providers = app.active_providers("engram")
         if providers:
             hyper, mode, model = await run_fusion(providers, app._http_client, parent_a, parent_b, req.language, app.TIMEOUT_S)
         else:

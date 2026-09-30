@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import re
 import time
 from dataclasses import dataclass, field
 
@@ -22,6 +23,8 @@ import httpx
 _GEMINI_BLOCKED = {"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "LANGUAGE", "OTHER"}
 # Surcharge passagère du modèle (« high demand ») : une autre clé prend le relais, puis une nouvelle tentative.
 _GEMINI_RETRY = {500, 503}
+# Quota nul (modèle non ouvert à cette clé) ou quota du jour épuisé : inutile de réessayer avant longtemps.
+_LONG_QUOTA = re.compile(r"limit: 0\b|PerDay")
 
 
 class KeyPool:
@@ -31,9 +34,17 @@ class KeyPool:
     cours : un Engramme garde sa clé près d'une minute, l'Engramme suivant part donc sur une autre), puis
     celle qui a servi le moins récemment (tourniquet). Une clé au quota (429) se met en pause une minute, une
     clé surchargée (500/503) vingt secondes : les appels suivants passent par les autres. État en mémoire
-    seulement ; les clés n'apparaissent jamais dans les messages ni dans /api/health (seulement leur nombre)."""
+    seulement ; les clés n'apparaissent jamais dans les messages ni dans /api/health (seulement leur nombre).
 
-    PAUSE = {429: 60.0, 500: 20.0, 503: 20.0}
+    V6.3 : les quotas de Google sont comptés par modèle ; une pause vise donc le couple (clé, modèle), et chaque
+    clé garde ses autres modèles (3 clés × 11 modèles = 33 quotas indépendants). Un quota nul (« limit: 0 » :
+    modèle non ouvert à cette clé, comme les modèles Pro sur l'offre gratuite) ou journalier épuisé met ce
+    couple en pause une heure. Une pause sans modèle vise toute la clé."""
+
+    # Quota : une minute ; surcharge (« high demand ») ou lenteur (délai dépassé, 408) : quarante-cinq secondes, le temps
+    # que les autres modèles de la chaîne servent à sa place.
+    PAUSE = {429: 60.0, 500: 45.0, 503: 45.0, 408: 45.0}
+    LONG_PAUSE = 3600.0
 
     def __init__(self, clock=time.monotonic):
         self.clock = clock
@@ -43,12 +54,15 @@ class KeyPool:
         self.busy: dict[str, int] = {}
         self.last: dict[str, int] = {}  # rang du dernier départ (compteur : l'horloge est trop grossière sous Windows)
         self.seq = 0
-        self.paused: dict[str, float] = {}
+        self.paused: dict[tuple[str, str | None], float] = {}  # (clé, modèle) ; modèle None : toute la clé
         self.served: dict[str, int] = {}
 
-    def order(self, keys: list[str]) -> list[str]:
+    def paused_until(self, key: str, model: str | None = None) -> float:
+        return max(self.paused.get((key, None), 0.0), self.paused.get((key, model), 0.0) if model else 0.0)
+
+    def order(self, keys: list[str], model: str | None = None) -> list[str]:
         now = self.clock()
-        return sorted(keys, key=lambda k: (self.paused.get(k, 0.0) > now, self.busy.get(k, 0), self.last.get(k, float("-inf"))))
+        return sorted(keys, key=lambda k: (self.paused_until(k, model) > now, self.busy.get(k, 0), self.last.get(k, float("-inf"))))
 
     @contextlib.contextmanager
     def using(self, key: str):
@@ -61,8 +75,14 @@ class KeyPool:
         finally:
             self.busy[key] -= 1
 
-    def pause(self, key: str, status: int) -> None:
-        self.paused[key] = self.clock() + self.PAUSE.get(status, 20.0)
+    def pause(self, key: str, status: int, model: str | None = None, long: bool = False) -> None:
+        self.paused[(key, model)] = self.clock() + (self.LONG_PAUSE if long else self.PAUSE.get(status, 20.0))
+
+    def stats(self, keys: list[str], models: list[str]) -> dict:
+        """Capacité : couples (clé, modèle) disponibles ou en pause (jamais les clés elles-mêmes)."""
+        now = self.clock()
+        pairs = [(k, m) for k in keys for m in models]
+        return {"pairs": len(pairs), "paused": sum(1 for k, m in pairs if self.paused_until(k, m) > now)}
 
 
 KEYS = KeyPool()
@@ -70,6 +90,10 @@ KEYS = KeyPool()
 
 class GenerationError(Exception):
     """Échec d'un modèle : on peut tenter le suivant de la chaîne."""
+
+
+class ModelTimeout(GenerationError):
+    """Le modèle n'a pas répondu dans le délai : il se repose sur cette clé, le suivant prend le relais."""
 
 
 class FatalGenerationError(Exception):
@@ -92,16 +116,22 @@ class Provider:
     def keys(self) -> list[str]:
         return [k.strip() for k in self.api_key.split(",") if k.strip()]
 
-    def key_order(self) -> list[str]:
-        """Toutes les clés, dans l'ordre d'essai de la répartition (cf. KeyPool)."""
-        return KEYS.order(self.keys)
+    def key_order(self, model: str | None = None) -> list[str]:
+        """Toutes les clés, dans l'ordre d'essai de la répartition pour ce modèle (cf. KeyPool)."""
+        return KEYS.order(self.keys, model)
+
+    def only(self, models: list[str]) -> "Provider":
+        """Le même fournisseur, restreint à une chaîne de modèles (rôle d'une tâche, voix d'un Conseil)."""
+        return Provider(self.name, self.api_key, list(models), self.url, self.options)
 
     async def complete(self, client: httpx.AsyncClient, model: str, system: str, user: str, timeout: float,
-                       *, json_mode: bool = False, schema: dict | None = None) -> str:
+                       *, json_mode: bool = False, schema: dict | None = None, thinking: str | None = None) -> str:
         """json_mode : réponse JSON (Gemini : responseMimeType, Groq : response_format) ;
-        schema : schéma de réponse imposé à Gemini (sous-ensemble OpenAPI de responseSchema)."""
-        call = _gemini if self.name == "gemini" else _groq
-        return await call(self, client, model, system, user, timeout, json_mode, schema)
+        schema : schéma de réponse imposé à Gemini (sous-ensemble OpenAPI de responseSchema) ;
+        thinking : niveau de réflexion Gemini (« high » : mode profond), ignoré par Groq et par les modèles qui le refusent."""
+        if self.name == "gemini":
+            return await _gemini(self, client, model, system, user, timeout, json_mode, schema, thinking)
+        return await _groq(self, client, model, system, user, timeout, json_mode, schema)
 
 
 def _detail(resp: httpx.Response) -> str:
@@ -117,7 +147,7 @@ async def _post(client: httpx.AsyncClient, model: str, url: str, **kwargs) -> ht
     try:
         return await client.post(url, **kwargs)
     except httpx.TimeoutException as exc:
-        raise GenerationError(f"{model}: délai dépassé") from exc
+        raise ModelTimeout(f"{model}: délai dépassé") from exc
     except httpx.HTTPError as exc:
         raise GenerationError(f"{model}: erreur réseau ({exc.__class__.__name__})") from exc
 
@@ -136,31 +166,44 @@ async def _gemini_post(p: Provider, client: httpx.AsyncClient, model: str, paylo
             # Clé dans un en-tête, jamais dans l'URL (qui finit dans les journaux).
             return await _post(client, model, url, json=payload, headers={"x-goog-api-key": key}, timeout=timeout)
 
-    for key in p.key_order():
+    order = p.key_order(model)
+    now = KEYS.clock()
+    if order and all(KEYS.paused_until(k, model) > now for k in order):
+        # Ce modèle se repose sur toutes les clés (quota, surcharge récente) : le suivant de la chaîne, sans attendre.
+        raise GenerationError(f"{model}: en pause sur toutes les clés (quota ou surcharge récents)")
+    for key in order:
         index = keys.index(key) + 1
-        resp = await send(key)
+        try:
+            resp = await send(key)
+        except ModelTimeout:
+            # Trop lent en ce moment (la demande est mondiale, pas propre à une clé) : ce modèle se repose sur toutes les
+            # clés, les appels suivants passent aussitôt par d'autres modèles.
+            for other in keys:
+                KEYS.pause(other, 408, model)
+            raise
         if resp.status_code == 400 and "API_KEY_INVALID" in resp.text:
             refused.append(f"clé n°{index} refusée (API_KEY_INVALID)")
         elif resp.status_code in (401, 403):
             refused.append(f"clé n°{index} : accès refusé (HTTP {resp.status_code}) {_detail(resp)}")
         elif resp.status_code == 429:
-            KEYS.pause(key, 429)
+            # Quota nul (modèle non ouvert à cette clé) ou journalier : ce couple (clé, modèle) se repose une heure.
+            KEYS.pause(key, 429, model, long=bool(_LONG_QUOTA.search(resp.text)))
             exhausted.append(f"clé n°{index}")
         elif resp.status_code in _GEMINI_RETRY:
-            KEYS.pause(key, resp.status_code)
+            KEYS.pause(key, resp.status_code, model)
             overloaded.append(key)
         else:
             return resp
     if overloaded:  # surcharge sur chaque clé encore valable : une dernière tentative, sur la moins occupée
         await asyncio.sleep(p.options.get("retry_delay", 2.0))
-        return await send(KEYS.order(overloaded)[0])
+        return await send(KEYS.order(overloaded, model)[0])
     if exhausted:  # quota d'un modèle atteint sur toutes les clés : un autre modèle a peut-être le sien
         raise GenerationError(f"{model}: quota atteint (HTTP 429) — {', '.join(exhausted)}" + (f" ; {'; '.join(refused)}" if refused else ""))
     raise FatalGenerationError("Clé Gemini refusée : " + " ; ".join(refused) + ". Vérifiez GEMINI_API_KEY.")
 
 
 async def _gemini(p: Provider, client: httpx.AsyncClient, model: str, system: str, user: str, timeout: float,
-                  json_mode: bool = False, schema: dict | None = None) -> str:
+                  json_mode: bool = False, schema: dict | None = None, thinking: str | None = None) -> str:
     payload = {
         "systemInstruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": user}]}],
@@ -174,7 +217,13 @@ async def _gemini(p: Provider, client: httpx.AsyncClient, model: str, system: st
         payload["generationConfig"]["responseMimeType"] = "application/json"
     if schema:
         payload["generationConfig"]["responseSchema"] = schema
+    if thinking:
+        payload["generationConfig"]["thinkingConfig"] = {"thinkingLevel": thinking}
     resp = await _gemini_post(p, client, model, payload, timeout)
+    if thinking and resp.status_code == 400 and "hinking" in resp.text:
+        # Niveau de réflexion refusé par ce modèle : la même demande, à sa réflexion par défaut.
+        del payload["generationConfig"]["thinkingConfig"]
+        resp = await _gemini_post(p, client, model, payload, timeout)
     if resp.status_code == 402:
         raise FatalGenerationError("Crédits Gemini épuisés (HTTP 402).")
     if resp.status_code == 400 and schema:

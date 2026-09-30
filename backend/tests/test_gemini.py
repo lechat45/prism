@@ -164,6 +164,7 @@ class GeminiTests(DbTestCase):
         for label, failure in cases.items():
             with self.subTest(label):
                 self.calls.clear()
+                providers.KEYS.clear()  # chaque cas part de modèles reposés (les pauses visent le couple clé × modèle)
                 retried = label == "surcharge 503"  # surcharge passagère : une nouvelle tentative d'abord
                 self.answers = {M1: [failure, failure] if retried else [failure]}
                 res = self.generate()

@@ -147,7 +147,18 @@ function enginePanel() {
     panel.push(fact("Modèles", (info.models || []).join(" → ") || "—"));
     const keys = info.gemini_keys;
     if (keys) panel.push(fact("Clés Gemini", `${keys} clé${keys > 1 ? "s" : ""} réparties`));
-    panel.push(el("p", "fine", "Les clés Gemini sont celles du serveur et ne le quittent jamais. Elles se partagent le travail : chaque demande part sur la clé la moins occupée (un Engramme en cours garde la sienne, le suivant en prend une autre) ; une clé surchargée ou au quota passe aussitôt la main et se repose un moment."));
+    // V6.3 : orchestre de modèles (familles, voix du Conseil du Nexus, quotas par couple clé × modèle).
+    const orchestra = info.orchestra;
+    if (orchestra) {
+      const families = { pro: "Pro", fast: "Flash", lite: "Lite", open: "Gemma (ouvert)" };
+      for (const [role, models] of Object.entries(orchestra.roles || {})) {
+        panel.push(fact(families[role] || role, models.join(" · ")));
+      }
+      panel.push(fact("Conseil du Nexus", (orchestra.council || []).map((voice) => voice[0]).join(" · ")));
+      const { pairs, paused } = orchestra.capacity || {};
+      panel.push(fact("Capacité", `${orchestra.models} modèles × ${keys} clés = ${pairs} quotas${paused ? ` (${paused} au repos)` : ""}`));
+    }
+    panel.push(el("p", "fine", "Les clés Gemini sont celles du serveur et ne le quittent jamais. Elles se partagent le travail : chaque demande part sur la clé la moins occupée (un Engramme en cours garde la sienne, le suivant en prend une autre). Google compte les quotas par modèle : un modèle au quota ou surchargé se repose sur cette clé seulement, et la chaîne passe au modèle suivant (Flash, puis Lite, puis Gemma). Les modèles Pro sont essayés en premier pour les Engrammes et le mode Profond ; sans droit sur l'offre gratuite, ils se reposent une heure."));
   } else {
     const keys = readKey().split(",").map((k) => k.trim()).filter(Boolean);
     panel.push(fact("Moteur", engine.waking ? "Navigateur (serveur en cours de réveil)" : "Navigateur"));
