@@ -453,7 +453,7 @@ try {
     await click(center("document.getElementById('add-engram')"));
     // « Vos Engrammes » arrive après l'ouverture et décale le formulaire : on attend la liste (vu en CI).
     await waitFor("!document.getElementById('engram-menu').hidden && !!document.querySelector('.custom-mind') && !/Recherche/.test(document.getElementById('engram-menu').textContent)", "menu des Engrammes");
-    await evaluate("document.querySelector('.custom-mind input').value = 'Léonard de Vinci'; document.querySelector('.custom-mind button').scrollIntoView({ block: 'center' })");
+    await evaluate("document.querySelector('.custom-mind input').value = 'Léonard de Vinci'; document.querySelector('.custom-mind button').scrollIntoView({ block: 'center', behavior: 'instant' })");
     await click(center("document.querySelector('.custom-mind button')"));
     await check("« Créer un Engramme » sans serveur : aucune création, le menu Intelligence explique",
       "[__nexus.nodes.size, !document.getElementById('intel-menu').hidden]", [4, true]);
@@ -509,7 +509,7 @@ try {
       await click(center("document.getElementById('add-engram')"));
       // « Vos Engrammes » arrive après l'ouverture (Mon Hub) et décale le formulaire : on attend la liste.
       await waitFor("!document.getElementById('engram-menu').hidden && !!document.querySelector('.custom-mind') && !/Recherche/.test(document.getElementById('engram-menu').textContent)", "menu des Engrammes");
-      await evaluate("document.querySelector('.custom-mind input').value = 'Léonard de Vinci'; document.querySelector('.custom-mind button').scrollIntoView({ block: 'center' })");
+      await evaluate("document.querySelector('.custom-mind input').value = 'Léonard de Vinci'; document.querySelector('.custom-mind button').scrollIntoView({ block: 'center', behavior: 'instant' })");
       await click(center("document.querySelector('.custom-mind button')"));
       await waitFor(`__nexus.nodes.size === 5 && ${engramsLive}`, "Engramme créé par le serveur", 120000).catch(async (err) => {
         const state = await evaluate("JSON.stringify([...__nexus.nodes.values()].filter(n=>n.type==='engram').map(n=>[n.name,n.source,n.status,n.error||'',n.el.classList.contains('is-live')]))");
