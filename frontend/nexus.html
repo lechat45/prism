@@ -1045,6 +1045,19 @@ button { cursor: pointer; }
     l.grad.setAttribute("x1", a.x); l.grad.setAttribute("y1", a.y); l.grad.setAttribute("x2", b.x); l.grad.setAttribute("y2", b.y);
     l.a = a; l.b = b;
   }
+  /** Fil sous un point de l'écran (zone de clic de 18 px autour du fil), testé sur sa géométrie. */
+  function linkAt(sx, sy) {
+    var p = toWorld(sx, sy);
+    var q = $("wires").createSVGPoint();
+    q.x = p.x;
+    q.y = p.y;
+    var found = null;
+    links.forEach(function (l) {
+      var hit = l.paths[3];
+      if (!found && l.el.isConnected && typeof hit.isPointInStroke === "function" && hit.isPointInStroke(q)) found = l;
+    });
+    return found;
+  }
   function placeLinksOf(id) { links.forEach(function (l) { if (l.from === id || l.to === id) placeLink(l); }); }
 
   /** Couper un fil : la mémoire du nœud suivant s'efface aussitôt (et tout ce qui en dépendait). */
@@ -1218,9 +1231,11 @@ button { cursor: pointer; }
     // Un clic sur un fil le coupe (voir addLink) ; l'étiquette d'un Hub ouvre sa War Room : pas de glisser du fond ici
     // (sa capture du pointeur détournerait le clic).
     var linkEl = e.target.closest(".link");
-    if (linkEl) {
-      // Couper un fil : appui puis relâchement au même endroit, sur ce fil (sans dépendre du « click » synthétisé).
-      gesture = { kind: "cut", id: linkEl.dataset.id, sx: e.clientX, sy: e.clientY };
+    // Couper un fil : appui puis relâchement sur ce fil. Le navigateur ne désigne pas toujours un fil SVG comme cible
+    // (vu en CI, avec les Engrammes isolés dans la page) : la géométrie des fils est alors testée ici même.
+    var hitLink = linkEl ? links.get(linkEl.dataset.id) : !nodeEl && !port ? linkAt(e.clientX, e.clientY) : null;
+    if (hitLink) {
+      gesture = { kind: "cut", id: hitLink.id, sx: e.clientX, sy: e.clientY };
       return;
     }
     if (e.target.closest(".hub .label")) return;
@@ -1311,8 +1326,8 @@ button { cursor: pointer; }
     gesturing(false);
     save();
     if (g.kind === "cut") {
-      var over = e && e.type === "pointerup" && e.target && e.target.closest ? e.target.closest(".link") : null;
-      if (over && over.dataset.id === g.id && Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < 8) cutLink(g.id, e.clientX, e.clientY);
+      var over = e && e.type === "pointerup" ? linkAt(e.clientX, e.clientY) : null;
+      if (over && over.id === g.id && Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < 8) cutLink(g.id, e.clientX, e.clientY);
       return;
     }
     if (g.kind === "node") g.n.el.classList.remove("is-dragging");

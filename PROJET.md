@@ -1,6 +1,6 @@
 # Prism — description complète du projet
 
-> Version décrite : **6.1.0-alpha.1** (30 septembre 2026). En ligne : <https://lechat45.github.io/prism/>,
+> Version décrite : **6.1.0-alpha.2** (30 septembre 2026). En ligne : <https://lechat45.github.io/prism/>,
 > API : <https://prism-api-0x4z.onrender.com>. Code : <https://github.com/lechat45/prism> (branches `v3` = site public
 > sur GitHub Pages, `v4` = branche déployée par Render pour l'API, `v5` et `v6` = développement ; identiques à chaque publication).
 > Ce document est mis à jour à chaque livraison ; le détail technique de chaque version est dans `CHANGELOG.md`.
@@ -9,6 +9,8 @@
 
 Les dernières mises à jour, de la plus récente à la plus ancienne.
 
+- **6.1.0-alpha.2 — 30 septembre 2026 · correctif.** Couper un fil dans le Nexus fonctionne à coup sûr, même avec
+  plusieurs Engrammes vivants à l'écran.
 - **6.1.0-alpha.1 — 30 septembre 2026 · les vrais Engrammes dans le Nexus.** Dans le Nexus, chaque Engramme est de
   nouveau le vrai Engramme cognitif, avec toutes ses bulles qui bougent seules, dans une carte de verre. Il pense à
   partir de ce qu'il est (son axiome, sa méthode, son caractère, les évènements de sa vie) et allume les bulles qu'il
@@ -408,6 +410,7 @@ tools/     E2E Chrome (CDP), serveurs de test, contrôles de déploiement, mesur
 | alpha.3 | CI de nouveau verte (clics des tests à travers le toast), miniatures de Mon Hub, déploiement de l'API du Nexus |
 | alpha.4 | Nexus : solde relu après « Penser » ; tests de bout en bout plus robustes (export, écran de rendu) |
 | 6.1.0-alpha.1 | Nexus : les vrais Engrammes (vivants, pensée fondée sur leurs bulles, plongée), Néo-Constellation |
+| alpha.2 | Nexus : couper un fil fonctionne à coup sûr (géométrie des fils testée par le Nexus) |
 
 ## 9. Limites connues
 
