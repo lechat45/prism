@@ -207,9 +207,12 @@ try {
       const e=document.elementFromPoint(q.x,q.y);if(e&&e.closest('.link')===l.el){best=[q.x,q.y];break}if(!best)best=[q.x,q.y]}
     return best})()`;
   const [cx, cy] = await evaluate(cutAt);
-  const under = await evaluate(`document.elementsFromPoint(${cx},${cy}).slice(0,4).map(e=>e.tagName+'.'+[...e.classList].join('.')).join(' > ')`);
+  const under = await evaluate(`(()=>{const c=__nexus.find('Marie Curie').id,x=__nexus.find('context').id;const want=[...__nexus.links.values()].find(l=>l.from===x&&l.to===c).id;
+    const top=document.elementFromPoint(${cx},${cy});const got=top&&top.closest('.link');
+    window.__ev=[];for(const t of ['pointerdown','pointerup','click'])addEventListener(t,(e)=>{const l=e.target.closest&&e.target.closest('.link');window.__ev.push(t+':'+(e.target.tagName||'?')+(l?'#'+l.dataset.id:'')+':'+e.button+':'+e.pointerType)},true);
+    return document.elementsFromPoint(${cx},${cy}).slice(0,3).map(e=>e.tagName+'.'+[...e.classList].join('.')).join(' > ')+' ; fil visé '+want+', fil sous le point '+(got?got.dataset.id:'aucun')})()`);
   await click(`[${cx},${cy}]`);
-  if (await evaluate("__nexus.links.size") !== 3) console.log(`  diagnostic : clic en ${Math.round(cx)}, ${Math.round(cy)} sur ${under}`);
+  if (await evaluate("__nexus.links.size") !== 3) console.log(`  diagnostic : clic en ${Math.round(cx)}, ${Math.round(cy)} sur ${under} ; évènements : ${await evaluate("(window.__ev||[]).join(', ')")}`);
   await check("fil coupé au clic : Curie perd sa mémoire, l'écran perd sa voix, sans délai",
     "(()=>{const c=__nexus.find('Marie Curie'),r=__nexus.find('render');return [__nexus.links.size,c.memory===null,c.el.querySelector('.thought').textContent,r.memory.thoughts.map(t=>t.author).join(' + '),document.querySelector('#nodes .render .voices').textContent.includes('Marie Curie')]})()",
     [3, true, "", "Ada Lovelace", false]);
